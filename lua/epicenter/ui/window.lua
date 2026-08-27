@@ -166,6 +166,7 @@ end
 
 --- @param box epicenter.Box
 function Window:set_geometry(box)
+  assert(box ~= nil, "Window:set_geometry: box must not be nil")
   if not self:valid() then
     return
   end

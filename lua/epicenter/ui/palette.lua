@@ -60,20 +60,44 @@ function Palette:_box()
     height = cfg.ui.height,
     max_width = cfg.ui.max_width,
     max_height = cfg.ui.max_height,
+    -- Test-only sizing hook (see `spec.columns`/`spec.lines`): nil defers to
+    -- the real editor grid, exactly as before. Specs must never assign
+    -- `vim.o.columns` themselves - nvim 0.12 aborts in draw_tabline when it
+    -- changes under an open floating window.
+    columns = self.columns,
+    lines = self.lines,
   })
 end
 
+--- `boxes.preview` is nil below MIN_WIDTH_FOR_PREVIEW even when
+--- `preview_win` still exists - during the open animation the target box
+--- has room but an early scaled-down frame may not. Skip the preview this
+--- frame rather than pass nil through; `reflow` drops the pane outright
+--- when the *settled* size no longer fits (see `_drop_preview`), and the
+--- animation's own `on_done` always re-applies the full, fitting target.
 function Palette:_apply_layout(box)
   local boxes = M.layout(box, self.want_preview)
   self.prompt_win:set_geometry(boxes.prompt)
   self.results_win:set_geometry(boxes.results)
-  if self.preview_win then
-    self.preview_win:set_geometry(boxes.preview)
+  if boxes.preview then
+    if self.preview_win then
+      self.preview_win:set_geometry(boxes.preview)
+    end
+    if self.preview then
+      self.preview:set_height(boxes.preview.height)
+    end
   end
   self.list:set_height(boxes.results.height)
-  if self.preview then
-    self.preview:set_height(boxes.preview.height)
-  end
+end
+
+--- Closes and forgets the preview pane once its window has no room; unlike
+--- the transient dip during the open animation, a settled resize below the
+--- threshold means the pane stays gone until the palette is reopened.
+function Palette:_drop_preview()
+  self.preview_win:close()
+  self.preview_win = nil
+  self.preview = nil
+  self.want_preview = false
 end
 
 --- Reflow after a `VimResized`: geometry changes, nothing animates.
@@ -82,6 +106,9 @@ function Palette:reflow()
     return
   end
   self.box = self:_box()
+  if self.preview_win and M.layout(self.box, self.want_preview).preview == nil then
+    self:_drop_preview()
+  end
   self:_apply_layout(self.box)
   self.list:draw()
 end
@@ -274,7 +301,9 @@ end
 ---   on_accept: fun(item, action: "edit"|"tab"|"vsplit"|"split"),
 ---   keys?: table<string, fun(palette: epicenter.Palette)>,
 ---   mode_label?: fun(state: table): string, empty_text?: string, on_close?: fun(),
----   help_lines?: string[] shown by `?`; defaults to the shared HELP block }
+---   help_lines?: string[] shown by `?`; defaults to the shared HELP block,
+---   columns?: integer, lines?: integer - test-only editor-grid override,
+---   see `Palette:_box`; production callers must leave these nil }
 --- @return epicenter.Palette
 function M.open(spec)
   local cfg = require("epicenter.config").get()
@@ -287,6 +316,8 @@ function M.open(spec)
     previous_win = vim.api.nvim_get_current_win(),
     query_text = "",
     generation = 0,
+    columns = spec.columns,
+    lines = spec.lines,
   }, Palette)
 
   self.box = self:_box()

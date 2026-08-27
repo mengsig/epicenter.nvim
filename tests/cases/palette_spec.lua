@@ -1,4 +1,5 @@
 local palette = require("epicenter.ui.palette")
+local window = require("epicenter.ui.window")
 
 describe("palette layout", function()
   local box = { row = 2, col = 4, width = 100, height = 20 }
@@ -35,6 +36,23 @@ describe("palette layout", function()
       expect.truthy(pane.col >= box.col)
       expect.truthy(pane.col + pane.width <= box.col + box.width)
       expect.truthy(pane.row + pane.height <= box.row + box.height)
+    end
+  end)
+
+  it("yields a valid box set at every width from 40 to 300 (F2)", function()
+    for width = 40, 300 do
+      local wide = { row = 0, col = 0, width = width, height = 30 }
+      for _, want_preview in ipairs({ false, true }) do
+        local boxes = palette.layout(wide, want_preview)
+        expect.truthy(boxes.prompt ~= nil and boxes.results ~= nil, ("width %d"):format(width))
+        expect.truthy(boxes.prompt.width > 0 and boxes.results.width > 0, ("width %d"):format(width))
+        if want_preview and width >= 80 then
+          expect.truthy(boxes.preview ~= nil, ("width %d should keep a preview"):format(width))
+          expect.truthy(boxes.preview.width > 0, ("width %d"):format(width))
+        else
+          expect.eq(boxes.preview, nil, ("width %d should drop the preview"):format(width))
+        end
+      end
     end
   end)
 end)
@@ -101,6 +119,88 @@ describe("palette query staleness", function()
     vim.wait(50)
 
     expect.eq(p.total, 0, "an error must not leave the previous query's total behind")
+    p:close()
+  end)
+end)
+
+describe("palette resize across the preview threshold (F2)", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+  end)
+
+  local function open_wide()
+    -- `columns`/`lines` are the test-only sizing hook `_box` reads instead
+    -- of `vim.o.columns` - nvim 0.12 aborts in draw_tabline if a spec
+    -- assigns that option while a float is open.
+    return palette.open({
+      title = " test ",
+      columns = 160,
+      lines = 40,
+      source = function(_, _, cb)
+        cb(nil, {}, 0)
+      end,
+      render_item = function(item)
+        return { text = tostring(item) }
+      end,
+      preview_of = function()
+        return nil
+      end,
+      empty_text = "  no matches",
+    })
+  end
+
+  it("never crashes reflowing across every width from 40 to 300", function()
+    local p = open_wide()
+    expect.truthy(p.preview_win ~= nil, "opens wide with a preview pane")
+
+    for width = 300, 40, -1 do
+      p.columns = width
+      local ok, err = pcall(function()
+        p:reflow()
+      end)
+      expect.truthy(ok, ("reflow crashed at width %d: %s"):format(width, tostring(err)))
+    end
+
+    expect.eq(p.preview_win, nil, "settled below the threshold, the pane is dropped")
+    expect.eq(p.want_preview, false)
+    p:close()
+  end)
+
+  it("drops the preview pane, not just its geometry, once it no longer fits", function()
+    local p = open_wide()
+    local preview_win = p.preview_win
+    expect.truthy(preview_win ~= nil)
+
+    p.columns = 60
+    p:reflow()
+
+    expect.eq(p.preview_win, nil)
+    expect.eq(p.preview, nil)
+    expect.falsy(preview_win:valid(), "the dropped window must actually close, not leak")
+    p:close()
+  end)
+
+  it("skips a transient sub-threshold frame mid open-animation instead of crashing", function()
+    local p = open_wide()
+    local target = p.box
+    expect.truthy(p.preview_win ~= nil)
+
+    -- Mimics an early open-animation frame (palette.lua scales from 0.88):
+    -- narrower than the settled target, briefly below the threshold even
+    -- though the animation is headed for a size that fits.
+    local shrunk = window.scale(target, 0.5)
+    local ok, err = pcall(function()
+      p:_apply_layout(shrunk)
+    end)
+    expect.truthy(ok, "a transient sub-threshold frame must not crash: " .. tostring(err))
+    expect.truthy(p.preview_win ~= nil, "a transient dip must not drop the pane outright")
+
+    -- The animation always finishes by re-applying the full, fitting target.
+    p:_apply_layout(target)
+    local boxes = palette.layout(target, p.want_preview)
+    expect.eq(p.preview_win:geometry(), boxes.preview)
+    expect.truthy(p.preview_win:valid())
     p:close()
   end)
 end)
