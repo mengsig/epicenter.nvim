@@ -260,6 +260,27 @@ local function shortest_path(edges, from, to, opts)
   return nil
 end
 
+--- Call sites reaching `symbol`, which is what "most depended-on" means here.
+local function fan_in(edges, symbol, opts)
+  local total = 0
+  for _, step in ipairs(level(edges, symbol, "callers", opts)) do
+    total = total + step.edge.count
+  end
+  return total
+end
+
+--- A path parameter, as a root-relative file.
+local function relative_path(ctx, path)
+  if type(path) ~= "string" or path == "" then
+    return nil
+  end
+  local normalized = vim.fs.normalize(path)
+  if ctx.root and vim.startswith(normalized, ctx.root) then
+    return normalized:sub(#ctx.root + 2)
+  end
+  return normalized
+end
+
 --- Symbols of one file, nested: `A.b` sits under `A` when both are in the file.
 local function outline_nodes(ctx, file)
   local nodes, by_qualified = {}, {}
@@ -294,5 +315,68 @@ return {
 
   ["navgraph/outline"] = function(ctx, params)
     return { nodes = outline_nodes(ctx, ctx.to_relative(params.uri)) }
+  end,
+
+  ["navgraph/hot"] = function(ctx, params)
+    local edges = graph_of(ctx.index)
+    local opts = opts_of(params)
+    local file = relative_path(ctx, params.path)
+    local items = {}
+    for _, symbol in ipairs(ctx.index.symbols) do
+      if not file or symbol.file == file then
+        local count = fan_in(edges, symbol, opts)
+        if count > 0 then
+          table.insert(items, { symbol = symbol, fanIn = count })
+        end
+      end
+    end
+    table.sort(items, function(a, b)
+      if a.fanIn ~= b.fanIn then
+        return a.fanIn > b.fanIn
+      end
+      return a.symbol.qualified < b.symbol.qualified
+    end)
+    local limit = params.limit or 30
+    return {
+      items = vim.list_slice(items, 1, math.min(#items, limit)),
+      max = items[1] and items[1].fanIn or 0,
+      total = #items,
+    }
+  end,
+
+  ["navgraph/unused"] = function(ctx, params)
+    local edges = graph_of(ctx.index)
+    local items = {}
+    for _, symbol in ipairs(ctx.index.symbols) do
+      local reached = fan_in(edges, symbol, {}) > 0
+      if not reached and not (params.noPublic == true and symbol.exported) then
+        table.insert(items, symbol)
+      end
+    end
+    local limit = params.limit or 200
+    return {
+      items = vim.list_slice(items, 1, math.min(#items, limit)),
+      total = #items,
+    }
+  end,
+
+  --- Writes DOT whatever `format` asks for: the fake has no renderer, and
+  --- saying so beats returning a path to a file that is not what it claims.
+  ["navgraph/graph"] = function(ctx, params)
+    local out = params.path
+    if type(out) ~= "string" or out == "" then
+      out = vim.fn.tempname() .. ".dot"
+    end
+    local edges = graph_of(ctx.index)
+    local fh = assert(io.open(out, "w"), "fake server could not write " .. out)
+    fh:write("digraph navgraph {\n")
+    for _, edge in ipairs(edges) do
+      if edge.to then
+        fh:write(("  %q -> %q;\n"):format(edge.from.qualified, edge.to.qualified))
+      end
+    end
+    fh:write("}\n")
+    fh:close()
+    return { path = out, format = "dot", nodes = #ctx.index.symbols, edges = #edges }
   end,
 }

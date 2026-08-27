@@ -23,8 +23,9 @@ CONTENTS                                                   *epicenter-contents*
      9.3 explore ............................... |epicenter-explore|
      9.4 path .................................. |epicenter-path|
      9.5 outline ................................ |epicenter-outline|
-     9.6 core .................................. |epicenter-core|
-     9.7 planned ................................ |epicenter-planned|
+     9.6 hot .................................... |epicenter-hot|
+     9.7 core .................................. |epicenter-core|
+     9.8 planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
 
 ==============================================================================
@@ -98,12 +99,14 @@ The binary is looked up in this order:
     callees  |epicenter-explore|  What the symbol under the cursor calls
     path     |epicenter-path|     Call path between two symbols
     outline  |epicenter-outline|  Live symbol outline of the current buffer
+    hot      |epicenter-hot|      Hot spots ranked by fan-in
+    unused   |epicenter-hot|      Symbols nothing in the index reaches
+    graph    |epicenter-hot|      Write the call graph to a file and open it
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
-    hot      |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -120,6 +123,7 @@ change `keymaps.prefix`.
     <leader>eC      :Epicenter callees
     <leader>ep      :Epicenter path
     <leader>eo      :Epicenter outline
+    <leader>eh      :Epicenter hot
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -193,6 +197,9 @@ Defaults: >lua
       explore = { limit = 100 },
       path = { step_ms = 45 },
       outline = { width = 34, debounce_ms = 80 },
+      hot = { limit = 30, bar_width = 12 },
+      unused = { limit = 200 },
+      graph = { format = "svg" },
       log = { level = "warn", file = nil },
     }
 <
@@ -239,6 +246,10 @@ explore.limit        Most edges fetched per expansion in the callers/callees
 path.step_ms         Time each step of the path ladder takes to draw.
 outline.width        Sidebar width in cells.
 outline.debounce_ms  Quiet time before the outline follows the cursor.
+hot.limit            Most hot spots listed.
+hot.bar_width        Width in cells of the fan-in bar.
+unused.limit         Most unused symbols listed.
+graph.format         Format asked of `navgraph/graph`, e.g. "svg" or "dot".
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -543,7 +554,40 @@ Options: >lua
     outline = { width = 34, debounce_ms = 80 },
 <
 ==============================================================================
-9.6 CORE                                                       *epicenter-core*
+9.6 HOT SPOTS                                                   *epicenter-hot*
+
+                                                            *:Epicenter-hot*
+:Epicenter hot [path]                                          *<leader>eh*
+    The most depended-on symbols, each with a bar scaled to the busiest one in
+    the list and its call-site count. Scoped to the current buffer's file, or
+    to {path}; `b` switches between that file and the whole repo.
+
+                                                         *:Epicenter-unused*
+:Epicenter unused [filter]
+    Symbols nothing in the index reaches. {filter} narrows the list by name,
+    and `p` drops the public ones so only unreached internals remain.
+
+                                                          *:Epicenter-graph*
+:Epicenter graph [file]
+    Asks the server to write the call graph, then opens it with |vim.ui.open|.
+    {file} is where to write it; without it the server picks the path, and the
+    notice names it either way.
+
+    <CR>            jump to the symbol (hot, unused)
+    o               peek at it
+    y               yank `file:line`
+    b               hot: buffer / repo scope
+    p               unused: hide the public symbols
+    q, <Esc>        close
+
+Options: >lua
+
+    hot = { limit = 30, bar_width = 12 },
+    unused = { limit = 200 },
+    graph = { format = "svg" },
+<
+==============================================================================
+9.7 CORE                                                       *epicenter-core*
 
                                                           *:Epicenter-status*
 :Epicenter status
@@ -571,12 +615,9 @@ Options: >lua
     `stdpath("state")/epicenter.log`.
 
 ==============================================================================
-9.7 PLANNED                                                 *epicenter-planned*
+9.8 PLANNED                                                 *epicenter-planned*
 
-These subcommands complete today and print a one-line notice; they ship in
-a later release.
-
-    hot       Hot spots ranked by fan-in
+Nothing is currently planned; every subcommand ships today.
 
 ==============================================================================
 10. EXTENDING                                            *epicenter-extending*

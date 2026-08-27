@@ -38,7 +38,6 @@ local registry = require("epicenter.registry")
 local EXPECTED_COMMANDS = {
   "search",
   "grep",
-  "hot",
   "blast",
   "hover",
   "diff",
@@ -46,6 +45,9 @@ local EXPECTED_COMMANDS = {
   "callees",
   "path",
   "outline",
+  "hot",
+  "unused",
+  "graph",
   "status",
   "install",
   "restart",

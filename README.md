@@ -79,6 +79,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls        |
 | `<leader>ep` | `:Epicenter path`    | Call chain between two symbols                |
 | `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer     |
+| `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, with fan-in bars    |
 
 Inside the palette:
 
@@ -108,13 +109,16 @@ Inside the palette:
 | `callees`  | Tree of what the symbol under the cursor calls           |
 | `path`     | Call chain between two symbols                           |
 | `outline`  | Live symbol outline sidebar for the current buffer       |
+| `hot`      | Most depended-on symbols, ranked by fan-in               |
+| `unused`   | Symbols nothing in the index reaches                     |
+| `graph`    | Write the call graph to a file and open it               |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
 | `log`      | Open the epicenter log                                   |
 
-`hot` completes today and announces itself as coming in a later release.
+Every subcommand ships today; none are pending.
 
 ### Inside the blast panel
 
@@ -223,6 +227,9 @@ require("epicenter").setup({
   explore = { limit = 100 },   -- edges fetched per expansion in callers/callees
   path = { step_ms = 45 },     -- time each rung of the path ladder takes to draw
   outline = { width = 34, debounce_ms = 80 },
+  hot = { limit = 30, bar_width = 12 },
+  unused = { limit = 200 },
+  graph = { format = "svg" },  -- format asked of navgraph/graph
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```

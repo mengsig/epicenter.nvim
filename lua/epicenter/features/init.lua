@@ -9,5 +9,6 @@ return {
   require("epicenter.features.explore"),
   require("epicenter.features.path"),
   require("epicenter.features.outline"),
+  require("epicenter.features.hot"),
   require("epicenter.features.core"),
 }

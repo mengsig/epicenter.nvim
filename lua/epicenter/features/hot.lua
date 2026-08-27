@@ -1,0 +1,191 @@
+--- Fan-in hot spots, symbols nothing reaches, and the graph export.
+--- No config requires at file scope - see `epicenter.registry`.
+local M = {}
+
+local function target_of(symbol)
+  return { path = vim.uri_to_fname(symbol.uri), line = symbol.line, end_line = symbol.endLine }
+end
+
+--- Row for a hot spot: the symbol, its location, and a bar scaled to the
+--- busiest symbol in the list. Pure.
+--- @param item { symbol: table, fanIn?: integer }
+--- @param max integer the largest fan-in in the same list
+function M.render_hot(item, max, width)
+  local icons = require("epicenter.ui.icons")
+  local toast = require("epicenter.ui.toast")
+  local symbol, spans = item.symbol, {}
+  local count = item.fanIn or 0
+
+  local head = (" %s %s"):format(icons.kind(symbol.kind), symbol.qualified)
+  local location = ("  %s:%d"):format(symbol.file, symbol.line)
+  table.insert(spans, { hl = "EpicenterMuted", from = #head, to = #head + #location })
+
+  local bar = "  "
+    .. toast.bar(
+      max > 0 and count / max or 0,
+      width,
+      icons.ui("progress_full"),
+      icons.ui("progress_empty")
+    )
+  local at = #head + #location
+  table.insert(spans, { hl = "EpicenterAccent", from = at, to = at + #bar })
+  local tail = (" %d"):format(count)
+  table.insert(spans, { hl = "EpicenterCount", from = at + #bar, to = at + #bar + #tail })
+
+  return { text = head .. location .. bar .. tail, spans = spans }
+end
+
+--- Row for an unused symbol. Pure.
+function M.render_unused(symbol)
+  local icons = require("epicenter.ui.icons")
+  local head = (" %s %s"):format(icons.kind(symbol.kind), symbol.qualified)
+  local location = ("  %s:%d"):format(symbol.file, symbol.line)
+  return {
+    text = head .. location,
+    spans = { { hl = "EpicenterMuted", from = #head, to = #head + #location } },
+  }
+end
+
+local function open_hot(ctx)
+  local cfg = require("epicenter.config").get()
+  local client = require("epicenter.client")
+  local panel_mod = require("epicenter.ui.panel")
+
+  local file = ctx.args[1] or vim.api.nvim_buf_get_name(ctx.bufnr)
+  local view = { path = file ~= "" and file or nil, max = 0 }
+  view.scope = view.path and "buffer" or "repo"
+
+  local function load()
+    client.hot({
+      path = view.scope == "buffer" and view.path or nil,
+      limit = cfg.hot.limit,
+    }, function(err, result)
+      if not view.panel:valid() then
+        return
+      end
+      if err then
+        view.panel:notice("  " .. (err.message or "navgraph did not answer"))
+        return
+      end
+      local items = result.items or {}
+      view.max = result.max or 0
+      view.panel:set_items(items, { stagger = true })
+      view.panel:set_footer((" %d · %s "):format(#items, view.scope))
+    end, { bufnr = ctx.bufnr, channel = "hot" })
+  end
+
+  view.panel = panel_mod.open({
+    title = " hot spots ",
+    footer = (" 0 · %s "):format(view.scope),
+    filetype = "epicenter-hot",
+    empty_text = "  nothing depends on anything here",
+    render_row = function(item)
+      return M.render_hot(item, view.max, cfg.hot.bar_width)
+    end,
+    text_of = function(item)
+      return item.symbol.qualified
+    end,
+    target_of = function(item)
+      return target_of(item.symbol)
+    end,
+    keys = {
+      b = function()
+        if not view.path then
+          require("epicenter").notify("this buffer is not a file - repo scope only")
+          return
+        end
+        view.scope = view.scope == "buffer" and "repo" or "buffer"
+        load()
+      end,
+    },
+  })
+
+  load()
+  return view.panel
+end
+
+local function open_unused(ctx)
+  local cfg = require("epicenter.config").get()
+  local client = require("epicenter.client")
+  local panel_mod = require("epicenter.ui.panel")
+
+  local view = { no_public = false }
+
+  local function load()
+    client.unused({ noPublic = view.no_public, limit = cfg.unused.limit }, function(err, result)
+      if not view.panel:valid() then
+        return
+      end
+      if err then
+        view.panel:notice("  " .. (err.message or "navgraph did not answer"))
+        return
+      end
+      view.panel:set_items(result.items or {}, { stagger = true })
+      view.panel:set_footer(
+        (" %d%s "):format(view.panel.list:count(), view.no_public and " · no public" or "")
+      )
+    end, { bufnr = ctx.bufnr, channel = "unused" })
+  end
+
+  view.panel = panel_mod.open({
+    title = " unused ",
+    footer = " 0 ",
+    filetype = "epicenter-unused",
+    empty_text = "  everything here is reached",
+    render_row = M.render_unused,
+    text_of = function(symbol)
+      return symbol.qualified
+    end,
+    target_of = target_of,
+    keys = {
+      p = function()
+        view.no_public = not view.no_public
+        load()
+      end,
+    },
+  })
+
+  if ctx.args[1] then
+    view.panel:set_filter(ctx.args[1])
+  end
+  load()
+  return view.panel
+end
+
+local function export_graph(ctx)
+  local cfg = require("epicenter.config").get()
+  local progress = require("epicenter.ui.toast").progress("exporting the graph")
+  require("epicenter.client").graph(
+    { path = ctx.args[1], format = cfg.graph.format },
+    function(err, result)
+      if err or not result or not result.path then
+        progress.finish(err and err.message or "navgraph returned no file", "error")
+        return
+      end
+      progress.finish("graph written to " .. vim.fn.fnamemodify(result.path, ":~"))
+      vim.ui.open(result.path)
+    end,
+    { bufnr = ctx.bufnr, channel = "graph" }
+  )
+end
+
+M.name = "hot"
+M.summary = "Fan-in hot spots, unreached symbols, and the graph export"
+
+M.options = {
+  hot = { limit = 30, bar_width = 12 },
+  unused = { limit = 200 },
+  graph = { format = "svg" },
+}
+
+M.commands = {
+  { name = "hot", desc = "Hot spots ranked by fan-in", run = open_hot },
+  { name = "unused", desc = "Symbols nothing in the index reaches", run = open_unused },
+  { name = "graph", desc = "Write the call graph to a file and open it", run = export_graph },
+}
+
+M.keymaps = {
+  { suffix = "h", command = "hot", desc = "Epicenter: hot spots" },
+}
+
+return M

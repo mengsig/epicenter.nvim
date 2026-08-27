@@ -5,7 +5,5 @@
 return {
   name = "planned",
   summary = "Subcommands announced but not yet implemented",
-  commands = {
-    { name = "hot", desc = "Hot spots ranked by fan-in", status = "planned" },
-  },
+  commands = {},
 }
