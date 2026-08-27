@@ -85,11 +85,23 @@ local VARIANTS = {
 --- Subtrees copied wholesale, with no key checking.
 local FREE_FORM = { highlights = true }
 
+--- Subtrees that pass an option unknown to their own defaults straight
+--- through, e.g. a newer navgraph's init_options key this plugin does not
+--- know about yet - a documented option still gets its own validation.
+local ALLOW_UNKNOWN = { ["lsp.init_options"] = true }
+
 local ENUMS = {
   ["ui.icons"] = { "auto", "nerd", "ascii" },
   ["log.level"] = { "error", "warn", "info", "debug", "trace" },
   ["lsp.init_options.tests"] = { "with", "without", "only" },
+  --- Only the string shorthand is enumerated; a table border spec (custom
+  --- per-side chars) is free-form, checked only by `nvim_open_win` itself.
+  ["ui.border"] = { "none", "single", "double", "rounded", "solid", "shadow" },
 }
+
+--- Strings that must not be empty: an empty keymaps.prefix installs bare
+--- normal-mode maps (`s`, `g`, ...), clobbering unrelated motions.
+local NONEMPTY_STRING = { ["keymaps.prefix"] = true }
 
 local POSITIVE = {
   ["ui.max_width"] = true,
@@ -125,6 +137,10 @@ local FALSE_ONLY = { ["keymaps"] = true }
 --- backoff_ms leaves the crash-recovery path with no delay to index into.
 local LIST_NONEMPTY_NUMBERS = { ["lsp.restart.backoff_ms"] = true }
 
+--- Lists whose elements must be strings; unlike backoff_ms these may be
+--- empty (an empty argv extension is the default).
+local LIST_STRINGS = { ["navgraph.args"] = true }
+
 local function fail(fmt, ...)
   error("epicenter.setup: " .. fmt:format(...), 0)
 end
@@ -135,8 +151,18 @@ end
 
 local function check_value(path, value)
   local enum = ENUMS[path]
-  if enum and not vim.tbl_contains(enum, value) then
+  if enum and type(value) == "string" and not vim.tbl_contains(enum, value) then
     fail("%s must be one of %s, got %q", path, table.concat(enum, ", "), tostring(value))
+  end
+  if NONEMPTY_STRING[path] and value == "" then
+    fail("%s must not be empty", path)
+  end
+  if LIST_STRINGS[path] then
+    for _, element in ipairs(value) do
+      if type(element) ~= "string" then
+        fail("%s must be a list of strings, got a %s element", path, type(element))
+      end
+    end
   end
   if POSITIVE[path] and (type(value) ~= "number" or value <= 0) then
     fail("%s must be a positive number, got %s", path, tostring(value))
@@ -163,34 +189,39 @@ local function check_value(path, value)
   end
 end
 
-local function merge(defaults, opts, prefix)
+local function merge(defaults, opts, prefix, allow_unknown)
   local out = vim.deepcopy(defaults)
   for key, value in pairs(opts) do
     local path = join(prefix, key)
     local allowed = VARIANTS[path]
     local default = defaults[key]
 
-    if not allowed then
-      if default == nil then
-        local known = vim.tbl_keys(defaults)
-        table.sort(known)
-        fail("unknown option %q (known here: %s)", path, table.concat(known, ", "))
-      end
-      allowed = { type(default) }
-    end
-
-    if not vim.tbl_contains(allowed, type(value)) then
-      fail("%s must be %s, got %s", path, table.concat(allowed, " or "), type(value))
-    end
-
-    check_value(path, value)
-
-    if FREE_FORM[key] and prefix == "" then
+    if not allowed and default == nil and allow_unknown then
+      -- Unrecognised, but this subtree passes it through verbatim (F6).
       out[key] = vim.deepcopy(value)
-    elseif type(value) == "table" and type(default) == "table" and not vim.islist(default) then
-      out[key] = merge(default, value, path)
     else
-      out[key] = vim.deepcopy(value)
+      if not allowed then
+        if default == nil then
+          local known = vim.tbl_keys(defaults)
+          table.sort(known)
+          fail("unknown option %q (known here: %s)", path, table.concat(known, ", "))
+        end
+        allowed = { type(default) }
+      end
+
+      if not vim.tbl_contains(allowed, type(value)) then
+        fail("%s must be %s, got %s", path, table.concat(allowed, " or "), type(value))
+      end
+
+      check_value(path, value)
+
+      if FREE_FORM[key] and prefix == "" then
+        out[key] = vim.deepcopy(value)
+      elseif type(value) == "table" and type(default) == "table" and not vim.islist(default) then
+        out[key] = merge(default, value, path, ALLOW_UNKNOWN[path])
+      else
+        out[key] = vim.deepcopy(value)
+      end
     end
   end
   return out

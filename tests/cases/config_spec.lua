@@ -142,6 +142,47 @@ describe("config", function()
     vim.g.epicenter_reduce_motion = saved
   end)
 
+  it("passes an lsp.init_options key it does not know verbatim (F6)", function()
+    local cfg = config.setup({
+      lsp = { init_options = { newOptionFromNewerNavgraph = 1 } },
+    })
+    expect.eq(cfg.lsp.init_options.newOptionFromNewerNavgraph, 1)
+    -- Documented keys keep their own validation - free-form does not mean
+    -- unchecked for the options this plugin actually knows about.
+    expect.errors(function()
+      config.setup({ lsp = { init_options = { debounceMs = -1 } } })
+    end, "debounceMs must be a positive number")
+    expect.errors(function()
+      config.setup({ lsp = { init_options = { tests = "maybe" } } })
+    end, "tests must be one of")
+  end)
+
+  it("enforces the ui.border enum for the string form only (F7)", function()
+    expect.errors(function()
+      config.setup({ ui = { border = "nope" } })
+    end, "ui%.border must be one of")
+    expect.eq(config.setup({ ui = { border = "double" } }).ui.border, "double")
+    -- The table form (custom per-side border chars) stays free-form.
+    expect.eq(config.setup({ ui = { border = { "1", "2" } } }).ui.border, { "1", "2" })
+  end)
+
+  it("rejects an empty keymaps.prefix (F8)", function()
+    expect.errors(function()
+      config.setup({ keymaps = { prefix = "" } })
+    end, "keymaps%.prefix must not be empty")
+  end)
+
+  it("rejects a non-string navgraph.args element (F9)", function()
+    expect.errors(function()
+      config.setup({ navgraph = { args = { 1, 2 } } })
+    end, "navgraph%.args must be a list of strings")
+    expect.eq(config.setup({ navgraph = { args = { "--foo", "bar" } } }).navgraph.args, {
+      "--foo",
+      "bar",
+    })
+    expect.eq(config.setup({ navgraph = { args = {} } }).navgraph.args, {}, "empty stays allowed")
+  end)
+
   it("exposes every feature's options as defaults", function()
     local registry = require("epicenter.registry")
     local defaults = config.defaults()
