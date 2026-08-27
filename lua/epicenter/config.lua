@@ -96,18 +96,34 @@ local POSITIVE = {
   ["ui.max_height"] = true,
   ["animation.open_ms"] = true,
   ["animation.close_ms"] = true,
+  ["animation.stagger_ms"] = true,
   ["animation.fps"] = true,
   ["animation.frame_budget_ms"] = true,
   ["lsp.init_options.debounceMs"] = true,
   ["lsp.init_options.watchIntervalMs"] = true,
   ["lsp.init_options.depth"] = true,
+  ["lsp.restart.max"] = true,
+  ["search.debounce_ms"] = true,
+  ["search.limit"] = true,
+  ["grep.debounce_ms"] = true,
+  ["grep.limit"] = true,
 }
 
 local FRACTION = { ["ui.width"] = true, ["ui.height"] = true }
 
+--- Inclusive numeric ranges, checked after POSITIVE/FRACTION so a value can
+--- be positive and still out of range (e.g. winblend > 100).
+local RANGE = {
+  ["ui.winblend"] = { 0, 100 },
+}
+
 --- A boolean here is only ever meaningful as `false`; `true` would silently
 --- mean "the default table", which install_keymaps never does.
 local FALSE_ONLY = { ["keymaps"] = true }
+
+--- Lists that must not be replaced with an empty table: an empty
+--- backoff_ms leaves the crash-recovery path with no delay to index into.
+local LIST_NONEMPTY_NUMBERS = { ["lsp.restart.backoff_ms"] = true }
 
 local function fail(fmt, ...)
   error("epicenter.setup: " .. fmt:format(...), 0)
@@ -128,8 +144,22 @@ local function check_value(path, value)
   if FRACTION[path] and (type(value) ~= "number" or value <= 0) then
     fail("%s must be > 0 (a fraction of the editor, or absolute cells when > 1)", path)
   end
+  local range = RANGE[path]
+  if range and (type(value) ~= "number" or value < range[1] or value > range[2]) then
+    fail("%s must be between %d and %d, got %s", path, range[1], range[2], tostring(value))
+  end
   if FALSE_ONLY[path] and type(value) == "boolean" and value ~= false then
     fail("%s must be a table or `false`, got true", path)
+  end
+  if LIST_NONEMPTY_NUMBERS[path] then
+    if type(value) ~= "table" or #value == 0 then
+      fail("%s must be a non-empty list of numbers", path)
+    end
+    for _, n in ipairs(value) do
+      if type(n) ~= "number" or n <= 0 then
+        fail("%s must be a non-empty list of positive numbers, got %s", path, tostring(n))
+      end
+    end
   end
 end
 
