@@ -1,3 +1,8 @@
+# Generated helptags.
 doc/tags
-.navgraph/
+
+# navgraph's own index cache, at the repo root only - the fixture tree's
+# .navgraph marker is committed on purpose.
+/.navgraph/
+
 *.log
