@@ -31,7 +31,7 @@ builds it for you).
 {
   "mengsig/epicenter.nvim",
   build = function()
-    require("epicenter").install()
+    require("epicenter").install({ wait = true })
   end,
   opts = {},
 }
@@ -43,7 +43,7 @@ builds it for you).
 use({
   "mengsig/epicenter.nvim",
   run = function()
-    require("epicenter").install()
+    require("epicenter").install({ wait = true })
   end,
   config = function()
     require("epicenter").setup({})

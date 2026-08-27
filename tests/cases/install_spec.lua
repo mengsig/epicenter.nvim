@@ -190,4 +190,18 @@ describe("install orchestration", function()
     expect.matches(ran[1], "^gh release download")
     expect.matches(ran[2] or "", "^git clone")
   end)
+
+  it("wait = true blocks the caller until the async install actually finishes", function()
+    stub_system(ran)
+    -- A build/run hook calls install() and treats its RETURN as done; wait
+    -- must make that true instead of racing the still-running download/build.
+    local ok, err = install.install({
+      tools = { gh = false, gh_auth = false, git = true, zig = true },
+      wait = 2000,
+    })
+    expect.eq(ok, false, "the stubbed clone must be reported as a failure, not swallowed")
+    expect.truthy(err ~= nil, "wait must return the error synchronously, not nil")
+    expect.matches(err, "git clone")
+    expect.matches(err, "stubbed failure")
+  end)
 end)

@@ -109,7 +109,10 @@ function M.complete(lead, line, _)
   return {}
 end
 
---- lazy.nvim `build =` hook: `build = function() require("epicenter").install() end`
+--- Plugin-manager `build =` hook: `build = function() require("epicenter").install({ wait = true }) end`
+--- `wait = true` blocks until installation actually finishes - the build
+--- step is otherwise considered done the instant this function returns,
+--- while the download/build is still running in the background.
 function M.install(opts)
   return require("epicenter.install").install(opts)
 end

@@ -47,17 +47,23 @@ With lazy.nvim, wire the installer to the build hook: >lua
 
     {
       "mengsig/epicenter.nvim",
-      build = function() require("epicenter").install() end,
+      build = function() require("epicenter").install({ wait = true }) end,
       opts = {},
     }
 <
 Calling |epicenter.setup()| is optional; the defaults apply on their own.
 
                                                           *epicenter.install()*
-require("epicenter").install()
+require("epicenter").install({opts})
     Downloads a release with `gh` when it is authenticated, otherwise clones
     and builds with `zig`. Reports exactly which tool is missing when neither
     route is available. Installs to `stdpath("data")/epicenter/bin/navgraph`.
+
+    Fully asynchronous by default - a `build =`/`run =` hook must pass
+    `{ wait = true }` (or a custom millisecond timeout), since a plugin
+    manager treats the hook function *returning* as the step being done.
+    With `wait`, returns `ok, err_or_path` once installation actually
+    finishes instead of while it is still downloading or building.
 
 The binary is looked up in this order:
     1. `navgraph.path` from |epicenter.setup()|

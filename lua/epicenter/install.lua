@@ -217,17 +217,27 @@ local function install_from_source(cfg, tmp, progress, cb)
 end
 
 --- Downloads a release when `gh` is authenticated, otherwise builds from
---- source. Exposed as `require("epicenter").install()` for a lazy.nvim
---- `build =` hook.
---- @param opts? { tools?: table, on_done?: fun(err: string|nil, path: string|nil) }
+--- source. Exposed as `require("epicenter").install()`.
+---
+--- A plugin manager's `build =` hook treats the function *returning* as the
+--- step being done, but this is normally fully async - pass `wait` for a
+--- build hook so it blocks until installation actually finishes.
+--- @param opts? { tools?: table, on_done?: fun(err: string|nil, path: string|nil),
+---   wait?: boolean|integer }
 ---   `tools` skips detection when the caller already probed the machine.
+---   `wait`: block until done and return `ok, err_or_path`; `true` waits up
+---   to 120s, or pass a custom timeout in ms.
+--- @return boolean|nil ok, string|nil err_or_path only set when `wait` is given
 function M.install(opts)
   opts = opts or {}
   local cfg = require("epicenter.config").get()
   local toast = require("epicenter.ui.toast")
   local progress = toast.progress("installing navgraph")
 
+  local finished, final_err, final_path = false, nil, nil
   local function done(err, path)
+    finished = true
+    final_err, final_path = err, path
     if err then
       require("epicenter.log").error("install failed: %s", err)
       progress.finish(err, "error")
@@ -277,6 +287,17 @@ function M.install(opts)
     with_tools(opts.tools)
   else
     M.detect_tools(with_tools)
+  end
+
+  if opts.wait then
+    local timeout = opts.wait == true and 120000 or opts.wait
+    local ok = vim.wait(timeout, function()
+      return finished
+    end, 50)
+    if not ok then
+      return false, ("epicenter: install timed out after %dms"):format(timeout)
+    end
+    return final_err == nil, final_err or final_path
   end
 end
 
