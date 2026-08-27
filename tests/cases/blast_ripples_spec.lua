@@ -1,9 +1,9 @@
 local ripples = require("epicenter.features.blast.ripples")
 local support = require("support")
 
-local function node(file, line, ring)
+local function node(file, line, depth)
   return {
-    ring = ring,
+    depth = depth,
     symbol = {
       uri = vim.uri_from_fname(vim.fs.joinpath(support.fixture_root(), file)),
       file = file,

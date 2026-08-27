@@ -1,17 +1,25 @@
 --- Pure core of the blast panel: query parameters, the ring/file/node row
 --- model, and the diff between two results. No windows, no buffers, no server
 --- - so every rendering and realtime-diff rule is testable without a UI.
+---
+--- Field names follow the protocol (`docs/lsp.md` v1): a node carries `depth`
+--- and `exact`, and the counts come from the server's `summary` rather than
+--- being recounted here.
 local M = {}
 
 --- @class epicenter.blast.Node
 --- @field key string stable across re-queries: uri plus qualified name
---- @field symbol table the navgraph symbol
---- @field ring integer 1-based distance from a root
---- @field heuristic boolean the edge that reached it was resolved by name only
+--- @field symbol table the protocol's Symbol
+--- @field depth integer 1-based distance from a root
+--- @field exact boolean false when the edge was resolved by name alone
 --- @field state? "added"|"removed" set only while a realtime transition plays
 
 M.DIRECTIONS = { "callers", "callees" }
 M.TESTS = { "with", "without", "only" }
+
+--- Params a panel may send. `uri`+`position`, `symbol`, `file` and `ref` are
+--- the protocol's Target forms; the rest is the query mode.
+local TARGET_KEYS = { "uri", "position", "symbol", "file", "ref" }
 
 --- @param direction "callers"|"callees"
 function M.flip_direction(direction)
@@ -36,7 +44,7 @@ end
 
 --- Request parameters shared by `navgraph/blast` and `navgraph/diff`.
 --- @param state { depth: integer, direction: string, tests: string, strict: boolean }
---- @param target { uri?: string, position?: table, symbol?: string, ref?: string }
+--- @param target table one of the protocol's Target forms
 function M.params(state, target)
   local params = {
     depth = state.depth,
@@ -44,7 +52,7 @@ function M.params(state, target)
     tests = state.tests,
     strict = state.strict,
   }
-  for _, key in ipairs({ "uri", "position", "symbol", "ref" }) do
+  for _, key in ipairs(TARGET_KEYS) do
     params[key] = target[key]
   end
   return params
@@ -56,10 +64,10 @@ end
 
 M.node_key = node_key
 
---- Total order of the panel body: ring, then file, then position in the file.
+--- Total order of the panel body: depth, then file, then position in the file.
 local function before(a, b)
-  if a.ring ~= b.ring then
-    return a.ring < b.ring
+  if a.depth ~= b.depth then
+    return a.depth < b.depth
   end
   if a.symbol.file ~= b.symbol.file then
     return a.symbol.file < b.symbol.file
@@ -70,9 +78,10 @@ local function before(a, b)
   return a.key < b.key
 end
 
---- Normalizes a `navgraph/blast` or `navgraph/diff` result into sorted nodes.
---- A node reported twice (two paths reach it) keeps its shallowest ring.
---- @param result table|nil
+--- Normalizes a `navgraph/blast` result into sorted nodes. The server already
+--- emits each symbol once at its minimum depth; a duplicate is folded anyway
+--- so a stricter server contract can never produce two rows for one symbol.
+--- @param result table|nil a `navgraph/blast` payload
 --- @return epicenter.blast.Node[]
 function M.nodes(result)
   local seen, nodes = {}, {}
@@ -81,14 +90,14 @@ function M.nodes(result)
     if symbol then
       local key = node_key(symbol)
       local node = seen[key]
-      local ring = math.max(1, math.floor(entry.ring or 1))
+      local depth = math.max(1, math.floor(entry.depth or 1))
       if not node then
-        node = { key = key, symbol = symbol, ring = ring, heuristic = entry.heuristic == true }
+        node = { key = key, symbol = symbol, depth = depth, exact = entry.exact ~= false }
         seen[key] = node
         table.insert(nodes, node)
-      elseif ring < node.ring then
-        node.ring = ring
-        node.heuristic = entry.heuristic == true
+      elseif depth < node.depth then
+        node.depth = depth
+        node.exact = entry.exact ~= false
       end
     end
   end
@@ -96,23 +105,9 @@ function M.nodes(result)
   return nodes
 end
 
---- Counts the panel's summary chips from the nodes it will actually show, so
---- the chips can never disagree with the body.
---- @param nodes epicenter.blast.Node[]
---- @return { symbols: integer, files: integer, tests: integer, max_depth: integer }
-function M.counts(nodes)
-  local files, count, tests, max_depth = {}, 0, 0, 0
-  for _, node in ipairs(nodes) do
-    if node.state ~= "removed" then
-      count = count + 1
-      files[node.symbol.file] = true
-      if node.symbol.test then
-        tests = tests + 1
-      end
-      max_depth = math.max(max_depth, node.ring)
-    end
-  end
-  return { symbols = count, files = vim.tbl_count(files), tests = tests, max_depth = max_depth }
+--- The empty summary, for a panel with no answer yet.
+function M.empty_summary()
+  return { symbols = 0, files = 0, tests = 0, maxDepth = 0, truncated = false }
 end
 
 --- @return { added: string[], removed: string[] } node keys, sorted
@@ -176,7 +171,7 @@ end
 
 --- @class epicenter.blast.Row
 --- @field kind "ring"|"file"|"node"
---- @field ring integer
+--- @field depth integer
 --- @field file? string
 --- @field count? integer nodes under a ring or file heading
 --- @field node? epicenter.blast.Node
@@ -186,23 +181,23 @@ end
 --- @return epicenter.blast.Row[]
 function M.rows(nodes)
   local rows = {}
-  local ring, file = nil, nil
+  local depth, file = nil, nil
   local ring_row, file_row = nil, nil
 
   for _, node in ipairs(nodes) do
-    if node.ring ~= ring then
-      ring, file = node.ring, nil
-      ring_row = { kind = "ring", ring = ring, count = 0 }
+    if node.depth ~= depth then
+      depth, file = node.depth, nil
+      ring_row = { kind = "ring", depth = depth, count = 0 }
       table.insert(rows, ring_row)
     end
     if node.symbol.file ~= file then
       file = node.symbol.file
-      file_row = { kind = "file", ring = ring, file = file, count = 0 }
+      file_row = { kind = "file", depth = depth, file = file, count = 0 }
       table.insert(rows, file_row)
     end
     ring_row.count = ring_row.count + 1
     file_row.count = file_row.count + 1
-    table.insert(rows, { kind = "node", ring = ring, file = file, node = node })
+    table.insert(rows, { kind = "node", depth = depth, file = file, node = node })
   end
   return rows
 end
@@ -233,6 +228,13 @@ end
 
 M.append = append
 
+--- @return string e.g. "1 file", "3 files"
+function M.plural(count, noun)
+  return ("%d %s"):format(count, count == 1 and noun or (noun .. "s"))
+end
+
+local plural = M.plural
+
 --- @param row epicenter.blast.Row
 --- @return { text: string, spans: table[] }
 function M.render_row(row)
@@ -240,7 +242,7 @@ function M.render_row(row)
   local spans, text = {}, ""
 
   if row.kind == "ring" then
-    text = append(text, spans, ("  ring %d"):format(row.ring), "EpicenterTitle")
+    text = append(text, spans, ("  ring %d"):format(row.depth), "EpicenterTitle")
     return {
       text = append(text, spans, ("  %d"):format(row.count), "EpicenterCount"),
       spans = spans,
@@ -262,7 +264,7 @@ function M.render_row(row)
     dim and "EpicenterMuted" or "EpicenterNormal"
   )
   text = append(text, spans, ("  %s:%d"):format(symbol.file, symbol.line), "EpicenterMuted")
-  if node.heuristic then
+  if not node.exact then
     text = append(text, spans, "  ?", "EpicenterMuted")
   end
   if symbol.test then
@@ -296,26 +298,23 @@ function M.title_line(meta)
   }
 end
 
---- Summary chips plus the query mode the keys drive.
---- @param counts { symbols: integer, files: integer, tests: integer, max_depth: integer, changed?: integer }
+--- The server's summary as chips, plus the query mode the keys drive.
+--- @param summary { symbols: integer, files: integer, tests: integer, maxDepth: integer,
+---   truncated?: boolean, changed?: integer }
 --- @param state { direction: string, tests: string, strict: boolean, follow: boolean }
---- @return string e.g. "1 file", "3 files"
-function M.plural(count, noun)
-  return ("%d %s"):format(count, count == 1 and noun or (noun .. "s"))
-end
-
-local plural = M.plural
-
-function M.chips_line(counts, state)
+function M.chips_line(summary, state)
   local icons = require("epicenter.ui.icons")
   local chips = {}
-  if counts.changed then
-    table.insert(chips, ("%d changed"):format(counts.changed))
+  if summary.changed then
+    table.insert(chips, ("%d changed"):format(summary.changed))
   end
-  table.insert(chips, plural(counts.symbols, "symbol"))
-  table.insert(chips, plural(counts.files, "file"))
-  table.insert(chips, plural(counts.tests, "test"))
-  table.insert(chips, ("depth %d"):format(counts.max_depth))
+  table.insert(chips, plural(summary.symbols, "symbol"))
+  table.insert(chips, plural(summary.files, "file"))
+  table.insert(chips, plural(summary.tests, "test"))
+  table.insert(chips, ("depth %d"):format(summary.maxDepth))
+  if summary.truncated then
+    table.insert(chips, "truncated")
+  end
 
   local arrow = state.direction == "callers" and icons.ui("fan_in") or icons.ui("fan_out")
   local mode = { arrow .. " " .. state.direction, "tests " .. state.tests }

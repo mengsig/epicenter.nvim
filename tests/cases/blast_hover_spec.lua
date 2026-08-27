@@ -25,6 +25,27 @@ local CALLER = {
   endLine = 18,
 }
 
+--- The protocol's `Node` tree, as `navgraph/callers` answers it.
+local function root_node(symbol, callers)
+  return {
+    symbol = symbol,
+    exact = true,
+    lines = {},
+    ext = {},
+    recursion = false,
+    children = vim.tbl_map(function(caller)
+      return {
+        symbol = caller,
+        exact = true,
+        lines = { caller.line },
+        children = {},
+        ext = {},
+        recursion = false,
+      }
+    end, callers or {}),
+  }
+end
+
 describe("hover card contents", function()
   before_each(function()
     require("epicenter.config").reset()
@@ -32,11 +53,7 @@ describe("hover card contents", function()
   end)
 
   it("shows the kind, signature, counts, range, doc and top callers", function()
-    local card = hover.render({
-      symbol = SYMBOL,
-      items = { { ring = 1, symbol = CALLER } },
-      total = 3,
-    })
+    local card = hover.render(root_node(SYMBOL, { CALLER, CALLER, CALLER }), 1)
     local text = table.concat(card.lines, "\n")
 
     expect.matches(card.lines[1], "M%.handle_request")
@@ -51,7 +68,7 @@ describe("hover card contents", function()
   end)
 
   it("points <CR> on a caller row at that caller", function()
-    local card = hover.render({ symbol = SYMBOL, items = { { ring = 1, symbol = CALLER } } })
+    local card = hover.render(root_node(SYMBOL, { CALLER }))
     expect.eq(#card.rows, 1)
     expect.eq(card.targets[card.rows[1]], {
       path = "/proj/app/server.lua",
@@ -63,7 +80,7 @@ describe("hover card contents", function()
   it("drops the caller section and the doc when there are none", function()
     local bare = vim.deepcopy(SYMBOL)
     bare.doc = nil
-    local card = hover.render({ symbol = bare, items = {}, total = 0 })
+    local card = hover.render(root_node(bare, {}))
     local text = table.concat(card.lines, "\n")
     expect.falsy(text:find("top callers", 1, true))
     expect.falsy(text:find("Routes one request", 1, true))
@@ -71,8 +88,7 @@ describe("hover card contents", function()
   end)
 
   it("says `N of M` only when the list is capped", function()
-    local card =
-      hover.render({ symbol = SYMBOL, items = { { ring = 1, symbol = CALLER } }, total = 1 })
+    local card = hover.render(root_node(SYMBOL, { CALLER }))
     expect.matches(table.concat(card.lines, "\n"), "top callers\n")
   end)
 

@@ -94,7 +94,14 @@ function M.serve(opts)
 
     local ok, result = pcall(handler, ctx, params)
     if not ok then
-      rpc.respond_error(output, id, -32603, tostring(result))
+      -- A handler raises `{ code, message }` to answer with a protocol error
+      -- code of its own (-32001 for a target that resolves to nothing,
+      -- -32602 for bad params); anything else is an internal failure.
+      if type(result) == "table" and result.code then
+        rpc.respond_error(output, id, result.code, result.message or "request failed")
+      else
+        rpc.respond_error(output, id, -32603, tostring(result))
+      end
       return
     end
     rpc.respond(output, id, result)

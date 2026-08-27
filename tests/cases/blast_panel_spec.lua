@@ -62,7 +62,7 @@ describe("blast panel against the fake navgraph server", function()
     expect.eq(names(panel), { "M.handle_request", "M.start" })
     expect.eq(
       vim.tbl_map(function(node)
-        return node.ring
+        return node.depth
       end, panel.nodes),
       { 1, 2 }
     )
@@ -108,11 +108,11 @@ describe("blast panel against the fake navgraph server", function()
     end)
     expect.eq(panel.state.direction, "callees")
     expect.eq(names(panel), { "M.route", "log_request" })
-    local heuristic = vim.tbl_filter(function(node)
-      return node.heuristic
+    local inexact = vim.tbl_filter(function(node)
+      return not node.exact
     end, panel.nodes)
-    expect.eq(#heuristic, 1, "the cross-file call is resolved by name only")
-    expect.eq(heuristic[1].symbol.qualified, "M.route")
+    expect.eq(#inexact, 1, "the cross-file call is resolved by name only")
+    expect.eq(inexact[1].symbol.qualified, "M.route")
     expect.matches(body(panel), "M%.route.*%?")
   end)
 
@@ -204,6 +204,71 @@ describe("blast panel against the fake navgraph server", function()
     expect.eq(ripples.ring_at(buf, 9), nil)
     expect.falsy(vim.api.nvim_buf_is_valid(surface_buf))
     expect.eq(require("epicenter.features.blast.panel").current(), nil)
+  end)
+
+  it("re-targets on the cursor in follow mode, debounced", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    expect.eq(names(panel), { "M.handle_request", "M.start" })
+
+    panel:toggle_follow()
+    expect.eq(panel.state.follow, true)
+    expect.matches(lines_of(panel)[2], "follow")
+    expect.ne(
+      vim.api.nvim_get_current_win(),
+      panel.surface.win,
+      "follow hands the cursor back to the code"
+    )
+
+    vim.api.nvim_win_set_cursor(0, { 14, 0 })
+    panel:on_cursor_moved(buf)
+    expect.truthy(panel.follow_debouncer.pending(), "a cursor move waits out the debounce")
+    expect.matches(lines_of(panel)[1], "log_request", "and the panel has not moved yet")
+
+    settled(panel, function()
+      panel.follow_debouncer.flush()
+    end)
+    expect.matches(lines_of(panel)[1], "M%.start", "the panel followed to the new definition")
+  end)
+
+  it("ignores cursor movement inside the panel itself", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    panel:toggle_follow()
+    panel:on_cursor_moved(panel.surface.buf)
+    expect.falsy(panel.follow_debouncer.pending())
+  end)
+
+  it("peeks at the selected definition and closes the peek again", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    panel:peek()
+    expect.truthy(panel.peek_win ~= nil and panel.peek_win:valid())
+    local peeked = table.concat(vim.api.nvim_buf_get_lines(panel.peek_win.buf, 0, -1, false), "\n")
+    expect.matches(peeked, "function M%.handle_request")
+
+    panel:peek()
+    expect.eq(panel.peek_win, nil, "o toggles the peek shut")
+  end)
+
+  it("renders the same panel in a vertical split", function()
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = false,
+      blast = { layout = "vsplit" },
+    })
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    expect.eq(panel.surface.kind, "split")
+    expect.eq(
+      vim.api.nvim_win_get_config(panel.surface.win).relative,
+      "",
+      "a real window, not a float"
+    )
+    expect.matches(table.concat(lines_of(panel), "\n"), "ring 1")
+    expect.matches(lines_of(panel)[1], "log_request")
   end)
 
   it("sends every mode toggle as a query parameter", function()

@@ -76,10 +76,10 @@ local function paint_all()
 end
 
 --- Marks the impacted lines and keeps them marked as files are opened.
---- @param nodes epicenter.blast.Node[]
+--- @param nodes epicenter.blast.Node[] each carrying the protocol's `depth`
 function M.apply(nodes)
   if not require("epicenter.config").get().ripples then
-    return
+    return M.clear()
   end
   local by_path = {}
   for _, node in ipairs(nodes) do
@@ -88,8 +88,8 @@ function M.apply(nodes)
       local lines = by_path[path] or {}
       by_path[path] = lines
       local line = node.symbol.line
-      if not lines[line] or node.ring < lines[line] then
-        lines[line] = node.ring
+      if not lines[line] or node.depth < lines[line] then
+        lines[line] = node.depth
       end
     end
   end

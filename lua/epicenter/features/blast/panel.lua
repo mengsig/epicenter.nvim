@@ -21,6 +21,9 @@ local HEADER_ROWS = 3
 --- symbol lookup and the graph query that follows it included.
 local CHANNEL = "blast"
 
+--- The protocol's code for a Target that resolves to nothing.
+local TARGET_NOT_FOUND = -32001
+
 local SPLIT_WINHIGHLIGHT = table.concat({
   "Normal:EpicenterNormal",
   "CursorLine:EpicenterSelection",
@@ -138,12 +141,13 @@ function Surface:close()
   if self.closed then
     return
   end
+  self.closed = true
   if self.kind == "float" then
-    -- The window owns the single teardown path; it calls back into on_close.
+    -- The window owns the single teardown path; it calls back into on_close
+    -- once its fade is done. The panel already counts as closed.
     self.window:close()
     return
   end
-  self.closed = true
   pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
   if vim.api.nvim_win_is_valid(self.win) then
     pcall(vim.api.nvim_win_close, self.win, true)
@@ -199,7 +203,7 @@ function M.open(opts)
     origin_buf = opts.bufnr or vim.api.nvim_get_current_buf(),
     nodes = {},
     rows = {},
-    counts = { symbols = 0, files = 0, tests = 0, max_depth = 0 },
+    summary = model.empty_summary(),
     meta = { kind = opts.kind, ref = opts.target.ref },
     selected = 1,
     top = 1,
@@ -300,24 +304,19 @@ function Panel:_resolve_cursor(opts, generation)
       if err then
         return self:_show_message(err.message or "navgraph did not answer")
       end
-      -- The word under the cursor first, then the definition it sits inside,
-      -- so `<leader>ee` anywhere in a body still blasts that body's symbol.
-      local symbol = result and result.symbol
-      if not symbol or symbol == vim.NIL then
-        symbol = result and result.enclosing
+      -- On a name, hand the position straight back so the server applies its
+      -- own resolution rules; otherwise blast the definition the cursor sits
+      -- inside, so `<leader>ee` works anywhere in a body.
+      local resolved = result and result.symbol
+      local target = { uri = self.target.uri, position = self.target.position }
+      if not resolved or resolved == vim.NIL then
+        local enclosing = result and result.enclosing
+        if not enclosing or enclosing == vim.NIL then
+          return self:_show_message("no symbol under the cursor")
+        end
+        target = { symbol = enclosing.qualified }
       end
-      if not symbol or symbol == vim.NIL then
-        return self:_show_message("no symbol under the cursor")
-      end
-      self:_request(
-        "blast",
-        model.params(self.state, {
-          symbol = symbol.qualified,
-          uri = symbol.uri,
-        }),
-        opts,
-        generation
-      )
+      self:_request("blast", model.params(self.state, target), opts, generation)
     end)
   end, { bufnr = self.origin_buf, channel = CHANNEL })
 end
@@ -335,25 +334,45 @@ function Panel:_request(method, params, opts, generation)
   end, { bufnr = self.origin_buf, channel = CHANNEL })
 end
 
+--- `navgraph/diff` wraps a blast result; `navgraph/blast` is one.
+--- @return table blast payload, integer|nil changed-symbol count
+local function unwrap(kind, result)
+  if kind ~= "diff" then
+    return result, nil
+  end
+  local blast = result.blast or { nodes = {}, roots = {}, summary = model.empty_summary() }
+  -- The changed set IS the roots the walk started from.
+  return blast, #(blast.roots or {})
+end
+
 function Panel:_on_result(err, result, opts)
   if not self:valid() then
     return
   end
   if err then
+    if err.code == TARGET_NOT_FOUND then
+      local named = self.target.symbol
+      return self:_show_message(
+        named and ("no symbol named " .. named) or "no symbol under the cursor"
+      )
+    end
     return self:_show_message(err.message or "the query failed")
   end
 
   self.answered = self.answered + 1
   self.message = nil
-  local roots = result.roots or {}
+  local blast, changed = unwrap(self.kind, result)
+  local roots = blast.roots or {}
   self.meta = { kind = self.kind, root = roots[1], ref = result.ref or self.target.ref }
-  self.changed = self.kind == "diff" and #roots or nil
 
-  local nodes = model.nodes(result)
+  local summary = vim.tbl_extend("force", model.empty_summary(), blast.summary or {})
+  summary.changed = changed
+
+  local nodes = model.nodes(blast)
   if opts.realtime and #self.nodes > 0 then
-    self:_transition(nodes)
+    self:_transition(nodes, summary)
   else
-    self:_set_nodes(nodes)
+    self:_set_nodes(nodes, summary)
     self:_paint({ stagger = not opts.realtime })
   end
   ripples.apply(self.nodes)
@@ -362,16 +381,16 @@ end
 function Panel:_show_message(message)
   self.answered = self.answered + 1
   self.message = "  " .. message
-  self:_set_nodes({})
+  self:_set_nodes({}, model.empty_summary())
   self:_paint()
   ripples.apply({})
 end
 
-function Panel:_set_nodes(nodes)
+--- @param summary table the server's blast summary for `nodes`
+function Panel:_set_nodes(nodes, summary)
   self.nodes = nodes
   self.rows = model.rows(nodes)
-  self.counts = model.counts(nodes)
-  self.counts.changed = self.changed
+  self.summary = summary or self.summary
   self:_clamp_selection()
 end
 
@@ -393,9 +412,11 @@ end
 
 -- Realtime ----------------------------------------------------------------------
 
+local COUNTED = { "symbols", "files", "tests", "maxDepth", "changed" }
+
 local function tick(from, to, eased)
-  local out = {}
-  for _, key in ipairs({ "symbols", "files", "tests", "max_depth", "changed" }) do
+  local out = vim.tbl_extend("force", {}, to)
+  for _, key in ipairs(COUNTED) do
     if to[key] then
       out[key] = math.floor((from[key] or 0) + ((to[key] - (from[key] or 0)) * eased) + 0.5)
     end
@@ -405,18 +426,19 @@ end
 
 --- Plays the change instead of rebuilding: the rows that left stay in place,
 --- dimmed, the rows that arrived flash the accent, the chips count across.
-function Panel:_transition(next_nodes)
+function Panel:_transition(next_nodes, summary)
   local delta = model.diff(self.nodes, next_nodes)
   self.last_delta = delta
   if #delta.added == 0 and #delta.removed == 0 then
-    self:_set_nodes(next_nodes)
+    self:_set_nodes(next_nodes, summary)
     self:_paint()
     return
   end
 
-  local from = self.counts
-  self:_set_nodes(model.transition(self.nodes, next_nodes))
-  local to = vim.deepcopy(self.counts)
+  -- Paint the union first - the chips already read the new summary - then
+  -- count them up to it from the old one.
+  local from, to = self.summary, summary
+  self:_set_nodes(model.transition(self.nodes, next_nodes), summary)
   self:_paint()
 
   local cfg = require("epicenter.config").get()
@@ -433,7 +455,7 @@ function Panel:_transition(next_nodes)
       if not self:valid() then
         return
       end
-      self:_set_nodes(next_nodes)
+      self:_set_nodes(next_nodes, summary)
       self:_paint()
       ripples.apply(self.nodes)
     end,
@@ -446,9 +468,9 @@ function Panel:_body_height()
   return math.max(1, self.surface:height() - HEADER_ROWS)
 end
 
-function Panel:_header(counts)
+function Panel:_header(summary)
   local title = model.title_line(self.meta)
-  local chips = model.chips_line(counts or self.counts, self.state)
+  local chips = model.chips_line(summary or self.summary, self.state)
   local spans = {}
   for row, rendered in ipairs({ title, chips }) do
     for _, span in ipairs(rendered.spans) do
@@ -554,12 +576,12 @@ end
 
 --- Rewrites only the chips line, so the counts can tick during a transition
 --- without disturbing the rows underneath.
-function Panel:_paint_chips(counts)
+function Panel:_paint_chips(summary)
   local buf = self.surface.buf
   if not self:valid() or not vim.api.nvim_buf_is_valid(buf) or self.help_open then
     return
   end
-  local chips = model.chips_line(counts, self.state)
+  local chips = model.chips_line(summary, self.state)
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 1, 2, false, { chips.text })
   vim.bo[buf].modifiable = false
@@ -627,7 +649,7 @@ end
 function Panel:_close_peek()
   if self.peek_win then
     self.peek_win:close()
-    self.peek_win, self.peek = nil, nil
+    self.peek_win = nil
   end
 end
 
@@ -648,8 +670,11 @@ function Panel:peek()
     focusable = false,
     zindex = 200,
   })
-  self.peek = preview.new({ buf = self.peek_win.buf, win = self.peek_win.win, height = box.height })
-  self.peek:show(target)
+  -- The preview paints into the window's buffer here and is not needed again;
+  -- keeping it on `self` would shadow this very method.
+  preview
+    .new({ buf = self.peek_win.buf, win = self.peek_win.win, height = box.height })
+    :show(target)
   self.peek_win:reveal(self.animate_opts)
 end
 

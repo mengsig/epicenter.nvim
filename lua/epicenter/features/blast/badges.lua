@@ -128,6 +128,23 @@ function M.clear(bufnr)
   end
 end
 
+--- The buffer's path as the server names it: root-relative, exactly what
+--- `navgraph/outline` returns in `files[].file`.
+--- @return string|nil
+function M.relative_path(bufnr)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then
+    return nil
+  end
+  local path = vim.fs.normalize(name)
+  local cfg = require("epicenter.config").get()
+  local root = vim.fs.normalize(require("epicenter.root").find(bufnr, cfg.lsp.root_markers))
+  if root ~= "" and vim.startswith(path, root .. "/") then
+    return path:sub(#root + 2)
+  end
+  return path
+end
+
 --- @return boolean whether navgraph indexes this buffer at all
 function M.eligible(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].buftype ~= "" then
@@ -169,7 +186,10 @@ function M.fetch(bufnr, opts)
   if not require("epicenter.client").session_for_buf(bufnr) then
     return
   end
-  require("epicenter.client").outline({ uri = vim.uri_from_bufnr(bufnr) }, function(err, result)
+  -- `navgraph/outline` filters by a path substring and answers with one entry
+  -- per matching file, so ask for this file and take the exact match back.
+  local relative = M.relative_path(bufnr)
+  require("epicenter.client").outline({ path = relative }, function(err, result)
     vim.schedule(function()
       if not vim.api.nvim_buf_is_valid(bufnr) then
         return
@@ -186,10 +206,22 @@ function M.fetch(bufnr, opts)
         end
         return
       end
-      outlines[bufnr] = result.symbols or {}
+      outlines[bufnr] = M.symbols_for(result, relative)
       M.refresh(bufnr, opts)
     end)
   end, { bufnr = bufnr, channel = "badges:" .. bufnr })
+end
+
+--- The definitions of one file out of a `navgraph/outline` answer. Pure.
+--- @param result { files: { file: string, symbols: table[] }[] }
+--- @return table[]
+function M.symbols_for(result, relative)
+  for _, entry in ipairs(result and result.files or {}) do
+    if entry.file == relative then
+      return entry.symbols or {}
+    end
+  end
+  return {}
 end
 
 local function refresh_visible()

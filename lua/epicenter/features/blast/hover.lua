@@ -8,6 +8,9 @@ local M = {}
 local model = require("epicenter.features.blast.model")
 local window = require("epicenter.ui.window")
 
+--- The protocol's code for a Target that resolves to nothing.
+local TARGET_NOT_FOUND = -32001
+
 local append = model.append
 
 --- Treesitter spans for one signature line, offset by `offset` bytes.
@@ -50,11 +53,14 @@ local function counts_line(symbol)
   return { text = append(text, spans, "    " .. range, "EpicenterMuted"), spans = spans }
 end
 
---- @param payload { symbol: table, items: table[], total: integer }
+--- @param root table the protocol's `Node` from `navgraph/callers`
+--- @param limit? integer top callers to list
 --- @return { lines: string[], spans: table[], targets: table<integer, table>, rows: integer[] }
-function M.render(payload)
+function M.render(root, limit)
   local icons = require("epicenter.ui.icons")
-  local symbol = payload.symbol
+  local symbol = root.symbol
+  local children = root.children or {}
+  local shown = vim.list_slice(children, 1, math.min(#children, limit or #children))
   local lines, spans, targets, rows = {}, {}, {}, {}
 
   local function put(rendered)
@@ -85,15 +91,13 @@ function M.render(payload)
     end
   end
 
-  if #(payload.items or {}) > 0 then
+  if #shown > 0 then
     put({ text = "" })
-    local total = payload.total or #payload.items
-    local heading = #payload.items < total
-        and ("  top callers  %d of %d"):format(#payload.items, total)
+    local heading = #shown < #children and ("  top callers  %d of %d"):format(#shown, #children)
       or "  top callers"
     put({ text = heading, spans = { { hl = "EpicenterMuted", from = 0, to = #heading } } })
-    for _, item in ipairs(payload.items) do
-      local caller = item.symbol
+    for _, child in ipairs(shown) do
+      local caller = child.symbol
       local text, row_spans = "", {}
       text = append(text, row_spans, "    " .. icons.kind(caller.kind) .. " ", "EpicenterMuted")
       text = append(text, row_spans, caller.qualified or caller.name or "?", "EpicenterNormal")
@@ -148,13 +152,13 @@ end
 --- @param bufnr integer buffer whose cursor the card describes
 --- @return epicenter.blast.Card
 function M.open(bufnr)
-  local existing = M.current()
-  if existing then
-    existing:focus()
-    return existing
+  -- Not `M.current()`: a card whose request is still in flight has no window
+  -- yet, and asking again must not stack a second one behind it.
+  if current and not current.closed then
+    current:focus()
+    return current
   end
 
-  local cfg = require("epicenter.config").get()
   local client = require("epicenter.client")
   local blast = require("epicenter.features.blast")
   local target = blast.cursor_target(bufnr)
@@ -168,11 +172,13 @@ function M.open(bufnr)
   }, Card)
   current = self
 
+  -- One request: `navgraph/callers` answers with the symbol itself and its
+  -- callers in a single `Node` tree. There is no `limit` param - the card caps
+  -- the list itself.
   self.pending = client.callers({
     uri = target.uri,
     position = target.position,
     depth = 1,
-    limit = cfg.hover.callers,
   }, function(err, result)
     vim.schedule(function()
       self:_show(err, result)
@@ -198,28 +204,28 @@ function Card:_show(err, result)
   if self.closed then
     return
   end
-  local symbol = result and result.symbol
-  if err or not symbol or symbol == vim.NIL then
+  local root = result and result.root
+  local missing = err and err.code == TARGET_NOT_FOUND
+  if missing or not root or root == vim.NIL then
     self.closed = true
     current = nil
-    require("epicenter").notify(
-      err and (err.message or "navgraph did not answer") or "no symbol under the cursor",
-      err and "error" or "info"
-    )
+    require("epicenter").notify("no symbol under the cursor", "info")
+    return
+  end
+  if err then
+    self.closed = true
+    current = nil
+    require("epicenter").notify(err.message or "navgraph did not answer", "error")
     return
   end
 
-  self.card = M.render({
-    symbol = symbol,
-    items = result.items or {},
-    total = result.total or #(result.items or {}),
-  })
+  local cfg = require("epicenter.config").get()
+  self.card = M.render(root, cfg.hover.callers)
 
   local width = 0
   for _, line in ipairs(self.card.lines) do
     width = math.max(width, vim.fn.strdisplaywidth(line) + 2)
   end
-  local cfg = require("epicenter.config").get()
   self.win = window.open({
     box = anchor_box(math.min(width, cfg.hover.max_width), #self.card.lines),
     title = " hover ",

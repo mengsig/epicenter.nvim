@@ -1,0 +1,228 @@
+local model = require("epicenter.features.blast.model")
+
+local function symbol(qualified, file, line, extra)
+  return vim.tbl_extend("force", {
+    qualified = qualified,
+    name = qualified:match("[%w_]+$"),
+    kind = "fn",
+    file = file,
+    line = line,
+    endLine = line + 3,
+    uri = "file:///proj/" .. file,
+  }, extra or {})
+end
+
+local function result(entries)
+  return {
+    nodes = vim.tbl_map(function(entry)
+      return {
+        symbol = symbol(entry[1], entry[2], entry[3], entry[5]),
+        depth = entry[4],
+        via = {},
+        exact = entry[6] ~= true,
+      }
+    end, entries),
+  }
+end
+
+local FIXTURE = result({
+  { "M.start", "app/server.lua", 14, 2 },
+  { "M.handle_request", "app/server.lua", 9, 1 },
+  { "RequestHandler.handle", "app/handlers.py", 2, 1, nil, true },
+})
+
+describe("blast model", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+  end)
+
+  it("orders nodes by ring, then file, then position", function()
+    expect.eq(
+      vim.tbl_map(function(node)
+        return node.symbol.qualified
+      end, model.nodes(FIXTURE)),
+      { "RequestHandler.handle", "M.handle_request", "M.start" }
+    )
+  end)
+
+  it("keeps the shallowest depth when two entries name one symbol", function()
+    local nodes = model.nodes(result({
+      { "M.start", "app/server.lua", 14, 3 },
+      { "M.start", "app/server.lua", 14, 1 },
+    }))
+    expect.eq(#nodes, 1)
+    expect.eq(nodes[1].depth, 1)
+  end)
+
+  it("survives a result with no nodes at all", function()
+    expect.eq(model.nodes(nil), {})
+    expect.eq(model.nodes({}), {})
+    expect.eq(model.rows({}), {})
+    expect.eq(model.empty_summary(), {
+      symbols = 0,
+      files = 0,
+      tests = 0,
+      maxDepth = 0,
+      truncated = false,
+    })
+  end)
+
+  it("groups rows into rings, then files, and counts each heading", function()
+    local rows = model.rows(model.nodes(FIXTURE))
+    expect.eq(
+      vim.tbl_map(function(row)
+        return row.kind
+      end, rows),
+      { "ring", "file", "node", "file", "node", "ring", "file", "node" }
+    )
+    expect.eq(rows[1].depth, 1)
+    expect.eq(rows[1].count, 2, "ring 1 holds two symbols across two files")
+    expect.eq(rows[2].file, "app/handlers.py")
+    expect.eq(rows[4].file, "app/server.lua")
+    expect.eq(rows[6].depth, 2)
+  end)
+
+  it("leaves counting to the server's summary rather than recounting rows", function()
+    expect.eq(model.counts, nil, "the panel reads blast.summary, so there is one source")
+  end)
+
+  it("renders a ring heading, a file heading and a row", function()
+    local rows = model.rows(model.nodes(FIXTURE))
+    expect.eq(model.render_row(rows[1]).text, "  ring 1  2")
+    expect.eq(model.render_row(rows[2]).text, "    app/handlers.py")
+    expect.matches(
+      model.render_row(rows[3]).text,
+      "RequestHandler%.handle  app/handlers%.py:2  %?$"
+    )
+    expect.falsy(model.render_row(rows[5]).text:find("?", 1, true), "an exact edge carries no mark")
+  end)
+
+  it("dims a test row and tags it", function()
+    local nodes = model.nodes(result({
+      { "spec.covers", "tests/server_spec.lua", 4, 1, { test = true } },
+    }))
+    local row = model.render_row(model.rows(nodes)[3])
+    expect.matches(row.text, "test$")
+    local name_span = nil
+    for _, span in ipairs(row.spans) do
+      if row.text:sub(span.from + 1, span.to) == "spec.covers" then
+        name_span = span
+      end
+    end
+    expect.eq(name_span.hl, "EpicenterMuted", "a test row is dimmed, not normal weight")
+  end)
+
+  it("dims a departing row the same way", function()
+    local nodes = model.nodes(result({ { "M.start", "app/server.lua", 14, 1 } }))
+    nodes[1].state = "removed"
+    local row = model.render_row(model.rows(nodes)[3])
+    for _, span in ipairs(row.spans) do
+      expect.ne(span.hl, "EpicenterNormal")
+    end
+  end)
+
+  it("names the root, or the ref for a diff", function()
+    expect.matches(
+      model.title_line({ kind = "blast", root = symbol("M.start", "app/server.lua", 14) }).text,
+      "M%.start  app/server%.lua:14$"
+    )
+    expect.matches(
+      model.title_line({ kind = "diff", ref = "origin/main" }).text,
+      "changes vs origin/main$"
+    )
+    expect.matches(model.title_line({ kind = "blast" }).text, "no symbol under the cursor")
+  end)
+
+  it("writes the server's summary as chips, with the query mode after them", function()
+    local summary = { symbols = 1, files = 1, tests = 0, maxDepth = 1 }
+    local state = { direction = "callers", tests = "with", strict = false, follow = false }
+    expect.matches(
+      model.chips_line(summary, state).text,
+      "^  1 symbol · 1 file · 0 tests · depth 1"
+    )
+    expect.matches(model.chips_line(summary, state).text, "callers · tests with$")
+
+    local loud = model.chips_line(
+      vim.tbl_extend("force", summary, { changed = 2, truncated = true }),
+      { direction = "callees", tests = "only", strict = true, follow = true }
+    ).text
+    expect.matches(loud, "^  2 changed · ")
+    expect.matches(loud, "depth 1 · truncated")
+    expect.matches(loud, "callees · tests only · strict · follow$")
+  end)
+
+  it("reports what arrived and what left, in a stable order", function()
+    local before = model.nodes(FIXTURE)
+    local after = model.nodes(result({
+      { "M.handle_request", "app/server.lua", 9, 1 },
+      { "M.route", "app/config.lua", 3, 1 },
+    }))
+    local delta = model.diff(before, after)
+    expect.eq(delta.added, { "file:///proj/app/config.lua#M.route" })
+    expect.eq(delta.removed, {
+      "file:///proj/app/handlers.py#RequestHandler.handle",
+      "file:///proj/app/server.lua#M.start",
+    })
+  end)
+
+  it("keeps departing rows in place while the change plays", function()
+    local before = model.nodes(FIXTURE)
+    local after = model.nodes(result({
+      { "M.handle_request", "app/server.lua", 9, 1 },
+      { "M.route", "app/config.lua", 3, 1 },
+    }))
+    local union = model.transition(before, after)
+    local states = {}
+    for _, node in ipairs(union) do
+      states[node.symbol.qualified] = node.state or "settled"
+    end
+    expect.eq(states, {
+      ["M.route"] = "added",
+      ["M.handle_request"] = "settled",
+      ["RequestHandler.handle"] = "removed",
+      ["M.start"] = "removed",
+    })
+    expect.eq(union[1].symbol.qualified, "M.route", "the union keeps one total order")
+  end)
+
+  it("leaves the inputs untouched when it builds the union", function()
+    local before = model.nodes(FIXTURE)
+    model.transition(before, {})
+    for _, node in ipairs(before) do
+      expect.eq(node.state, nil)
+    end
+  end)
+
+  it("flips direction, cycles the tests scope and clamps depth", function()
+    expect.eq(model.flip_direction("callers"), "callees")
+    expect.eq(model.flip_direction("callees"), "callers")
+    expect.eq(model.cycle_tests("with"), "without")
+    expect.eq(model.cycle_tests("without"), "only")
+    expect.eq(model.cycle_tests("only"), "with")
+    expect.eq(model.clamp_depth(0, 6), 1)
+    expect.eq(model.clamp_depth(9, 6), 6)
+    expect.eq(model.clamp_depth(3, 6), 3)
+  end)
+
+  it("sends the query mode and the target together", function()
+    local state = { depth = 2, direction = "callers", tests = "with", strict = false }
+    expect.eq(model.params(state, { ref = "HEAD" }), {
+      depth = 2,
+      direction = "callers",
+      tests = "with",
+      strict = false,
+      ref = "HEAD",
+    })
+  end)
+
+  it("gives a jump target for a row, and none for a heading", function()
+    local rows = model.rows(model.nodes(FIXTURE))
+    expect.eq(model.target(rows[1]), nil)
+    expect.eq(model.target(rows[3]), {
+      path = "/proj/app/handlers.py",
+      line = 2,
+      end_line = 5,
+    })
+  end)
+end)

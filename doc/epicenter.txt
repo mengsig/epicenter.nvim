@@ -380,8 +380,9 @@ Options: >lua
     buffers as overlays - so an edit you have not saved is already in the
     answer.
 
-                                                         *epicenter-badges*
-                                                              *epicenter-ripples*
+                                                          *epicenter-ripples*
+RIPPLES
+
 While a panel is open every impacted definition line is marked in the code
 itself: a sign-column glyph and a tinted line, graded by ring, strongest at
 ring 1. The marks are dropped when the panel closes. `ripples = false` turns
@@ -395,12 +396,13 @@ These three are derived from `EpicenterAccent` over the editor background
 (not the float background - they land in ordinary windows) and re-derived on
 `ColorScheme`.
 
+                                                           *epicenter-badges*
 BADGES
 
 `badges` puts the fan-in and fan-out of a definition at the end of its line as
 muted virtual text, revealed left to right:
 
-    function M.handle_request(method, path)      1   2
+    function M.handle_request(method, path)      <- 1  -> 2
 
     "cursor"   the definition the cursor is inside, refreshed on |CursorHold|
     "all"      every definition in the buffer

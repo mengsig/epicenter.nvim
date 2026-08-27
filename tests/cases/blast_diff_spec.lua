@@ -51,7 +51,7 @@ describe("diff blast against the fake navgraph server", function()
   local function opened(args)
     local it_panel = epicenter.run("diff", args or {}, buf)
     wait(function()
-      return (it_panel.counts.changed or 0) > 0
+      return (it_panel.summary.changed or 0) > 0
     end, 10000, "changed symbols")
     return it_panel
   end
@@ -60,7 +60,7 @@ describe("diff blast against the fake navgraph server", function()
     panel = opened()
     expect.matches(lines_of(panel)[1], "changes vs HEAD")
     expect.matches(lines_of(panel)[2], "^  2 changed · ")
-    expect.eq(panel.counts.changed, 2, "both definitions in the open file changed")
+    expect.eq(panel.summary.changed, 2, "both definitions in the open file changed")
     expect.eq(names(panel), { "M.handle_request", "M.start" })
     expect.matches(table.concat(lines_of(panel), "\n"), "ring 2")
   end)
@@ -72,7 +72,7 @@ describe("diff blast against the fake navgraph server", function()
 
   it("counts an unsaved edit without waiting for a save", function()
     panel = opened()
-    expect.eq(panel.counts.changed, 2)
+    expect.eq(panel.summary.changed, 2)
 
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, {
       "",
@@ -82,7 +82,7 @@ describe("diff blast against the fake navgraph server", function()
     })
 
     wait(function()
-      return panel.counts.changed == 3
+      return panel.summary.changed == 3
     end, 10000, "the new definition reaches the panel")
     expect.matches(lines_of(panel)[2], "^  3 changed · ")
   end)
