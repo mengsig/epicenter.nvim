@@ -68,6 +68,40 @@ describe("registry", function()
     registry.reset()
   end)
 
+  it("merges a feature's own option_rules for an option path it owns (#F11)", function()
+    package.loaded["epicenter.features"] = {
+      {
+        name = "a",
+        summary = "a",
+        commands = {},
+        options = { a = { mode = "x" } },
+        option_rules = { enums = { ["a.mode"] = { "x", "y" } } },
+      },
+    }
+    registry.reset()
+    expect.eq(registry.option_rules().enums["a.mode"], { "x", "y" })
+    package.loaded["epicenter.features"] = nil
+    registry.reset()
+  end)
+
+  it("rejects a feature's rule on an option path it does not own (#F11)", function()
+    package.loaded["epicenter.features"] = {
+      {
+        name = "a",
+        summary = "a",
+        commands = {},
+        -- Declares no `options`, so it owns nothing - yet rules on `b.mode`.
+        option_rules = { enums = { ["b.mode"] = { "x" } } },
+      },
+    }
+    registry.reset()
+    expect.errors(function()
+      registry.option_rules()
+    end, "which it does not own")
+    package.loaded["epicenter.features"] = nil
+    registry.reset()
+  end)
+
   it("does not pull config in - config builds its defaults from the registry", function()
     for name in pairs(package.loaded) do
       if name:match("^epicenter") then

@@ -203,6 +203,22 @@ describe("blast panel against the fake navgraph server", function()
     end
   end)
 
+  it("repaints on VimResized (#F11)", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    local calls = 0
+    local original = panel._paint
+    panel._paint = function(self, ...)
+      calls = calls + 1
+      return original(self, ...)
+    end
+
+    vim.api.nvim_exec_autocmds("VimResized", { modeline = false })
+
+    expect.eq(calls, 1, "a resize must repaint the panel exactly once")
+    panel._paint = original
+  end)
+
   it("cleans up its marks and subscriptions on close", function()
     panel = epicenter.run("blast", {}, buf)
     settled(panel)

@@ -1,3 +1,72 @@
+--- `epicenter.setup()`'s feature-wiring seam (#F11): every feature's own
+--- `setup(cfg)` is called, a failure is wrapped with the feature's name
+--- rather than swallowed, and a second `setup()` re-runs it cleanly.
+local function fake_features(specs)
+  package.loaded["epicenter.features"] = specs
+  require("epicenter.registry").reset()
+end
+
+local function restore()
+  package.loaded["epicenter.features"] = nil
+  require("epicenter.registry").reset()
+  require("epicenter.config").reset()
+end
+
+describe("epicenter.setup wires up feature setup", function()
+  after_each(restore)
+
+  it("calls every feature's setup with the resolved config", function()
+    local seen
+    fake_features({
+      {
+        name = "probe",
+        summary = "probe",
+        commands = {},
+        setup = function(cfg)
+          seen = cfg
+        end,
+      },
+    })
+    local cfg =
+      require("epicenter").setup({ ui = { icons = "ascii" }, lsp = { auto_start = false } })
+    expect.truthy(seen ~= nil, "the feature's setup was never called")
+    expect.eq(seen, cfg)
+  end)
+
+  it("wraps a feature's setup failure with its name, not a bare error", function()
+    fake_features({
+      {
+        name = "broken",
+        summary = "broken",
+        commands = {},
+        setup = function()
+          error("boom")
+        end,
+      },
+    })
+    expect.errors(function()
+      require("epicenter").setup({ lsp = { auto_start = false } })
+    end, "broken")
+  end)
+
+  it("is idempotent: a second setup() re-runs every feature's setup cleanly", function()
+    local calls = 0
+    fake_features({
+      {
+        name = "probe",
+        summary = "probe",
+        commands = {},
+        setup = function()
+          calls = calls + 1
+        end,
+      },
+    })
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    expect.eq(calls, 2, "a second setup() must not skip or duplicate a feature's own setup")
+  end)
+end)
+
 local epicenter = require("epicenter")
 
 describe("keymap install and teardown", function()
