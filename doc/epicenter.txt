@@ -600,8 +600,8 @@ CORE                                                           *epicenter-core*
     index took, a bar per language, and the log path. A server that does not
     answer is reported as such rather than left blank.
 
-    The pid is the one `navgraph/status` reports; Neovim does not expose the
-    child process itself, so without it the panel names the LSP client.
+    The pid is Neovim's own record of the spawned process; without it (no
+    local client yet) the panel names the LSP client instead.
 
     r               rescan and repaint
     R               restart the server and repaint

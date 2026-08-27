@@ -14,8 +14,9 @@ local function root_for(ctx)
 end
 
 --- What this session knows about the server for `root`: whether it is up, and
---- how to identify it. Neovim does not expose the child pid, so the pid is the
---- server's own (from `navgraph/status`) when it reports one.
+--- how to identify it. `client.rpc.pid` is Neovim's own record of the
+--- spawned process, not anything the server reports - `navgraph/status`
+--- carries no pid (F2).
 --- @return { running: boolean, client_id: integer|nil, protocol: integer|nil, restarts: integer }
 function M.server_info(root)
   local info = require("epicenter.client").info(root)
@@ -48,9 +49,8 @@ function M.dashboard_lines(view)
   row(lines, spans, "root", vim.fn.fnamemodify(view.root, ":~"))
 
   local server_parts = { server.running and "running" or "stopped" }
-  local pid = status and status.pid or server.pid
-  if pid then
-    table.insert(server_parts, "pid " .. pid)
+  if server.pid then
+    table.insert(server_parts, "pid " .. server.pid)
   elseif server.client_id then
     table.insert(server_parts, "client " .. server.client_id)
   end

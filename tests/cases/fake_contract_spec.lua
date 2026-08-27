@@ -111,4 +111,22 @@ describe("the fake answers the real navgraph/* shapes", function()
     expect.truthy(result.languages.lua, "keyed 'lua', not '.lua'")
     expect.truthy(result.languages.python, "keyed 'python', not '.py'")
   end)
+
+  it("navgraph/status carries exactly the contract's fields, no invented pid (F2)", function()
+    local err, result = support.request(root, "navgraph/status", {})
+    expect.eq(err, nil)
+    expect.eq(keys_of(result), {
+      "cache",
+      "edges",
+      "files",
+      "indexedAt",
+      "languages",
+      "lastIndexMs",
+      "overlays",
+      "protocolVersion",
+      "root",
+      "symbols",
+      "version",
+    })
+  end)
 end)
