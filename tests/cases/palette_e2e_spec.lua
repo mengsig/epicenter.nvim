@@ -115,6 +115,25 @@ describe("search palette against the fake navgraph server", function()
     p:close()
   end)
 
+  it("jumps to the match column on accept, not always column 0", function()
+    local buf2 = open_fixture(root, "app/server.lua")
+    local p = epicenter.run("grep", {}, buf2)
+    p:query("log_request")
+    wait(function()
+      return p.list:count() > 0
+    end, 10000, "grep results")
+    local expected = p.list:current()
+    expect.truthy(expected.character > 0, "the fixture match is not at column 0")
+    p:accept("edit")
+
+    -- buf2 already showed server.lua before accept, so waiting on the buffer
+    -- name alone would race the scheduled jump - wait for the line instead.
+    wait(function()
+      return vim.api.nvim_win_get_cursor(0)[1] == expected.line
+    end, 5000, "jump to the match")
+    expect.eq(vim.api.nvim_win_get_cursor(0)[2], expected.character)
+  end)
+
   it("shows each palette's own keys in the in-app help, not the other's", function()
     local p = epicenter.run("search", {}, buf)
     p:toggle_help()

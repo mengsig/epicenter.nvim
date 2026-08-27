@@ -50,8 +50,10 @@ local GREP_HELP = {
 local function jump(target, action)
   vim.cmd("normal! m'")
   vim.cmd(("%s %s"):format(OPEN_COMMAND[action] or "edit", vim.fn.fnameescape(target.path)))
-  local last = vim.api.nvim_buf_line_count(0)
-  vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(target.line, last)), 0 })
+  local line = math.max(1, math.min(target.line, vim.api.nvim_buf_line_count(0)))
+  local line_len = #(vim.api.nvim_buf_get_lines(0, line - 1, line, false)[1] or "")
+  local col = math.max(0, math.min(target.character or 0, line_len))
+  vim.api.nvim_win_set_cursor(0, { line, col })
   vim.cmd("normal! zz")
 end
 
@@ -114,7 +116,7 @@ local function symbol_target(item)
 end
 
 local function match_target(item)
-  return { path = vim.uri_to_fname(item.uri), line = item.line }
+  return { path = vim.uri_to_fname(item.uri), line = item.line, character = item.character }
 end
 
 local function open_symbol_palette(ctx)
