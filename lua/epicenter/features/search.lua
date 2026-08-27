@@ -79,7 +79,11 @@ function M.render_symbol(item)
     end
   end
 
-  text = append(text, spans, ("  %s:%d"):format(symbol.file, symbol.line), "EpicenterMuted")
+  -- refs mode: item.lines are the reference's own use-site line(s), not the
+  -- enclosing definition's - show where the reference is, not where the
+  -- enclosing function starts (F3).
+  local line = item.lines and item.lines[1] or symbol.line
+  text = append(text, spans, ("  %s:%d"):format(symbol.file, line), "EpicenterMuted")
   if (symbol.callers or 0) > 0 then
     text =
       append(text, spans, ("  %s%d"):format(icons.ui("fan_in"), symbol.callers), "EpicenterCount")
@@ -107,8 +111,15 @@ function M.render_match(item, _, pattern)
   return { text = text, spans = spans }
 end
 
-local function symbol_target(item)
+--- Definition target normally; in refs mode `item.lines` are the use-site
+--- line(s) inside `symbol`'s file, and the jump/preview must land on the
+--- reference, not the enclosing definition (F3). No `end_line`, so the
+--- preview highlights just the reference line, not the whole function.
+function M.symbol_target(item)
   local symbol = item.symbol
+  if item.lines then
+    return { path = vim.uri_to_fname(symbol.uri), line = item.lines[1] }
+  end
   return { path = vim.uri_to_fname(symbol.uri), line = symbol.line, end_line = symbol.endLine }
 end
 
@@ -143,9 +154,9 @@ local function open_symbol_palette(ctx)
       end, { bufnr = state.bufnr, channel = "search" })
     end,
     render_item = M.render_symbol,
-    preview_of = symbol_target,
+    preview_of = M.symbol_target,
     on_accept = function(item, action)
-      jump(symbol_target(item), action)
+      jump(M.symbol_target(item), action)
     end,
     mode_label = function(state)
       local parts = {}

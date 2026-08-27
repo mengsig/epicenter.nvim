@@ -134,6 +134,30 @@ describe("search palette against the fake navgraph server", function()
     expect.eq(vim.api.nvim_win_get_cursor(0)[2], expected.character)
   end)
 
+  it("jumps to the use site in refs mode, not the enclosing definition (F3)", function()
+    local p = epicenter.run("search", {}, buf)
+    p.state.refs = true
+    p:query("log_request")
+    wait(function()
+      return p.list:count() > 0
+    end, 10000, "refs results")
+
+    local item = p.list:current()
+    expect.eq(item.symbol.qualified, "M.handle_request", "refs mode groups by the referencer")
+    expect.truthy(item.lines ~= nil, "a refs item must carry use-site lines")
+    expect.matches(results_lines(p)[1], "app/server%.lua:10", "the row must show the use site")
+    expect.falsy(
+      results_lines(p)[1]:match("app/server%.lua:9%f[%D]"),
+      "the row must not show the enclosing definition's own line"
+    )
+
+    p:accept("edit")
+    wait(function()
+      return vim.api.nvim_win_get_cursor(0)[1] == 10
+    end, 5000, "jump to the use site")
+    expect.matches(vim.api.nvim_get_current_line(), "log_request%(method, path%)")
+  end)
+
   it("shows each palette's own keys in the in-app help, not the other's", function()
     local p = epicenter.run("search", {}, buf)
     p:toggle_help()

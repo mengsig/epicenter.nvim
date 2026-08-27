@@ -49,6 +49,28 @@ describe("search rows", function()
     end
   end)
 
+  it("shows the reference's own line in refs mode, not the enclosing definition's (F3)", function()
+    -- A refs-mode item carries the enclosing definition as `symbol` but the
+    -- actual use-site line(s) in `lines` - the definition's own line (9)
+    -- must not appear; the reference's line (10) must.
+    local row = search.render_symbol({ symbol = SYMBOL, lines = { 10, 14 } })
+    expect.matches(row.text, "app/server%.lua:10")
+    expect.falsy(row.text:match("app/server%.lua:9%f[%D]"), "must not show the definition's line")
+  end)
+
+  it("jumps to the first use site in refs mode, not the definition (F3)", function()
+    local target = search.symbol_target({ symbol = SYMBOL, lines = { 10, 14 } })
+    expect.eq(target.path, "/tmp/proj/app/server.lua")
+    expect.eq(target.line, 10, "must land on the reference, not the definition line (9)")
+    expect.eq(target.end_line, nil, "a reference is a single line, not the whole function")
+  end)
+
+  it("jumps to the definition when not in refs mode", function()
+    local target = search.symbol_target({ symbol = SYMBOL, matches = {} })
+    expect.eq(target.line, 9)
+    expect.eq(target.end_line, 13)
+  end)
+
   it("renders a grep hit with the match lit inside the trimmed line", function()
     local row = search.render_match({
       file = "app/server.lua",
