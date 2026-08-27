@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / nvim ${{ matrix.nvim }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nvim: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+      - name: nvim version
+        run: nvim --version
+      - name: test
+        run: make test
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua plugin tests
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "luajit-openresty"
+      - uses: leafo/gh-actions-luarocks@v4
+      - name: install luacheck
+        run: luarocks install luacheck
+      - name: luacheck
+        run: luacheck lua plugin tests --exclude-files 'tests/fixtures/**'
+
+  docs:
+    name: docs in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: helptags build
+        run: nvim --headless --clean -c 'helptags doc' -c 'quit'
