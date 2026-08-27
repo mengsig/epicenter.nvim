@@ -70,6 +70,15 @@ describe("diff blast against the fake navgraph server", function()
     expect.matches(lines_of(panel)[1], "changes vs origin/main")
   end)
 
+  it("reports the server's own error for a ref it rejects, not a clean tree (#F9)", function()
+    panel = epicenter.run("diff", { "typo" }, buf)
+    wait(function()
+      return panel.answered > 0
+    end, 10000, "the error answer")
+    expect.eq(panel.nodes, {}, "a rejected ref must never read as an empty change set")
+    expect.matches(table.concat(lines_of(panel), "\n"), "bad revision 'typo'")
+  end)
+
   it("counts an unsaved edit without waiting for a save", function()
     panel = opened()
     expect.eq(panel.summary.changed, 2)

@@ -20,6 +20,11 @@ local function check_params(method, params, allowed)
   end
 end
 
+--- The fixture has no git of its own ("Changed has no git here", above), so
+--- this stands in for what a real repository's refs would resolve - a ref
+--- git rejects is a `-32002`, never silently a clean tree.
+local KNOWN_REFS = { HEAD = true, ["origin/main"] = true }
+
 local SCOPE = { strict = true, tests = true }
 local TARGET = { uri = true, position = true, symbol = true, file = true, ref = true }
 
@@ -85,9 +90,13 @@ return {
   --- Unlike a `{ ref }` blast, an empty change set is a routine answer here.
   ["navgraph/diff"] = function(ctx, params)
     check_params("navgraph/diff", params, DIFF_PARAMS)
+    local ref = params.ref or "HEAD"
+    if not KNOWN_REFS[ref] then
+      fail(-32002, "fatal: bad revision '%s'", ref)
+    end
     local roots = graph.changed(ctx.index, ctx.overlays)
     return {
-      ref = params.ref or "HEAD",
+      ref = ref,
       blast = graph.blast(
         ctx.index,
         roots,
