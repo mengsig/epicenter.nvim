@@ -162,4 +162,29 @@ describe("list object", function()
     end
     expect.eq(has_selection, true)
   end)
+
+  it("stagger-reveals only the first draw, then renders later ones at full height", function()
+    local saved_reduce = vim.g.epicenter_reduce_motion
+    vim.g.epicenter_reduce_motion = false
+    require("epicenter.config").setup({ animate = true })
+
+    l:set_items(items(10))
+    l:draw({ stagger = true })
+    local first = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    expect.eq(#first, 1, "the first paint starts the reveal at one row")
+
+    local settled = vim.wait(500, function()
+      return l.reveal == nil
+    end)
+    expect.truthy(settled, "the first reveal must finish")
+
+    -- A later result set (a keystroke while the palette is already open)
+    -- must not collapse-and-regrow again - that was F8.
+    l:set_items(items(10))
+    l:draw({ stagger = true })
+    local second = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    expect.eq(#second, 4, "a later result set renders at full height immediately")
+
+    vim.g.epicenter_reduce_motion = saved_reduce
+  end)
 end)

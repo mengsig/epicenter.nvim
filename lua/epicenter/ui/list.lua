@@ -78,6 +78,7 @@ function M.new(opts)
     selected = 1,
     top = 1,
     reveal = nil,
+    revealed = false,
   }, List)
 end
 
@@ -185,7 +186,10 @@ local function paint(self, rendered, rows)
   end
 end
 
---- Writes the visible slice into the buffer.
+--- Writes the visible slice into the buffer. A stagger reveal is right for
+--- the first result set after the list opens, and wrong for every refresh
+--- after that (it would collapse-and-regrow on every keystroke) - so it
+--- fires at most once per list, on whichever draw asks for it first.
 --- @param opts? { stagger?: boolean }
 function List:draw(opts)
   opts = opts or {}
@@ -196,7 +200,12 @@ function List:draw(opts)
     self.reveal = nil
   end
 
-  if not opts.stagger or #rendered.lines <= 1 then
+  local stagger = opts.stagger and not self.revealed
+  if opts.stagger then
+    self.revealed = true
+  end
+
+  if not stagger or #rendered.lines <= 1 then
     paint(self, rendered)
     return
   end
@@ -210,10 +219,14 @@ function List:draw(opts)
     on_frame = function(eased)
       paint(self, rendered, math.max(1, math.ceil(eased * count)))
     end,
-    on_done = function()
+    on_done = function(completed)
       running = false
       self.reveal = nil
-      paint(self, rendered)
+      -- A cancelled reveal is about to be replaced by a fresh draw() call;
+      -- painting the old content here would be a wasted, briefly-stale frame.
+      if completed then
+        paint(self, rendered)
+      end
     end,
   })
   self.reveal = running and handle or nil
