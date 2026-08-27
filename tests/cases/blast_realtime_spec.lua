@@ -183,3 +183,62 @@ describe("the blast panel diffs a realtime update instead of rebuilding", functi
     expect.eq(names(panel), { "M.handle_request", "M.start" })
   end)
 end)
+
+--- <leader>ee's headline entry point: a fixed cursor position, not a named
+--- symbol. The re-index that a line-shifting edit triggers is exactly the
+--- edit that stops naming the same line (#F2).
+describe("the blast panel pins to the resolved symbol on a cursor-target realtime re-query", function()
+  local root, buf, panel, original
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+
+    local path = vim.fs.joinpath(root, "app/server.lua")
+    local existing = vim.fn.bufnr(path)
+    if existing ~= -1 then
+      vim.api.nvim_buf_delete(existing, { force = true })
+    end
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+    original = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    -- `function M.handle_request(...)` - a fixed cursor position, not a
+    -- definition's own line number the panel could re-derive.
+    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+  end)
+
+  after_each(function()
+    if panel then
+      panel:close()
+      panel = nil
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, original)
+      vim.bo[buf].modified = false
+    end
+    require("epicenter.events").clear()
+  end)
+
+  it("keeps the root on the resolved symbol after a line-shifting edit", function()
+    panel = epicenter.run("blast", {}, buf)
+    wait(function()
+      return panel.answered > 0 and #panel.nodes > 0
+    end, 10000, "the first result")
+    expect.eq(panel.meta.root.qualified, "M.handle_request")
+    expect.eq(names(panel), { "M.start" })
+
+    local before = panel.answered
+    -- Inserted above the root: every definition below shifts down one line,
+    -- so the ORIGINAL cursor position now names a different definition
+    -- (log_request's range grows to cover it).
+    vim.api.nvim_buf_set_lines(buf, 0, 0, false, { "-- a line inserted near the top" })
+    wait(function()
+      return panel.answered > before
+    end, 10000, "a realtime re-query")
+
+    expect.eq(panel.meta.root.qualified, "M.handle_request", "the panel must not silently re-root")
+    expect.eq(names(panel), { "M.start" })
+  end)
+end)

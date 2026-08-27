@@ -365,6 +365,13 @@ function Panel:_on_result(err, result, opts)
   local roots = blast.roots or {}
   self.meta = { kind = self.kind, root = roots[1], ref = result.ref or self.target.ref }
 
+  -- A cursor target is a fixed position, but a re-index shifts lines - pin
+  -- to the resolved symbol so a realtime re-query never silently re-roots
+  -- onto whatever now sits at that stale position (#F2).
+  if self.kind == "blast" and self.target.position and roots[1] and roots[1].qualified then
+    self.target = { symbol = roots[1].qualified }
+  end
+
   local summary = vim.tbl_extend("force", model.empty_summary(), blast.summary or {})
   summary.changed = changed
 
