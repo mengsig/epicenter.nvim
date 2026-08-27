@@ -10,6 +10,8 @@ local function symbol(over)
     uri = "file:///proj/app/server.lua",
     line = 9,
     endLine = 13,
+    callers = 2,
+    callees = 0,
   }, over or {})
 end
 
@@ -23,8 +25,11 @@ local function row(node, over)
   }, over or {})
 end
 
-local function node_of(edge)
-  return explore.node_of_edge(edge, "root")
+local CALLERS = { direction = "callers" }
+
+--- @param child { symbol: table, exact?: boolean, lines?: integer[], ext?: string[], recursion?: boolean }
+local function node_of(child, view)
+  return explore.node_of_child(view or CALLERS, child, "root")
 end
 
 describe("explorer rows", function()
@@ -34,85 +39,154 @@ describe("explorer rows", function()
   end)
 
   it("shows the kind, the qualified name and the location", function()
-    local rendered = explore.render_row(row(node_of({ symbol = symbol(), degree = 2 })))
+    local rendered = explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
     expect.matches(rendered.text, "M%.handle_request")
     expect.matches(rendered.text, "app/server%.lua:9")
   end)
 
-  it("badges a repeated edge, a reference edge and a heuristic edge", function()
+  it("badges a repeated edge and a heuristic edge", function()
     local rendered = explore.render_row(row(node_of({
       symbol = symbol(),
-      count = 2,
-      kind = "ref",
-      heuristic = true,
+      exact = false,
+      lines = { 9, 10 },
     })))
     expect.matches(rendered.text, "2x")
-    expect.matches(rendered.text, "ref")
     expect.matches(rendered.text, "%?")
   end)
 
   it("omits the count badge for a single edge", function()
-    local rendered = explore.render_row(row(node_of({ symbol = symbol(), count = 1 })))
+    local rendered = explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
     expect.falsy(rendered.text:match("1x"))
   end)
 
   it("marks a node already open further up the branch", function()
-    local rendered =
-      explore.render_row(row(node_of({ symbol = symbol() }), { recursive = true, depth = 2 }))
+    local rendered = explore.render_row(
+      row(node_of({ symbol = symbol(), exact = true, lines = {} }), { recursive = true, depth = 2 })
+    )
     expect.matches(rendered.text, "recursive")
     expect.matches(rendered.text, "^    ", "depth indents the row")
   end)
 
-  it("shows an unresolved call muted, with no location", function()
-    local rendered = explore.render_row(row(node_of({ name = "os.getenv", resolved = false })))
-    expect.matches(rendered.text, "os%.getenv")
-    expect.falsy(rendered.text:match(":%d"))
-    expect.eq(rendered.spans[1].hl, "EpicenterMuted")
+  it("marks a node the server itself flagged recursive", function()
+    local rendered = explore.render_row(
+      row(node_of({ symbol = symbol(), exact = true, lines = {}, recursion = true }))
+    )
+    expect.matches(rendered.text, "recursive")
   end)
 
-  it("groups the unresolved calls under one ~ ext row", function()
-    local children = explore.merge_children({ key = "root", children = {} }, {
-      { symbol = symbol(), resolved = true, degree = 0 },
-      { name = "os.getenv", resolved = false },
-      { name = "print", resolved = false },
+  it("groups the unresolved calls under one ~ ext row, muted, with no location", function()
+    local children = explore.merge_children(CALLERS, { key = "root", children = {} }, {
+      children = { { symbol = symbol(), exact = true, lines = { 9 } } },
+      ext = { "os.getenv", "print" },
     })
-    expect.eq(#children, 2, "two resolved-or-group rows")
+    expect.eq(#children, 2, "one resolved row plus the ext group")
     local group = children[2]
     expect.eq(group.type, "ext")
     expect.eq(#group.children, 2)
     local rendered = explore.render_row(row(group, { expandable = true, expanded = true }))
     expect.matches(rendered.text, "~ ext %(2%)")
+
+    local extern = explore.render_row(row(group.children[1]))
+    expect.matches(extern.text, "os%.getenv")
+    expect.falsy(extern.text:match(":%d"))
+    expect.eq(extern.spans[1].hl, "EpicenterMuted")
   end)
 
   it("renders the not-yet-fetched child as a quiet placeholder", function()
-    local node = node_of({ symbol = symbol(), degree = 3 })
+    local node = node_of({ symbol = symbol({ callers = 3 }), exact = true, lines = { 9 } })
     expect.eq(#node.children, 1, "a node with edges is expandable before it is fetched")
     expect.eq(node.children[1].type, "pending")
     expect.matches(explore.render_row(row(node.children[1])).text, "%.%.%.")
   end)
 
   it("gives a node with no edges nothing to expand", function()
-    expect.eq(#node_of({ symbol = symbol(), degree = 0 }).children, 0)
+    expect.eq(#node_of({ symbol = symbol({ callers = 0 }), exact = true, lines = {} }).children, 0)
   end)
 
   it("keeps an already-loaded subtree across a refresh, and drops what is gone", function()
     local parent = { key = "root", children = {} }
-    parent.children = explore.merge_children(parent, {
-      { symbol = symbol(), resolved = true, degree = 1 },
-      { symbol = symbol({ qualified = "M.start", line = 14 }), resolved = true, degree = 0 },
+    parent.children = explore.merge_children(CALLERS, parent, {
+      children = {
+        { symbol = symbol({ callers = 1 }), exact = true, lines = { 9 } },
+        { symbol = symbol({ qualified = "M.start", name = "start", line = 14, callers = 0 }), exact = true, lines = { 15 } },
+      },
+      ext = {},
     })
     local kept = parent.children[1]
     kept.loaded = true
     kept.children = { { key = "grandchild", type = "symbol" } }
 
-    parent.children = explore.merge_children(parent, {
-      { symbol = symbol({ endLine = 20 }), resolved = true, degree = 4, count = 3 },
+    parent.children = explore.merge_children(CALLERS, parent, {
+      children = { { symbol = symbol({ endLine = 20, callers = 4 }), exact = true, lines = { 9, 10, 11 } } },
+      ext = {},
     })
     expect.eq(#parent.children, 1, "M.start is gone")
     expect.eq(parent.children[1], kept, "the surviving node is the same node")
     expect.eq(parent.children[1].children[1].key, "grandchild", "its loaded subtree survives")
     expect.eq(parent.children[1].degree, 4, "but its edge facts are refreshed")
-    expect.eq(parent.children[1].edge.count, 3)
+    expect.eq(#parent.children[1].lines, 3)
+  end)
+
+  it("scopes the row key to the path, not just the symbol (F9)", function()
+    local leaf = symbol({ qualified = "leaf", name = "leaf", line = 5 })
+    local under_alpha = explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/alpha")
+    local under_beta = explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/beta")
+    expect.truthy(under_alpha.key ~= under_beta.key, "distinct rows for the same symbol under two parents")
+    expect.eq(under_alpha.identity, under_beta.identity, "but the same symbol identity")
+  end)
+
+  it("a diamond does not auto-expand the same symbol under a second parent (F9)", function()
+    local leaf = symbol({ qualified = "leaf", name = "leaf", line = 5, callers = 2 })
+    local alpha_sym = symbol({ qualified = "alpha", name = "alpha", line = 10, callers = 1 })
+    local beta_sym = symbol({ qualified = "beta", name = "beta", line = 15, callers = 1 })
+
+    local root = { key = "root", identity = "root", children = {} }
+    root.children = explore.merge_children(CALLERS, root, {
+      children = {
+        { symbol = alpha_sym, exact = true, lines = { 1 } },
+        { symbol = beta_sym, exact = true, lines = { 2 } },
+      },
+      ext = {},
+    })
+    local alpha, beta = root.children[1], root.children[2]
+
+    alpha.loaded = true
+    alpha.children = explore.merge_children(CALLERS, alpha, {
+      children = { { symbol = leaf, exact = true, lines = { 1 } } },
+      ext = {},
+    })
+    beta.loaded = true
+    beta.children = explore.merge_children(CALLERS, beta, {
+      children = { { symbol = leaf, exact = true, lines = { 1 } } },
+      ext = {},
+    })
+    local leaf_under_alpha, leaf_under_beta = alpha.children[1], beta.children[1]
+    expect.truthy(leaf_under_alpha.key ~= leaf_under_beta.key)
+
+    -- Expand leaf under alpha only.
+    leaf_under_alpha.loaded = true
+    leaf_under_alpha.children = { { key = "grandchild", type = "symbol", children = {} } }
+
+    local tree = require("epicenter.ui.tree")
+    local opts = {
+      key_of = function(n) return n.key end,
+      identity_of = function(n) return n.identity end,
+      children_of = function(n) return n.children end,
+    }
+    local expanded =
+      { [root.key] = true, [alpha.key] = true, [leaf_under_alpha.key] = true, [beta.key] = true }
+    local flat = tree.flatten({ root }, expanded, opts)
+
+    local beta_leaf_row
+    for _, r in ipairs(flat) do
+      if r.key == leaf_under_beta.key then
+        beta_leaf_row = r
+      end
+    end
+    expect.truthy(beta_leaf_row, "the row still renders")
+    expect.eq(beta_leaf_row.expanded, false, "opening leaf under alpha does not open it under beta too")
+    expect.eq(beta_leaf_row.node.type, "symbol", "beta's copy is a real fetched node, not a stuck placeholder")
+    expect.eq(beta_leaf_row.node.symbol.qualified, "leaf")
   end)
 
   it("cycles the test scope and reports the toggles in the footer", function()
@@ -242,6 +316,38 @@ describe("explorer against the fake navgraph server", function()
     press("t")
     wait_rows(1, "tests-only callees")
     expect.matches(rows()[1], "M%.handle_request", "the root stays, it just has no edges")
+  end)
+
+  it("coalesces a burst of reindexes into one debounced pass (F11)", function()
+    require("epicenter.config").reset()
+    require("epicenter.config")
+      .setup({ ui = { icons = "ascii" }, animate = false, explore = { debounce_ms = 250 } })
+    panel = require("epicenter").run("callers", { "log_request" }, buf)
+    wait_rows(2, "first level")
+    panel.list:select(2)
+    press("l")
+    wait_row(3, "M%.start", "second level")
+
+    local client = require("epicenter.client")
+    local calls, original = 0, client.callers
+    client.callers = function(...)
+      calls = calls + 1
+      return original(...)
+    end
+
+    local ok = pcall(function()
+      for _ = 1, 5 do
+        support.request(root, "navgraph/rescan", {})
+      end
+      wait(function()
+        return calls == 2
+      end, 10000, "one settled pass for the 2 expanded rows, not one pass per reindex")
+      -- Confirm it stays at 2: a bug that fires per-reindex would keep growing.
+      vim.wait(500)
+      expect.eq(calls, 2)
+    end)
+    client.callers = original
+    assert(ok)
   end)
 
   it("refreshes the open rows when the index changes, without collapsing", function()

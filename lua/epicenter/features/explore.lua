@@ -27,14 +27,16 @@ end
 
 -- Nodes ------------------------------------------------------------------------
 
---- Stable across reindexes (no server-assigned ids), and unique per parent so
---- the tree's cycle detection sees the same node as the same key.
+--- Stable across reindexes (no server-assigned ids). This is a symbol's
+--- IDENTITY - the same symbol reached through two different callers must
+--- resolve to the same identity, so the tree's cycle detection (F9) sees a
+--- real recursive path instead of a phantom one.
 local function symbol_key(symbol)
   return ("%s#%s@%d"):format(symbol.uri, symbol.qualified, symbol.line)
 end
 
---- A node with edges it has not fetched yet still needs a chevron, so it
---- carries one placeholder child until `l` replaces it with the real level.
+--- A node with more to fetch still needs a chevron, so it carries one
+--- placeholder child until `l` replaces it with the real level.
 local function seed(node)
   if not node.loaded then
     node.children = node.degree > 0
@@ -44,33 +46,50 @@ local function seed(node)
   return node
 end
 
---- @param edge { symbol?: table, name?: string, resolved?: boolean,
----   heuristic?: boolean, kind?: string, count?: integer, degree?: integer }
-local function node_of_edge(edge, parent_key)
-  local resolved = edge.resolved ~= false and edge.symbol ~= nil and edge.symbol ~= vim.NIL
-  local symbol = resolved and edge.symbol or nil
+--- Fan-in/out (per direction) decides expandability before the level is
+--- fetched: the contract carries no other "does this have edges" signal.
+local function degree_of(view, symbol)
+  return view.direction == "callees" and (symbol.callees or 0) or (symbol.callers or 0)
+end
+
+--- A row's identity is the symbol's global identity; its KEY is scoped by the
+--- path that reached it, so the same symbol under two different parents is
+--- two different rows (F9) - `ui.tree` uses `identity` only for cycle
+--- detection and `key` for everything else (the `expanded` set, merge, seed).
+--- @param child { symbol: table, exact: boolean, lines: integer[], ext: string[], recursion: boolean }
+local function node_of_child(view, child, parent_key)
+  local symbol = child.symbol
+  local identity = symbol_key(symbol)
   return seed({
-    type = resolved and "symbol" or "extern",
-    key = resolved and symbol_key(symbol) or (parent_key .. "/ext:" .. tostring(edge.name)),
-    name = resolved and symbol.qualified or tostring(edge.name),
+    type = "symbol",
+    key = parent_key .. "/" .. identity,
+    identity = identity,
+    name = symbol.qualified,
     symbol = symbol,
-    edge = {
-      kind = edge.kind or "call",
-      count = edge.count or 1,
-      heuristic = edge.heuristic == true,
-    },
-    degree = resolved and (edge.degree or 0) or 0,
+    exact = child.exact ~= false,
+    lines = child.lines or {},
+    ext = child.ext or {},
+    server_recursion = child.recursion == true,
+    degree = degree_of(view, symbol),
     children = {},
     loaded = false,
   })
 end
 
---- Children of `node` for `edges`, keeping already-loaded subtrees whose key
---- still appears (a reindex diffs the rows, it never rebuilds the tree).
+local function node_of_extern(name, parent_key)
+  local key = parent_key .. "/ext:" .. tostring(name)
+  return { type = "extern", key = key, identity = key, name = tostring(name), children = {}, loaded = true }
+end
+
+--- Children of `node` for a fetched `root_node` (the contract's `Node`):
+--- its resolved `children` plus a `~ext` group for its own `ext` names.
+--- Keeps already-loaded subtrees whose key still appears (a reindex diffs
+--- the rows, it never rebuilds the tree).
+--- @param view table
 --- @param node table
---- @param edges table[]
+--- @param root_node { children: table[], ext: string[] }
 --- @return table[]
-function M.merge_children(node, edges)
+function M.merge_children(view, node, root_node)
   local previous = {}
   for _, child in ipairs(node.children) do
     previous[child.key] = child
@@ -81,21 +100,28 @@ function M.merge_children(node, edges)
     end
   end
 
-  local resolved, externs = {}, {}
-  for _, edge in ipairs(edges) do
-    local fresh = node_of_edge(edge, node.key)
+  local resolved = {}
+  for _, child in ipairs(root_node.children or {}) do
+    local fresh = node_of_child(view, child, node.key)
     local kept = previous[fresh.key]
     if kept then
-      kept.symbol, kept.name, kept.edge, kept.degree =
-        fresh.symbol, fresh.name, fresh.edge, fresh.degree
+      kept.symbol, kept.exact, kept.lines, kept.ext, kept.server_recursion, kept.degree =
+        fresh.symbol, fresh.exact, fresh.lines, fresh.ext, fresh.server_recursion, fresh.degree
       fresh = seed(kept)
     end
-    table.insert(fresh.type == "extern" and externs or resolved, fresh)
+    table.insert(resolved, fresh)
   end
 
-  if #externs > 0 then
-    local group = previous[node.key .. "/~ext"]
-      or { type = "ext", key = node.key .. "/~ext", name = "ext", children = {}, loaded = true }
+  local ext_names = root_node.ext or {}
+  if #ext_names > 0 then
+    local group_key = node.key .. "/~ext"
+    local group = previous[group_key]
+      or { type = "ext", key = group_key, identity = group_key, name = "ext", children = {}, loaded = true }
+    local externs = {}
+    for _, name in ipairs(ext_names) do
+      local fresh = node_of_extern(name, node.key)
+      table.insert(externs, previous[fresh.key] or fresh)
+    end
     group.children = externs
     table.insert(resolved, group)
   end
@@ -103,6 +129,10 @@ function M.merge_children(node, edges)
 end
 
 -- Rendering --------------------------------------------------------------------
+
+local function is_recursive(row)
+  return row.recursive or row.node.server_recursion == true
+end
 
 --- One display row. Pure, so the layout is testable without a server.
 --- @param row { node: table, depth: integer, expandable: boolean, expanded: boolean, recursive: boolean }
@@ -137,17 +167,14 @@ function M.render_row(row)
       append(text, spans, ("  %s:%d"):format(node.symbol.file, node.symbol.line), "EpicenterMuted")
   end
 
-  local edge = node.edge or {}
-  if (edge.count or 0) > 1 then
-    text = append(text, spans, ("  %dx"):format(edge.count), "EpicenterCount")
+  local count = #(node.lines or {})
+  if count > 1 then
+    text = append(text, spans, ("  %dx"):format(count), "EpicenterCount")
   end
-  if edge.kind == "ref" then
-    text = append(text, spans, "  ref", "EpicenterMuted")
-  end
-  if edge.heuristic then
+  if node.exact == false then
     text = append(text, spans, "  ?", "EpicenterInfo")
   end
-  if row.recursive then
+  if is_recursive(row) then
     text = append(text, spans, "  recursive", "EpicenterMuted")
   end
   return { text = text, spans = spans }
@@ -163,19 +190,17 @@ function M.footer(view, rows)
     table.insert(parts, "strict")
   end
   table.insert(parts, "tests: " .. view.tests)
-  return (" %s "):format(table.concat(parts, " · "))
+  return (" %s · l/h expand · r/s/t toggle "):format(table.concat(parts, " · "))
 end
 
 -- The panel --------------------------------------------------------------------
 
 local function request_params(view, ref)
-  local cfg = require("epicenter.config").get()
   local params = {
     depth = 1,
     refs = view.refs,
     strict = view.strict,
     tests = view.tests,
-    limit = cfg.explore.limit,
   }
   if type(ref) == "string" then
     params.symbol = ref
@@ -186,8 +211,8 @@ local function request_params(view, ref)
   return params
 end
 
---- One level of edges for `ref`, on a per-node channel so a superseded answer
---- (a fast `l` or a burst of reindexes) is dropped rather than painted.
+--- One level for `ref`, on a per-node channel so a superseded answer (a fast
+--- `l` or a burst of reindexes) is dropped rather than painted.
 local function fetch(view, ref, channel, cb)
   local client = require("epicenter.client")
   client[METHOD[view.direction]](request_params(view, ref), cb, {
@@ -199,6 +224,11 @@ end
 --- Reference the server resolves back to `node`.
 local function ref_of(node)
   return node.symbol.qualified
+end
+
+--- A missing/nil `root` reads as "nothing here" - never invents a shape.
+local function empty_root()
+  return { children = {}, ext = {} }
 end
 
 local function expand(view, node)
@@ -218,20 +248,31 @@ local function expand(view, node)
       return
     end
     node.loaded = true
-    node.children = M.merge_children(node, result.edges or {})
+    node.children = M.merge_children(view, node, result.root or empty_root())
     view.tree:set_expanded(node.key, #node.children > 0)
     view.panel:refresh_tree()
     view.panel:set_footer(M.footer(view, view.panel.list:count()))
   end)
 end
 
---- Re-fetches every loaded node that is currently open, so a reindex updates
---- what the user is looking at without collapsing it.
+--- Re-fetches every loaded, currently-expanded node in one pass, repainting
+--- once the whole batch lands rather than after each fetch (F11): a burst of
+--- reindexes is itself coalesced by the caller's debounce.
 local function refresh_open(view)
+  local pending = 0
+  local function settle()
+    pending = pending - 1
+    if pending == 0 and view.panel:valid() then
+      view.panel:refresh_tree()
+    end
+  end
+
   local function walk(node)
     if node.loaded and view.tree:is_expanded(node.key) then
+      pending = pending + 1
       fetch(view, ref_of(node), node.key, function(err, result)
         if not view.panel:valid() then
+          pending = pending - 1
           return
         end
         if err then
@@ -241,10 +282,11 @@ local function refresh_open(view)
             node.name,
             err.message
           )
+          settle()
           return
         end
-        node.children = M.merge_children(node, result.edges or {})
-        view.panel:refresh_tree()
+        node.children = M.merge_children(view, node, result.root or empty_root())
+        settle()
       end)
     end
     for _, child in ipairs(node.children) do
@@ -253,6 +295,7 @@ local function refresh_open(view)
       end
     end
   end
+
   if view.root then
     walk(view.root)
   end
@@ -267,23 +310,25 @@ local function load_root(view, ref)
       view.panel:notice("  " .. (err.message or "navgraph did not answer"))
       return
     end
-    local root = result.root
-    if not root or root == vim.NIL or not root.symbol or root.symbol == vim.NIL then
+    local root_node = result.root
+    if not root_node or root_node == vim.NIL or not root_node.symbol or root_node.symbol == vim.NIL then
       view.panel:notice("  no symbol to explore here")
       return
     end
+    local symbol = root_node.symbol
     view.root = {
       type = "symbol",
-      key = symbol_key(root.symbol),
-      name = root.symbol.qualified,
-      symbol = root.symbol,
-      degree = root.degree or 0,
+      key = symbol_key(symbol),
+      identity = symbol_key(symbol),
+      name = symbol.qualified,
+      symbol = symbol,
+      degree = degree_of(view, symbol),
       children = {},
       loaded = true,
     }
-    view.root.children = M.merge_children(view.root, result.edges or {})
+    view.root.children = M.merge_children(view, view.root, root_node)
     view.panel:set_roots({ view.root }, { expand_roots = true })
-    view.panel:set_title((" %s %s "):format(view.direction, root.symbol.qualified))
+    view.panel:set_title((" %s %s "):format(view.direction, symbol.qualified))
     view.panel:set_footer(M.footer(view, view.panel.list:count()))
   end)
 end
@@ -329,6 +374,9 @@ local function open(direction, ctx)
       key_of = function(node)
         return node.key
       end,
+      identity_of = function(node)
+        return node.identity or node.key
+      end,
       children_of = function(node)
         return node.children
       end,
@@ -343,10 +391,11 @@ local function open(direction, ctx)
           and { path = vim.uri_to_fname(symbol.uri), line = symbol.line, end_line = symbol.endLine }
         or nil
     end,
+    hints = { l = "expand", h = "collapse", r = "refs", s = "strict", t = "tests" },
     keys = {
       l = function(self)
         local row = self:current()
-        if not row or row.recursive then
+        if not row or is_recursive(row) then
           return
         end
         local node = row.node
@@ -379,13 +428,22 @@ local function open(direction, ctx)
         view.unsubscribe()
         view.unsubscribe = nil
       end
+      if view.refresh_debounce then
+        view.refresh_debounce.close()
+        view.refresh_debounce = nil
+      end
     end,
   })
 
   view.tree = view.panel.tree
-  view.unsubscribe = events.on(events.INDEXED, function()
+  view.refresh_debounce = require("epicenter.ui.prompt").debounce(cfg.explore.debounce_ms, function()
     if view.panel:valid() then
       refresh_open(view)
+    end
+  end)
+  view.unsubscribe = events.on(events.INDEXED, function()
+    if view.panel:valid() then
+      view.refresh_debounce.call()
     end
   end)
 
@@ -397,7 +455,7 @@ M.name = "explore"
 M.summary = "Who calls this symbol, and what it calls, one level at a time"
 
 M.options = {
-  explore = { limit = 100 },
+  explore = { debounce_ms = 100 },
 }
 
 M.commands = {
@@ -422,7 +480,7 @@ M.keymaps = {
   { suffix = "C", command = "callees", desc = "Epicenter: callees" },
 }
 
-M.node_of_edge = node_of_edge
+M.node_of_child = node_of_child
 M.next_tests = next_tests
 
 return M
