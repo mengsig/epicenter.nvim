@@ -37,16 +37,17 @@ local ACTIONS = {
   ["<C-x>"] = "split",
 }
 
+--- Keys every palette shares. A caller with mode-specific keys (e.g. search's
+--- <C-r>/<C-k> vs grep's <C-r>) supplies its own `help_lines` in its spec
+--- instead - the shared block used to be shown for both and lied for grep.
 local HELP = {
   "  keys",
   "",
-  "  <CR>        jump to the symbol",
+  "  <CR>        jump to the result",
   "  <C-t>       open in a new tab",
   "  <C-v>       open in a vertical split",
   "  <C-x>       open in a split",
   "  <C-n>/<C-p> next / previous result",
-  "  <C-r>       toggle reference mode",
-  "  <C-k>       cycle the kind filter",
   "  <C-y>       yank file:line",
   "  ?           toggle this help (normal mode)",
   "  <Esc>       close",
@@ -163,7 +164,7 @@ function Palette:toggle_help()
   end
   self.help_open = not self.help_open
   if self.help_open then
-    self.preview_win:set_lines(HELP)
+    self.preview_win:set_lines(self.spec.help_lines or HELP)
   else
     self.preview.shown = nil
     self:_update_preview()
@@ -268,7 +269,8 @@ end
 ---   preview_of?: fun(item): { path: string, line: integer, end_line?: integer }|nil,
 ---   on_accept: fun(item, action: "edit"|"tab"|"vsplit"|"split"),
 ---   keys?: table<string, fun(palette: epicenter.Palette)>,
----   mode_label?: fun(state: table): string, empty_text?: string, on_close?: fun() }
+---   mode_label?: fun(state: table): string, empty_text?: string, on_close?: fun(),
+---   help_lines?: string[] shown by `?`; defaults to the shared HELP block }
 --- @return epicenter.Palette
 function M.open(spec)
   local cfg = require("epicenter.config").get()

@@ -17,6 +17,35 @@ local function short(path)
   return vim.fn.fnamemodify(path, ":~:.")
 end
 
+local SEARCH_HELP = {
+  "  keys",
+  "",
+  "  <CR>        jump to the symbol",
+  "  <C-t>       open in a new tab",
+  "  <C-v>       open in a vertical split",
+  "  <C-x>       open in a split",
+  "  <C-n>/<C-p> next / previous result",
+  "  <C-r>       toggle reference mode",
+  "  <C-k>       cycle the kind filter",
+  "  <C-y>       yank file:line",
+  "  ?           toggle this help (normal mode)",
+  "  <Esc>       close",
+}
+
+local GREP_HELP = {
+  "  keys",
+  "",
+  "  <CR>        jump to the match",
+  "  <C-t>       open in a new tab",
+  "  <C-v>       open in a vertical split",
+  "  <C-x>       open in a split",
+  "  <C-n>/<C-p> next / previous result",
+  "  <C-r>       toggle regex",
+  "  <C-y>       yank file:line",
+  "  ?           toggle this help (normal mode)",
+  "  <Esc>       close",
+}
+
 --- Opens `path` at `line` (1-based), leaving the jumplist entry behind.
 local function jump(target, action)
   vim.cmd("normal! m'")
@@ -100,6 +129,7 @@ local function open_symbol_palette(ctx)
     debounce_ms = cfg.search.debounce_ms,
     state = { bufnr = ctx.bufnr, refs = false, kind_index = 1 },
     empty_text = "  no symbols match",
+    help_lines = SEARCH_HELP,
     source = function(query, state, cb)
       client.search({
         query = query,
@@ -155,6 +185,7 @@ local function open_grep_palette(ctx)
     debounce_ms = cfg.grep.debounce_ms,
     state = state,
     empty_text = "  no lines match",
+    help_lines = GREP_HELP,
     source = function(query, current, cb)
       current.pattern = query
       if query == "" then

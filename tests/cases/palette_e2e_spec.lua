@@ -11,6 +11,10 @@ local function results_lines(p)
   return vim.api.nvim_buf_get_lines(p.results_win.buf, 0, -1, false)
 end
 
+local function preview_lines(p)
+  return vim.api.nvim_buf_get_lines(p.preview_win.buf, 0, -1, false)
+end
+
 describe("search palette against the fake navgraph server", function()
   local root, buf
 
@@ -109,6 +113,23 @@ describe("search palette against the fake navgraph server", function()
     expect.matches(results_lines(p)[1], "app/server%.lua:%d+")
     expect.matches(results_lines(p)[1], "log_request")
     p:close()
+  end)
+
+  it("shows each palette's own keys in the in-app help, not the other's", function()
+    local p = epicenter.run("search", {}, buf)
+    p:toggle_help()
+    local search_help = table.concat(preview_lines(p), "\n")
+    expect.matches(search_help, "toggle reference mode")
+    expect.matches(search_help, "cycle the kind filter")
+    p:close()
+
+    local buf2 = open_fixture(root, "app/server.lua")
+    local p2 = epicenter.run("grep", {}, buf2)
+    p2:toggle_help()
+    local grep_help = table.concat(preview_lines(p2), "\n")
+    expect.matches(grep_help, "toggle regex")
+    expect.falsy(grep_help:match("cycle the kind filter"), "grep has no <C-k>, its help must not claim one")
+    p2:close()
   end)
 
   it("reflows the whole palette, list height included, on a real VimResized", function()
