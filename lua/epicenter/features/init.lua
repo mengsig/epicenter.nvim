@@ -4,4 +4,5 @@
 --- @type epicenter.FeatureSpec[]
 return {
   require("epicenter.features.planned"),
+  require("epicenter.features.core"),
 }

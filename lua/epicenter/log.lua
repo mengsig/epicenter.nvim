@@ -56,7 +56,11 @@ local function handle()
     return nil
   end
   local path = M.path()
-  vim.fn.mkdir(vim.fs.dirname(path), "p")
+  -- uv, not vim.fn.mkdir: logging happens from LSP callbacks in fast contexts.
+  local dir = vim.fs.dirname(path)
+  if not (vim.uv or vim.loop).fs_stat(dir) then
+    (vim.uv or vim.loop).fs_mkdir(dir, 493)
+  end
   local fh, err = io.open(path, "a")
   if not fh then
     -- One loud notice, then stay quiet: a broken log must not spam the editor.
