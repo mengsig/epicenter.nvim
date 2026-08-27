@@ -88,4 +88,31 @@ describe("client against the fake navgraph server", function()
     expect.eq(id, again)
     expect.eq(#client.roots(), 1)
   end)
+
+  it("re-attaches every buffer that was open before a crash", function()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/config.lua")))
+    local buf1 = vim.api.nvim_get_current_buf()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    local buf2 = vim.api.nvim_get_current_buf()
+    expect.ne(buf1, buf2, "the two fixture files must land in two different buffers")
+
+    local id = client.start({ root = root, cmd = support.fake_cmd(root), bufnr = buf1 })
+    client.start({ root = root, bufnr = buf2 })
+    wait(function()
+      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0 and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
+    end, 5000, "both buffers attached before the crash")
+
+    -- Crash it: exit without shutdown first, exactly what a killed process
+    -- leaves behind (the fake reports exit 1 in that case).
+    vim.lsp.get_client_by_id(id):notify("exit", {})
+
+    wait(function()
+      local info = client.info(root)
+      return info.client_id ~= nil and info.client_id ~= id
+    end, 10000, "navgraph to restart after the crash")
+
+    wait(function()
+      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0 and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
+    end, 5000, "both buffers re-attached to the restarted server")
+  end)
 end)

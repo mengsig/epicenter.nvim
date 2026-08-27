@@ -86,8 +86,7 @@ return {
       run = function(ctx)
         local client = require("epicenter.client")
         local root = root_for(ctx)
-        client.stop(root)
-        local _, err = client.start({ root = root, bufnr = ctx.bufnr })
+        local _, err = client.restart({ root = root, bufnr = ctx.bufnr })
         require("epicenter").notify(
           err or ("navgraph restarted for " .. vim.fn.fnamemodify(root, ":~")),
           err and "error" or "info"

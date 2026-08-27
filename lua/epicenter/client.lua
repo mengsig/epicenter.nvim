@@ -187,8 +187,8 @@ local function schedule_restart(root, state)
   log.warn("navgraph for %s exited; restart %d in %dms", root, state.restarts, delay)
   vim.defer_fn(function()
     if servers[root] == state then
-      servers[root] = nil
-      M.start({ root = root, cmd = state.cmd, restarts = state.restarts })
+      -- Re-attach every buffer the dead client served, not just the current one.
+      M.restart({ root = root, restarts = state.restarts })
     end
   end, delay)
 end
@@ -206,6 +206,7 @@ function M.start(opts)
   if existing and vim.lsp.get_client_by_id(existing.client_id) then
     if opts.bufnr then
       vim.lsp.buf_attach_client(opts.bufnr, existing.client_id)
+      existing.buffers[opts.bufnr] = true
     end
     return existing.client_id, nil
   end
@@ -220,7 +221,8 @@ function M.start(opts)
     cmd = vim.list_extend({ bin, "lsp" }, cfg.navgraph.args)
   end
 
-  local state = { cmd = cmd, restarts = opts.restarts or 0, root = root, stopping = false }
+  local state =
+    { cmd = cmd, restarts = opts.restarts or 0, root = root, stopping = false, buffers = {} }
   servers[root] = state
 
   local client_id = vim.lsp.start({
@@ -258,6 +260,39 @@ function M.start(opts)
     return nil, "epicenter: could not start navgraph (cmd: " .. table.concat(cmd, " ") .. ")"
   end
   state.client_id = client_id
+  if opts.bufnr then
+    state.buffers[opts.bufnr] = true
+  end
+  return client_id, nil
+end
+
+--- Stops the server for `root`, then starts a fresh one with the same `cmd`
+--- and re-attaches every buffer that was attached before the stop (crash or
+--- explicit restart).
+--- @param opts { root: string, cmd?: string[], bufnr?: integer, restarts?: integer }
+--- @return integer|nil client_id, string|nil err
+function M.restart(opts)
+  local root = vim.fs.normalize(opts.root)
+  local dying = servers[root]
+  local buffers = dying and vim.deepcopy(dying.buffers) or {}
+  if opts.bufnr then
+    buffers[opts.bufnr] = true
+  end
+  local cmd = opts.cmd or (dying and dying.cmd)
+
+  M.stop(root)
+  local client_id, err =
+    M.start({ root = root, cmd = cmd, bufnr = opts.bufnr, restarts = opts.restarts })
+  if not client_id then
+    return nil, err
+  end
+
+  for bufnr in pairs(buffers) do
+    if bufnr ~= opts.bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.lsp.buf_attach_client(bufnr, client_id)
+      servers[root].buffers[bufnr] = true
+    end
+  end
   return client_id, nil
 end
 
@@ -332,7 +367,8 @@ end
 --- Registers a session directly. Tests use it to drive the request layer
 --- without spawning a process.
 function M.register_session(root, session)
-  servers[vim.fs.normalize(root)] = { session = session, cmd = {}, restarts = 0, root = root }
+  servers[vim.fs.normalize(root)] =
+    { session = session, cmd = {}, restarts = 0, root = root, buffers = {} }
 end
 
 -- Typed request layer ----------------------------------------------------------
