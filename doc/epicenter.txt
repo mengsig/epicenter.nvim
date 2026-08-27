@@ -32,8 +32,10 @@ The engine runs as `navgraph lsp`, an LSP server over stdio speaking the
 standard subset plus custom `navgraph/*` methods. One server per workspace
 root. Open buffers are sent as overlays, so answers include unsaved edits.
 
-Nothing on the UI path blocks: every request is asynchronous and cancellable,
-and a response superseded by a newer keystroke is dropped rather than painted.
+Every request is asynchronous and cancellable, and a response superseded by a
+newer keystroke is dropped rather than painted. The preview's file read is
+the one blocking part of the UI path, capped at 20,000 lines scanned; past
+that it says so instead of freezing (see |epicenter-search|).
 
 ==============================================================================
 2. INSTALLATION                                        *epicenter-installation*

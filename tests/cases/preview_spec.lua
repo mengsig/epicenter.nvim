@@ -67,3 +67,63 @@ describe("preview short-file and out-of-range edges", function()
     expect.eq(lines[1], "three")
   end)
 end)
+
+describe("preview bounded scan (F11)", function()
+  local buf, win, path
+
+  before_each(function()
+    require("epicenter.config").reset()
+    buf = vim.api.nvim_create_buf(false, true)
+    win = vim.api.nvim_open_win(buf, false, {
+      relative = "editor",
+      row = 0,
+      col = 0,
+      width = 20,
+      height = 10,
+      style = "minimal",
+      noautocmd = true,
+    })
+    path = vim.fn.tempname()
+  end)
+
+  after_each(function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+    vim.fn.delete(path)
+  end)
+
+  it("caps the scan instead of reading arbitrarily far into a huge file", function()
+    -- The file content does not matter: the cap trips on the computed
+    -- starting line, before any read happens.
+    vim.fn.writefile({ "line one", "line two" }, path)
+    local p = preview.new({ buf = buf, win = win, height = 10 })
+
+    local ok, err = pcall(function()
+      p:show({ path = path, line = 25000, end_line = 25000 })
+    end)
+    expect.eq(ok, true, err)
+
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    expect.matches(lines[1], "preview unavailable beyond line")
+    expect.eq(p.shown, nil, "a capped target must not be recorded as shown")
+  end)
+
+  it("still previews a target just inside the scan cap", function()
+    local content = {}
+    for i = 1, 30 do
+      content[i] = "line " .. i
+    end
+    vim.fn.writefile(content, path)
+    local p = preview.new({ buf = buf, win = win, height = 10 })
+    p:show({ path = path, line = 15, end_line = 15 })
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    expect.truthy(
+      vim.tbl_contains(lines, "line 15"),
+      "a normal target well inside the cap must still show"
+    )
+  end)
+end)

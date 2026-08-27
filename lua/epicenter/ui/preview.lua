@@ -2,6 +2,10 @@
 local M = {}
 
 local MAX_SLICE = 400
+--- read_slice scans from line 1 to reach `from`, on the main loop: cap how
+--- far that scan may go so a symbol deep in a huge file cannot freeze the
+--- editor. Comfortably past any file a human reads by hand.
+local MAX_SCAN_LINES = 20000
 
 --- Reads lines `from`..`to` (1-based, inclusive) without loading the whole
 --- file. Returns the lines plus the first line number actually read.
@@ -70,6 +74,16 @@ function Preview:show(target)
   local context = math.max(1, math.floor(self.height / 4))
   local from = math.max(1, target.line - context)
   local to = math.min(from + math.max(self.height, 1) + 5, from + MAX_SLICE)
+
+  if from > MAX_SCAN_LINES then
+    self:clear(
+      ("  preview unavailable beyond line %d (%s)"):format(
+        MAX_SCAN_LINES,
+        vim.fn.fnamemodify(target.path, ":~:.")
+      )
+    )
+    return
+  end
 
   local lines, err = M.read_slice(target.path, from, to)
   if not lines then

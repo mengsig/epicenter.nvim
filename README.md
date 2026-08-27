@@ -188,12 +188,17 @@ server covers.
 
 ## Why it feels instant
 
-Nothing on the UI path blocks. Every server call is asynchronous and
-cancellable, and each keystroke's request is tagged with a channel: when a
-newer request goes out, the older response is dropped on arrival rather than
-painted, so results never flicker backwards to a query you have already
-replaced. Requests are debounced (40ms for search) so a fast typist issues a
-handful of queries, not one per character.
+Every server call is asynchronous and cancellable, and each keystroke's
+request is tagged: when a newer query is issued, an older answer - however
+it arrives, even synchronously - is dropped rather than painted, so results
+never flicker backwards to a query you have already replaced. Requests are
+debounced (40ms for search) so a fast typist issues a handful of queries,
+not one per character.
+
+The one blocking read on the UI path is the preview's file slice, capped at
+20,000 lines scanned and 400 lines shown - past that it says so instead of
+freezing. `:checkhealth`'s binary version check blocks too (a user-invoked
+report, `:wait(3000)` at worst).
 
 Motion is cheap and interruptible: one `vim.uv` timer per animation, geometry
 interpolated over 120ms, and a frame that costs more than 8ms drops the next
