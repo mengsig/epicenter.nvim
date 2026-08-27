@@ -13,13 +13,13 @@ local function capabilities(methods)
     return vim.startswith(name, "navgraph/")
   end, vim.tbl_keys(methods))
   table.sort(navgraph_methods)
+  -- Only advertise what tests/fake actually implements: the client's
+  -- FALLBACK_METHODS guard reads these at face value, and the real
+  -- navgraph must be able to trust that too.
   return {
     textDocumentSync = { openClose = true, change = 1, save = { includeText = false } },
     definitionProvider = true,
-    referencesProvider = true,
-    hoverProvider = true,
     documentSymbolProvider = true,
-    workspaceSymbolProvider = true,
     positionEncoding = "utf-8",
     experimental = {
       navgraph = { protocolVersion = PROTOCOL_VERSION, methods = navgraph_methods },

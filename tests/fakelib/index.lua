@@ -244,6 +244,55 @@ function M.search(index, opts)
   return { items = vim.list_slice(items, 1, math.min(total, limit)), total = total }
 end
 
+--- `navgraph/search` with `refs:true`: use sites of symbols matching `query`,
+--- grouped by the definition each use site sits inside. Mirrors the fan-in
+--- scan in M.build, but keeps the call-site line numbers instead of just
+--- counting them.
+--- @param opts { query: string, kinds?: string[], limit?: integer }
+function M.search_refs(index, opts)
+  local query = opts.query or ""
+  if query == "" then
+    return { items = {}, total = 0 }
+  end
+
+  local by_referencer = {}
+  for _, target in ipairs(index.symbols) do
+    local allowed = not opts.kinds or #opts.kinds == 0 or vim.tbl_contains(opts.kinds, target.kind)
+    if allowed and M.fuzzy(target.qualified, query) then
+      local pattern = "%f[%w_]" .. target.name .. "%s*%("
+      for file, lines in pairs(index.sources) do
+        for i, line in ipairs(lines) do
+          if not (file == target.file and i == target.line) and line:find(pattern) then
+            local enclosing = M.enclosing(index, file, i)
+            if enclosing then
+              local entry = by_referencer[enclosing.id]
+              if not entry then
+                entry = { symbol = enclosing, lines = {} }
+                by_referencer[enclosing.id] = entry
+              end
+              if not vim.tbl_contains(entry.lines, i) then
+                table.insert(entry.lines, i)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  local items = vim.tbl_values(by_referencer)
+  for _, item in ipairs(items) do
+    table.sort(item.lines)
+  end
+  table.sort(items, function(a, b)
+    return a.symbol.qualified < b.symbol.qualified
+  end)
+
+  local total = #items
+  local limit = opts.limit or 50
+  return { items = vim.list_slice(items, 1, math.min(total, limit)), total = total }
+end
+
 --- @param opts { pattern: string, regex?: boolean, caseSensitive?: boolean, limit?: integer }
 function M.grep(index, opts)
   local pattern = opts.pattern or ""

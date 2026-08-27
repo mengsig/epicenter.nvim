@@ -119,6 +119,19 @@ describe("fake grep", function()
   end)
 end)
 
+describe("fake search refs (F13)", function()
+  it("finds use sites grouped by the referencing definition, not the definition itself", function()
+    local refs = index.search_refs(built, { query = "log_request" })
+    expect.eq(#refs.items, 1)
+    expect.eq(refs.items[1].symbol.qualified, "M.handle_request")
+    expect.eq(refs.items[1].lines, { 10 })
+  end)
+
+  it("returns nothing for an empty query, same as a plain search", function()
+    expect.eq(index.search_refs(built, { query = "" }), { items = {}, total = 0 })
+  end)
+end)
+
 describe("fake overlays", function()
   it("indexes unsaved text in place of the file on disk", function()
     local overlaid = index.build(support.fixture_root(), {

@@ -35,6 +35,19 @@ describe("client against the fake navgraph server", function()
     expect.matches(first.symbol.uri, "^file://")
   end)
 
+  it("answers refs:true with use sites, not the identical definition list", function()
+    local err, defs = support.request(root, "navgraph/search", { query = "log_request" })
+    expect.eq(err, nil)
+    local err2, refs = support.request(root, "navgraph/search", { query = "log_request", refs = true })
+    expect.eq(err2, nil)
+    expect.ne(
+      defs.items[1].symbol.qualified,
+      refs.items[1].symbol.qualified,
+      "refs mode must show a use site's enclosing definition, not the same definition list"
+    )
+    expect.truthy(refs.items[1].lines ~= nil, "refs items must carry the use-site line numbers")
+  end)
+
   it("answers a grep over the same sources", function()
     local err, result = support.request(root, "navgraph/grep", { pattern = "log_request" })
     expect.eq(err, nil)
