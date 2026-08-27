@@ -77,6 +77,8 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref         |
 | `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor         |
 | `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls        |
+| `<leader>ep` | `:Epicenter path`    | Call chain between two symbols                |
+| `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer     |
 
 Inside the palette:
 
@@ -104,14 +106,15 @@ Inside the palette:
 | `diff`     | Impact of the changes since a git ref                    |
 | `callers`  | Tree of who calls the symbol under the cursor            |
 | `callees`  | Tree of what the symbol under the cursor calls           |
+| `path`     | Call chain between two symbols                           |
+| `outline`  | Live symbol outline sidebar for the current buffer       |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
 | `log`      | Open the epicenter log                                   |
 
-`outline`, `hot` and `path` complete today and announce themselves as coming
-in a later release.
+`hot` completes today and announces itself as coming in a later release.
 
 ### Inside the blast panel
 
@@ -218,6 +221,8 @@ require("epicenter").setup({
   hover = { callers = 5, max_width = 80 },
   badges = "cursor",          -- "cursor" | "all" | false
   explore = { limit = 100 },   -- edges fetched per expansion in callers/callees
+  path = { step_ms = 45 },     -- time each rung of the path ladder takes to draw
+  outline = { width = 34, debounce_ms = 80 },
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```

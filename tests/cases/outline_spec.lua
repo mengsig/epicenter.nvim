@@ -1,0 +1,180 @@
+local outline = require("epicenter.features.outline")
+local support = require("support")
+
+local function symbol(over)
+  return vim.tbl_extend("force", {
+    qualified = "RequestHandler",
+    name = "RequestHandler",
+    kind = "class",
+    file = "app/handlers.py",
+    uri = "file:///proj/app/handlers.py",
+    line = 1,
+    endLine = 1,
+  }, over or {})
+end
+
+describe("outline rows", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+  end)
+
+  it("flattens the nesting into indented rows", function()
+    local rows = outline.rows_of({
+      {
+        symbol = symbol(),
+        children = {
+          {
+            symbol = symbol({ qualified = "RequestHandler.close", name = "close", kind = "method" }),
+          },
+        },
+      },
+      { symbol = symbol({ qualified = "dispatch", name = "dispatch", kind = "fn" }) },
+    })
+    expect.eq(
+      vim.tbl_map(function(row)
+        return ("%d:%s"):format(row.depth, row.symbol.name)
+      end, rows),
+      { "0:RequestHandler", "1:close", "0:dispatch" }
+    )
+  end)
+
+  it("shows the bare name, the kind and the line", function()
+    local rendered = outline.render_row({ symbol = symbol({ line = 7 }), depth = 1 })
+    expect.matches(rendered.text, "RequestHandler")
+    expect.matches(rendered.text, "7$")
+    expect.matches(rendered.text, "^    ", "depth indents the row")
+  end)
+
+  it("picks the innermost symbol containing the cursor line", function()
+    local rows = {
+      { symbol = symbol({ name = "outer", line = 1, endLine = 20 }), depth = 0 },
+      { symbol = symbol({ name = "inner", line = 5, endLine = 9 }), depth = 1 },
+    }
+    expect.eq(outline.enclosing_index(rows, 7), 2)
+    expect.eq(outline.enclosing_index(rows, 15), 1)
+    expect.eq(outline.enclosing_index(rows, 40), nil)
+  end)
+
+  it("declares the command and its keymap", function()
+    expect.eq(outline.commands[1].name, "outline")
+    expect.eq(outline.keymaps[1].suffix, "o")
+  end)
+end)
+
+describe("outline sidebar against the fake navgraph server", function()
+  local root, buf, panel
+
+  local function press(lhs)
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+      if map.lhs == lhs and map.callback then
+        return map.callback()
+      end
+    end
+    error("no mapping for " .. lhs)
+  end
+
+  local function names()
+    return vim.tbl_map(function(row)
+      return row.symbol.name
+    end, panel.list:items())
+  end
+
+  local function open(relative)
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, relative)))
+    buf = vim.api.nvim_get_current_buf()
+    panel = require("epicenter").run("outline", {}, buf)
+    wait(function()
+      return panel.list:count() > 0
+    end, 10000, "outline for " .. relative)
+    return panel
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.events").clear()
+  end)
+
+  it("nests the methods of a class under it", function()
+    open("app/handlers.py")
+    expect.eq(names(), { "RequestHandler", "handle_request", "close", "dispatch" })
+    local rows = vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false)
+    expect.matches(rows[1], "RequestHandler")
+    expect.matches(rows[2], "^    %S", "a method is indented under its class")
+  end)
+
+  it("highlights the symbol the cursor sits in, and follows it", function()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    buf = vim.api.nvim_get_current_buf()
+    local source_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_cursor(source_win, { 10, 0 })
+
+    panel = require("epicenter").run("outline", {}, buf)
+    wait(function()
+      return panel.list:count() > 0
+    end, 10000, "outline")
+    expect.eq(panel:current().symbol.qualified, "M.handle_request")
+
+    vim.api.nvim_win_set_cursor(source_win, { 15, 0 })
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf })
+    wait(function()
+      return panel:current().symbol.qualified == "M.start"
+    end, 5000, "the sidebar follows the cursor")
+  end)
+
+  it("cycles the kind filter", function()
+    open("app/handlers.py")
+    press("k")
+    expect.eq(names(), { "handle_request", "close", "dispatch" }, "functions and methods only")
+    press("k")
+    expect.eq(names(), { "RequestHandler" }, "types only")
+  end)
+
+  it("filters by name", function()
+    open("app/handlers.py")
+    panel:set_filter("close")
+    expect.eq(names(), { "close" })
+  end)
+
+  it("rebuilds itself when the index changes", function()
+    open("app/handlers.py")
+    local before = panel.list:count()
+    support.request(root, "navgraph/rescan", {})
+    wait(function()
+      return panel.list:count() == before and names()[1] == "RequestHandler"
+    end, 10000, "outline after the reindex")
+  end)
+
+  it("follows a buffer switch", function()
+    open("app/handlers.py")
+    vim.api.nvim_set_current_win(outline.current().source_win)
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/config.lua")))
+    wait(function()
+      return vim.deep_equal(names(), { "route", "load_config" })
+    end, 10000, "outline for the new buffer")
+  end)
+
+  it("opens focused, focuses when it is not, and closes when it is", function()
+    open("app/handlers.py")
+    expect.eq(vim.api.nvim_get_current_win(), panel.win.win, "the sidebar takes focus on open")
+
+    local source_win = outline.current().source_win
+    vim.api.nvim_set_current_win(source_win)
+    expect.eq(require("epicenter").run("outline", {}, buf), panel, "from elsewhere it focuses")
+    expect.eq(vim.api.nvim_get_current_win(), panel.win.win)
+
+    require("epicenter").run("outline", {}, buf)
+    expect.falsy(panel:valid(), "running it from inside closes it")
+    expect.eq(outline.current(), nil)
+  end)
+end)

@@ -133,21 +133,29 @@ local function level(edges, symbol, direction, opts)
   return out
 end
 
+--- Exact qualified name first, then a bare-name hit.
+local function find_named(ctx, name)
+  if type(name) ~= "string" or name == "" then
+    return nil
+  end
+  for _, symbol in ipairs(ctx.index.symbols) do
+    if symbol.qualified == name then
+      return symbol
+    end
+  end
+  for _, symbol in ipairs(ctx.index.symbols) do
+    if symbol.name == name then
+      return symbol
+    end
+  end
+  return nil
+end
+
 --- Symbol the request points at: an explicit name, else the word under the
 --- cursor, else the symbol whose body encloses the cursor.
 local function root_symbol(ctx, params)
   if type(params.symbol) == "string" and params.symbol ~= "" then
-    for _, symbol in ipairs(ctx.index.symbols) do
-      if symbol.qualified == params.symbol then
-        return symbol
-      end
-    end
-    for _, symbol in ipairs(ctx.index.symbols) do
-      if symbol.name == params.symbol then
-        return symbol
-      end
-    end
-    return nil
+    return find_named(ctx, params.symbol)
   end
 
   if not params.uri or not params.position then
@@ -217,6 +225,55 @@ local function respond(ctx, params, direction)
   }
 end
 
+--- Shortest call chain from `from` to `to`, breadth-first so the answer is the
+--- shortest one and the search cannot loop on a cycle.
+local function shortest_path(edges, from, to, opts)
+  if from == to then
+    return { { symbol = from } }
+  end
+  local came_from, queue, seen = {}, { from }, { [from] = true }
+  local at = 1
+  while at <= #queue do
+    local node = queue[at]
+    at = at + 1
+    for _, step in ipairs(level(edges, node, "callees", opts)) do
+      local next_node = step.node
+      if next_node and not seen[next_node] then
+        seen[next_node] = true
+        came_from[next_node] = { previous = node, edge = step.edge }
+        if next_node == to then
+          local steps, cursor = {}, to
+          while cursor do
+            local link = came_from[cursor]
+            table.insert(steps, 1, {
+              symbol = cursor,
+              edge = link and { kind = link.edge.kind, heuristic = link.edge.heuristic } or nil,
+            })
+            cursor = link and link.previous or nil
+          end
+          return steps
+        end
+        table.insert(queue, next_node)
+      end
+    end
+  end
+  return nil
+end
+
+--- Symbols of one file, nested: `A.b` sits under `A` when both are in the file.
+local function outline_nodes(ctx, file)
+  local nodes, by_qualified = {}, {}
+  for _, symbol in ipairs(ctx.index.symbols) do
+    if symbol.file == file then
+      local node = { symbol = symbol, children = {} }
+      local parent = by_qualified[symbol.qualified:match("^(.*)%.[%w_]+$") or ""]
+      by_qualified[symbol.qualified] = node
+      table.insert(parent and parent.children or nodes, node)
+    end
+  end
+  return nodes
+end
+
 return {
   ["navgraph/callers"] = function(ctx, params)
     return respond(ctx, params, "callers")
@@ -224,5 +281,18 @@ return {
 
   ["navgraph/calls"] = function(ctx, params)
     return respond(ctx, params, "callees")
+  end,
+
+  ["navgraph/path"] = function(ctx, params)
+    local from, to = find_named(ctx, params.from), find_named(ctx, params.to)
+    if not from or not to then
+      return { found = false, steps = {} }
+    end
+    local steps = shortest_path(graph_of(ctx.index), from, to, opts_of(params))
+    return { found = steps ~= nil, steps = steps or {} }
+  end,
+
+  ["navgraph/outline"] = function(ctx, params)
+    return { nodes = outline_nodes(ctx, ctx.to_relative(params.uri)) }
   end,
 }

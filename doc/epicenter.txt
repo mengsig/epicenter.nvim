@@ -21,8 +21,10 @@ CONTENTS                                                   *epicenter-contents*
          ripples .............................. |epicenter-ripples|
          badges ............................... |epicenter-badges|
      9.3 explore ............................... |epicenter-explore|
-     9.4 core .................................. |epicenter-core|
-     9.5 planned ................................ |epicenter-planned|
+     9.4 path .................................. |epicenter-path|
+     9.5 outline ................................ |epicenter-outline|
+     9.6 core .................................. |epicenter-core|
+     9.7 planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
 
 ==============================================================================
@@ -94,13 +96,14 @@ The binary is looked up in this order:
     diff     |epicenter-blast|    Impact of the changes since a git ref
     callers  |epicenter-explore|  Who calls the symbol under the cursor
     callees  |epicenter-explore|  What the symbol under the cursor calls
+    path     |epicenter-path|     Call path between two symbols
+    outline  |epicenter-outline|  Live symbol outline of the current buffer
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
-    outline, hot, path
-             |epicenter-planned|  Announced, shipping in a later release
+    hot      |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -115,6 +118,8 @@ change `keymaps.prefix`.
     <leader>ed      :Epicenter diff
     <leader>ec      :Epicenter callers
     <leader>eC      :Epicenter callees
+    <leader>ep      :Epicenter path
+    <leader>eo      :Epicenter outline
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -186,6 +191,8 @@ Defaults: >lua
       hover = { callers = 5, max_width = 80 },
       badges = "cursor",
       explore = { limit = 100 },
+      path = { step_ms = 45 },
+      outline = { width = 34, debounce_ms = 80 },
       log = { level = "warn", file = nil },
     }
 <
@@ -229,6 +236,9 @@ badges               "cursor" (badge the definition the cursor is inside),
                      "all" (badge every definition in the buffer), or `false`.
 explore.limit        Most edges fetched per expansion in the callers/callees
                      explorer.
+path.step_ms         Time each step of the path ladder takes to draw.
+outline.width        Sidebar width in cells.
+outline.debounce_ms  Quiet time before the outline follows the cursor.
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -487,7 +497,53 @@ Options: >lua
     explore = { limit = 100 },
 <
 ==============================================================================
-9.4 CORE                                                       *epicenter-core*
+9.4 PATH                                                       *epicenter-path*
+
+                                                           *:Epicenter-path*
+:Epicenter path [from] [to]                                    *<leader>ep*
+    The shortest call chain between two symbols, drawn as a ladder that fills
+    in one step at a time. With no arguments both ends are picked from the
+    search palette, from first; with one argument that is the {from} end.
+
+    Each rung names the edge (`calls`, `references`) and marks a heuristic
+    resolution with `?`. When there is no chain the panel says so - it is an
+    answer, not an error.
+
+    <CR>            jump to the symbol on the cursor line
+    y               yank `file:line`
+    q, <Esc>        close
+
+Options: >lua
+
+    path = { step_ms = 45 },
+<
+==============================================================================
+9.5 OUTLINE                                                 *epicenter-outline*
+
+                                                        *:Epicenter-outline*
+:Epicenter outline                                             *<leader>eo*
+    A sidebar with the current buffer's symbols, nested by their qualified
+    name, rebuilt on |EpicenterIndexed| so it includes unsaved edits. Run it
+    again to focus the sidebar, and once more to close it.
+
+    The symbol the cursor sits in is highlighted as you move around the
+    buffer, and the sidebar follows you when you switch buffers.
+
+    j, <Down>       next symbol
+    <Up>            previous symbol
+    <CR>            jump to it in the window you came from
+    o               peek at it without leaving the sidebar
+    k               cycle the kind filter
+                    (all -> functions -> types -> values)
+    /               filter by name
+    q, <Esc>        close
+
+Options: >lua
+
+    outline = { width = 34, debounce_ms = 80 },
+<
+==============================================================================
+9.6 CORE                                                       *epicenter-core*
 
                                                           *:Epicenter-status*
 :Epicenter status
@@ -515,14 +571,12 @@ Options: >lua
     `stdpath("state")/epicenter.log`.
 
 ==============================================================================
-9.5 PLANNED                                                 *epicenter-planned*
+9.7 PLANNED                                                 *epicenter-planned*
 
 These subcommands complete today and print a one-line notice; they ship in
 a later release.
 
-    outline   Symbol outline of the current file
     hot       Hot spots ranked by fan-in
-    path      Call path between two symbols
 
 ==============================================================================
 10. EXTENDING                                            *epicenter-extending*
