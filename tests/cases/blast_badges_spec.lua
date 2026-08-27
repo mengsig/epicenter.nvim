@@ -114,6 +114,70 @@ describe("badges against the fake navgraph server", function()
     expect.eq(badge_count(buf), 0)
   end)
 
+  it("costs one round trip per generation, not one per trigger (#F7)", function()
+    local client = require("epicenter.client")
+    local original = client.outline
+    local calls = 0
+    client.outline = function(...)
+      calls = calls + 1
+      return original(...)
+    end
+
+    fetched(buf)
+    -- The fake server's own indexing can push a few `navgraph/indexed`
+    -- notifications right after a buffer opens; let that settle before
+    -- asserting anything about round-trip counts.
+    local settled = false
+    vim.wait(3000, function()
+      local before = calls
+      vim.wait(150)
+      settled = calls == before
+      return settled
+    end, 50)
+    expect.truthy(settled, "the fake server's own indexing churn must quiet down")
+    local baseline = calls
+
+    -- A burst of fetches for the same (now settled) state - as BufEnter and
+    -- BufWinEnter firing together would produce - must cost nothing more.
+    badges.fetch(buf)
+    badges.fetch(buf)
+    badges.fetch(buf)
+    vim.wait(300)
+    expect.eq(calls, baseline, "an unchanged buffer state must not re-fetch")
+
+    -- A genuine reindex with no local edit still invalidates the cache,
+    -- exactly once.
+    local events = require("epicenter.events")
+    events.emit(events.INDEXED, {})
+    wait(function()
+      return calls > baseline
+    end, 10000, "the reindex-triggered fetch")
+    vim.wait(300)
+    expect.eq(calls, baseline + 1, "a reindex must cost exactly one more round trip")
+
+    client.outline = original
+  end)
+
+  it("cancels the reveal tween on a buffer wipe instead of leaking it (#F8)", function()
+    local manual = animate.manual_driver()
+    local now = 0
+    badges.place(buf, { { line = 3, text = "<- 1  -> 0" } }, {
+      animate = {
+        motion = true,
+        driver = manual.driver,
+        duration = 100,
+        clock = function()
+          return now
+        end,
+      },
+    })
+    expect.truthy(manual.running(), "the reveal tween is running")
+
+    vim.api.nvim_buf_delete(buf, { force = true })
+
+    expect.falsy(manual.running(), "wiping the buffer must cancel its reveal tween")
+  end)
+
   it("follows the cursor to another definition", function()
     fetched(buf)
     expect.eq(badge_at(buf, 3), "  <- 1  -> 0")

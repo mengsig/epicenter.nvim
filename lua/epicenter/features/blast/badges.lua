@@ -19,6 +19,11 @@ local outlines = {}
 --- bufnr -> what is currently painted, so an unchanged badge does not replay.
 local painted = {}
 local reveals = {}
+--- bufnr -> { tick, generation } of the last outline fetch started. Caches
+--- per reindex generation, so a burst of BufEnter/BufWinEnter/reindex on an
+--- unchanged buffer costs at most one `navgraph/outline` round trip.
+local fetched_at = {}
+local index_generation = 0
 local augroup = nil
 
 --- @param symbol { callers?: integer, callees?: integer }
@@ -186,6 +191,12 @@ function M.fetch(bufnr, opts)
   if not require("epicenter.client").session_for_buf(bufnr) then
     return
   end
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  local last = fetched_at[bufnr]
+  if last and last.tick == tick and last.generation == index_generation then
+    return
+  end
+  fetched_at[bufnr] = { tick = tick, generation = index_generation }
   -- `navgraph/outline` filters by a path substring and answers with one entry
   -- per matching file, so ask for this file and take the exact match back.
   local relative = M.relative_path(bufnr)
@@ -237,10 +248,19 @@ end
 function M.setup(cfg)
   augroup = augroup or vim.api.nvim_create_augroup("EpicenterBadges", { clear = true })
   vim.api.nvim_clear_autocmds({ group = augroup })
-  for bufnr in pairs(outlines) do
-    M.clear(bufnr)
+  -- Cancel every running reveal directly, not only the ones for a buffer
+  -- `outlines` still remembers - a buffer whose fetch is in flight has a
+  -- pending reveal too, and a loop keyed on `outlines` would miss it.
+  for _, handle in pairs(reveals) do
+    handle.cancel()
   end
-  outlines = {}
+  for bufnr in pairs(outlines) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+    end
+  end
+  outlines, painted, reveals, fetched_at = {}, {}, {}, {}
+  index_generation = 0
   if cfg.badges == false then
     return
   end
@@ -262,14 +282,21 @@ function M.setup(cfg)
   vim.api.nvim_create_autocmd("User", {
     group = augroup,
     pattern = require("epicenter.events").INDEXED,
-    callback = refresh_visible,
+    callback = function()
+      index_generation = index_generation + 1
+      refresh_visible()
+    end,
   })
   vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
     group = augroup,
     callback = function(event)
+      if reveals[event.buf] then
+        reveals[event.buf].cancel()
+      end
       outlines[event.buf] = nil
       painted[event.buf] = nil
       reveals[event.buf] = nil
+      fetched_at[event.buf] = nil
     end,
   })
 end
