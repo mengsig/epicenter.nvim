@@ -202,14 +202,23 @@ describe("search palette against the fake navgraph server", function()
     p:close()
   end)
 
-  it("announces the planned subcommands instead of failing", function()
+  it("announces a planned subcommand instead of failing", function()
+    -- Whichever subcommand is still announced-but-unshipped; the list shrinks
+    -- as features land, and the branch disappears with the last of them.
+    local planned = vim.tbl_filter(function(cmd)
+      return cmd.status == "planned"
+    end, require("epicenter.registry").commands())[1]
+    if not planned then
+      return
+    end
+
     local notices = {}
     local toast = require("epicenter.ui.toast")
     local original = toast.notify
     toast.notify = function(msg, opts)
       table.insert(notices, { msg = msg, opts = opts })
     end
-    epicenter.run("blast", {}, buf)
+    epicenter.run(planned.name, {}, buf)
     toast.notify = original
     expect.eq(#notices, 1)
     expect.matches(notices[1].msg, "coming in a later release")

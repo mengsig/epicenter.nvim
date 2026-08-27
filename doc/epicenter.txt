@@ -17,8 +17,9 @@ CONTENTS                                                   *epicenter-contents*
   8. Events ................................... |epicenter-events|
   9. Features
      9.1 search ............................... |epicenter-search|
-     9.2 core ................................. |epicenter-core|
-     9.3 planned .............................. |epicenter-planned|
+     9.2 blast ................................ |epicenter-blast|
+     9.3 core ................................. |epicenter-core|
+     9.4 planned .............................. |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
 
 ==============================================================================
@@ -82,12 +83,13 @@ The binary is looked up in this order:
 
     search   |epicenter-search|   Symbol search palette
     grep     |epicenter-search|   Text search palette
+    blast    |epicenter-blast|    Blast radius of the symbol under the cursor
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
-    blast, callers, callees, outline, hot, diff, path
+    callers, callees, outline, hot, diff, path
              |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
@@ -98,6 +100,7 @@ change `keymaps.prefix`.
 
     <leader>es      :Epicenter search
     <leader>eg      :Epicenter grep
+    <leader>ee      :Epicenter blast
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -189,6 +192,10 @@ animate              Master motion switch. |g:epicenter_reduce_motion| also
                      turns motion off, and wins over this.
 animation.*          Durations in ms. `frame_budget_ms` drops the next frame
                      after any frame that cost more than it.
+
+blast.*              Blast panel defaults; see |epicenter-blast|.
+ripples              Mark the impacted lines in the code while a blast panel
+                     is open. `false` turns the marks off.
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -284,7 +291,70 @@ Options: >lua
     grep   = { debounce_ms = 60, limit = 200 },
 <
 ==============================================================================
-9.2 CORE                                                       *epicenter-core*
+9.2 BLAST                                                     *epicenter-blast*
+
+                                                           *:Epicenter-blast*
+:Epicenter blast [{symbol}]                                    *<leader>ee*
+    What breaks if this symbol changes. Without an argument the target is the
+    symbol under the cursor; with one, the symbol of that name.
+
+    The header names the root and carries the summary chips - symbols, files,
+    tests and the deepest ring reached - followed by the query mode. The body
+    is one section per depth ring, each grouped by file. A row is the kind
+    icon, the qualified name, `file:line`, a muted `?` when the edge was
+    resolved by name alone, and a `test` tag on a test definition.
+
+    The panel is live: every reindex re-queries (debounced) and the result is
+    diffed against what is on screen. Arriving rows flash the accent, departing
+    rows dim and then leave, and the chips count across. The panel is never
+    rebuilt underneath you.
+
+Keys inside the panel:
+
+    <CR>            jump to the symbol
+    o               peek at it without leaving the panel
+    y               yank `file:line`
+    +, -            deeper / shallower - re-queries
+    d               flip callers <-> callees
+    t               cycle the tests scope (with -> without -> only)
+    s               toggle strict resolution (drops heuristic edges)
+    f               follow the cursor: the panel re-targets as you move
+                    (debounced, `blast.follow_debounce_ms`) and hands focus
+                    back to the code
+    j, k, gg, G     move
+    ?               toggle the key help
+    q, <Esc>        close
+
+Options: >lua
+
+    blast = {
+      depth = 2,                  -- rings requested
+      max_depth = 6,              -- upper bound for `+`
+      direction = "callers",      -- "callers" | "callees"
+      tests = "with",             -- "with" | "without" | "only"
+      strict = false,             -- drop name-resolved edges
+      layout = "float",           -- "float" | "vsplit"
+      follow_debounce_ms = 80,
+      realtime_debounce_ms = 150,
+    },
+    ripples = true,
+<
+                                                         *epicenter-ripples*
+While a panel is open every impacted definition line is marked in the code
+itself: a sign-column glyph and a tinted line, graded by ring, strongest at
+ring 1. The marks are dropped when the panel closes. `ripples = false` turns
+them off.
+
+    EpicenterRipple1    ring 1, the strongest grade
+    EpicenterRipple2    ring 2
+    EpicenterRipple3    ring 3 and deeper
+
+These three are derived from `EpicenterAccent` over the editor background
+(not the float background - they land in ordinary windows) and re-derived on
+`ColorScheme`.
+
+==============================================================================
+9.3 CORE                                                       *epicenter-core*
 
                                                           *:Epicenter-status*
 :Epicenter status
@@ -312,12 +382,11 @@ Options: >lua
     `stdpath("state")/epicenter.log`.
 
 ==============================================================================
-9.3 PLANNED                                                 *epicenter-planned*
+9.4 PLANNED                                                 *epicenter-planned*
 
 These subcommands complete today and print a one-line notice; they ship in
 a later release.
 
-    blast     Blast radius of the symbol under the cursor
     callers   Who calls the symbol under the cursor
     callees   What the symbol under the cursor calls
     outline   Symbol outline of the current file
@@ -332,15 +401,25 @@ A feature is one file under `lua/epicenter/features/` returning a spec, plus
 one `require` line in `lua/epicenter/features/init.lua`: >lua
 
     local M = {}
-    M.name = "blast"
-    M.summary = "Blast radius of the symbol under the cursor"
-    M.options = { blast = { depth = 3 } }
+    M.name = "hot"
+    M.summary = "Hot spots ranked by fan-in"
+    M.options = { hot = { limit = 20 } }
+    M.option_rules = { positive = { ["hot.limit"] = true } }
     M.commands = {
-      { name = "blast", desc = "Blast radius", run = function(ctx) end },
+      { name = "hot", desc = "Hot spots", run = function(ctx) end },
     }
-    M.keymaps = { { suffix = "b", command = "blast", desc = "Epicenter: blast" } }
+    M.keymaps = { { suffix = "h", command = "hot", desc = "Epicenter: hot" } }
     return M
 <
+`option_rules` is how a feature validates its own options at |epicenter.setup()|
+time: `variants` lists the types a path accepts, `enums` the values, `positive`
+the paths that must be a positive number. A feature may only rule on paths
+rooted at an option key it owns.
+
+A feature that needs to watch the session - autocmds, buffer-local keys - adds
+`setup = function(cfg) ... end`. It runs at the end of |epicenter.setup()| and
+must be idempotent, because a second `setup()` calls it again.
+
 `lua/epicenter/registry.lua` collects the specs; `:Epicenter` completion, the
 keymap installer, `:checkhealth` and the config defaults all iterate it. Two
 features claiming the same subcommand or option key is a hard error.

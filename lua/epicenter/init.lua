@@ -57,6 +57,19 @@ local function install_autocmds(cfg)
   end
 end
 
+--- Lets a feature install whatever it needs to watch the session (autocmds,
+--- buffer-local keys). Must be idempotent: a second `setup()` calls it again.
+local function setup_features(cfg)
+  for _, spec in ipairs(registry.specs()) do
+    if spec.setup then
+      local ok, err = pcall(spec.setup, cfg)
+      if not ok then
+        error(("epicenter: feature %q failed to set up: %s"):format(spec.name, err), 0)
+      end
+    end
+  end
+end
+
 --- @param opts? table
 --- @return table resolved config
 function M.setup(opts)
@@ -65,6 +78,7 @@ function M.setup(opts)
   require("epicenter.ui.theme").setup()
   install_keymaps(cfg)
   install_autocmds(cfg)
+  setup_features(cfg)
   return cfg
 end
 

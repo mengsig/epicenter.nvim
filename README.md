@@ -71,6 +71,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | ------------ | -------------------- | --------------------------------------------- |
 | `<leader>es` | `:Epicenter search`  | Fuzzy symbol search across the project        |
 | `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits included  |
+| `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol under the cursor   |
 
 Inside the palette:
 
@@ -93,14 +94,31 @@ Inside the palette:
 | ---------- | -------------------------------------------------------- |
 | `search`   | Symbol search palette                                    |
 | `grep`     | Text search palette                                      |
+| `blast`    | Blast radius of the symbol under the cursor              |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
 | `log`      | Open the epicenter log                                   |
 
-`blast`, `callers`, `callees`, `outline`, `hot`, `diff` and `path` complete
-today and announce themselves as coming in a later release.
+`callers`, `callees`, `outline`, `hot`, `diff` and `path` complete today and
+announce themselves as coming in a later release.
+
+### Inside the blast panel
+
+| Key            | Does                                                     |
+| -------------- | -------------------------------------------------------- |
+| `<CR>`         | Jump to the symbol                                       |
+| `o`            | Peek at it without leaving the panel                     |
+| `y`            | Yank `file:line`                                         |
+| `+` / `-`      | Deeper / shallower (re-queries)                          |
+| `d`            | Flip callers ↔ callees                                   |
+| `t`            | Cycle the tests scope (with → without → only)            |
+| `s`            | Toggle strict resolution (drops heuristic edges)         |
+| `f`            | Follow the cursor                                        |
+| `j`/`k`/`gg`/`G` | Move                                                   |
+| `?`            | Toggle the key help                                      |
+| `q` / `<Esc>`  | Close                                                    |
 
 ## Configuration
 
@@ -151,6 +169,17 @@ require("epicenter").setup({
   keymaps = { prefix = "<leader>e" }, -- or false
   search = { debounce_ms = 40, limit = 50 },
   grep = { debounce_ms = 60, limit = 200 },
+  blast = {
+    depth = 2,                -- rings requested
+    max_depth = 6,            -- upper bound for `+` in the panel
+    direction = "callers",    -- "callers" | "callees"
+    tests = "with",           -- "with" | "without" | "only"
+    strict = false,           -- drop name-resolved (heuristic) edges
+    layout = "float",         -- "float" | "vsplit"
+    follow_debounce_ms = 80,
+    realtime_debounce_ms = 150,
+  },
+  ripples = true,             -- mark impacted lines in the code while a panel is open
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```
@@ -167,6 +196,10 @@ hierarchy. Every group is overridable through `highlights`:
 `EpicenterNormal`, `EpicenterBorder`, `EpicenterTitle`, `EpicenterAccent`,
 `EpicenterMatch`, `EpicenterMuted`, `EpicenterCount`, `EpicenterInfo`,
 `EpicenterSelection`, `EpicenterPrompt`, `EpicenterHint`, `EpicenterRange`.
+
+The blast panel adds `EpicenterRipple1`, `EpicenterRipple2` and
+`EpicenterRipple3` — the ring grades of the inline marks, derived from the
+accent over the *editor* background rather than the float background.
 
 ## How it relates to NavGraph
 
@@ -226,6 +259,11 @@ Adding a feature is one new file plus one line.
    ```
 
 2. Add one `require` line to `lua/epicenter/features/init.lua`.
+
+A feature validates its own options with `option_rules` (`variants` for the
+types a path accepts, `enums` for its values, `positive` for numbers that must
+be > 0), and can watch the session with `setup = function(cfg) ... end`, which
+runs at the end of `setup()` and must be idempotent.
 
 `lua/epicenter/registry.lua` collects the specs, and `plugin/epicenter.lua`,
 `:Epicenter` completion, the keymap installer, `:checkhealth` and the config

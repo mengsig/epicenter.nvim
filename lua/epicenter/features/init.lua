@@ -4,6 +4,7 @@
 --- @type epicenter.FeatureSpec[]
 return {
   require("epicenter.features.search"),
+  require("epicenter.features.blast"),
   require("epicenter.features.planned"),
   require("epicenter.features.core"),
 }

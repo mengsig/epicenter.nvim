@@ -149,10 +149,30 @@ local function join(prefix, key)
   return prefix == "" and tostring(key) or (prefix .. "." .. tostring(key))
 end
 
-local function check_value(path, value)
-  local enum = ENUMS[path]
+--- Core rules plus the ones features declared for their own options.
+--- @return { variants: table, enums: table, positive: table }
+local function rules()
+  local extra = registry.option_rules()
+  return {
+    variants = vim.tbl_extend("force", VARIANTS, extra.variants),
+    enums = vim.tbl_extend("force", ENUMS, extra.enums),
+    positive = vim.tbl_extend("force", POSITIVE, extra.positive),
+  }
+end
+
+local function readable(values)
+  return table.concat(
+    vim.tbl_map(function(v)
+      return tostring(v)
+    end, values),
+    ", "
+  )
+end
+
+local function check_value(rule, path, value)
+  local enum = rule.enums[path]
   if enum and type(value) == "string" and not vim.tbl_contains(enum, value) then
-    fail("%s must be one of %s, got %q", path, table.concat(enum, ", "), tostring(value))
+    fail("%s must be one of %s, got %s", path, readable(enum), tostring(value))
   end
   if NONEMPTY_STRING[path] and value == "" then
     fail("%s must not be empty", path)
@@ -164,7 +184,7 @@ local function check_value(path, value)
       end
     end
   end
-  if POSITIVE[path] and (type(value) ~= "number" or value <= 0) then
+  if rule.positive[path] and (type(value) ~= "number" or value <= 0) then
     fail("%s must be a positive number, got %s", path, tostring(value))
   end
   if FRACTION[path] and (type(value) ~= "number" or value <= 0) then
@@ -189,11 +209,11 @@ local function check_value(path, value)
   end
 end
 
-local function merge(defaults, opts, prefix, allow_unknown)
+local function merge(defaults, opts, prefix, rule, allow_unknown)
   local out = vim.deepcopy(defaults)
   for key, value in pairs(opts) do
     local path = join(prefix, key)
-    local allowed = VARIANTS[path]
+    local allowed = rule.variants[path]
     local default = defaults[key]
 
     if not allowed and default == nil and allow_unknown then
@@ -213,12 +233,12 @@ local function merge(defaults, opts, prefix, allow_unknown)
         fail("%s must be %s, got %s", path, table.concat(allowed, " or "), type(value))
       end
 
-      check_value(path, value)
+      check_value(rule, path, value)
 
       if FREE_FORM[key] and prefix == "" then
         out[key] = vim.deepcopy(value)
       elseif type(value) == "table" and type(default) == "table" and not vim.islist(default) then
-        out[key] = merge(default, value, path, ALLOW_UNKNOWN[path])
+        out[key] = merge(default, value, path, rule, ALLOW_UNKNOWN[path])
       else
         out[key] = vim.deepcopy(value)
       end
@@ -248,7 +268,7 @@ function M.setup(opts)
   if type(opts) ~= "table" then
     fail("expected a table, got %s", type(opts))
   end
-  current = merge(M.defaults(), opts, "")
+  current = merge(M.defaults(), opts, "", rules())
   require("epicenter.log").configure(current.log)
   return current
 end

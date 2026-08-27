@@ -15,12 +15,19 @@
 --- @field command string subcommand to invoke
 --- @field desc string
 ---
+--- @class epicenter.OptionRules
+--- @field variants? table<string, string[]> config path -> the types it accepts
+--- @field enums? table<string, any[]> config path -> the values it accepts
+--- @field positive? table<string, boolean> config path -> must be a positive number
+---
 --- @class epicenter.FeatureSpec
 --- @field name string unique feature id, also its vimdoc tag
 --- @field summary string
 --- @field commands epicenter.Command[]
 --- @field keymaps? epicenter.Keymap[]
 --- @field options? table merged into the config defaults under its own keys
+--- @field option_rules? epicenter.OptionRules validation for the feature's own options
+--- @field setup? fun(cfg: table) called by `epicenter.setup()`; must be idempotent
 --- @field health? fun(add: fun(level: "ok"|"warn"|"error", msg: string))
 ---
 --- Feature modules must not `require("epicenter.config")` at file scope: config
@@ -42,6 +49,28 @@ local function validate_spec(spec, source)
   end
   if type(spec.commands) ~= "table" then
     fail("feature %q has no commands list", spec.name)
+  end
+  if spec.setup ~= nil and type(spec.setup) ~= "function" then
+    fail("feature %q has a non-function setup", spec.name)
+  end
+end
+
+local RULE_KINDS = { "variants", "enums", "positive" }
+
+--- A feature may only relax or constrain option paths rooted at a key it owns,
+--- so no feature can loosen another's option - or a core one.
+local function collect_rules(spec, owned, into)
+  for kind, rules in pairs(spec.option_rules or {}) do
+    if not vim.tbl_contains(RULE_KINDS, kind) then
+      fail("feature %q declares unknown option rule kind %q", spec.name, tostring(kind))
+    end
+    for path, rule in pairs(rules) do
+      local key = tostring(path):match("^[^.]+")
+      if not owned[key] then
+        fail("feature %q rules on option %q, which it does not own", spec.name, tostring(path))
+      end
+      into[kind][path] = rule
+    end
   end
 end
 
@@ -66,7 +95,14 @@ end
 
 local function build()
   local specs = require("epicenter.features")
-  local built = { specs = {}, commands = {}, by_name = {}, keymaps = {}, options = {} }
+  local built = {
+    specs = {},
+    commands = {},
+    by_name = {},
+    keymaps = {},
+    options = {},
+    rules = { variants = {}, enums = {}, positive = {} },
+  }
   local feature_names, option_owner = {}, {}
 
   for i, spec in ipairs(specs) do
@@ -100,13 +136,16 @@ local function build()
       table.insert(built.keymaps, vim.tbl_extend("force", {}, map, { feature = spec.name }))
     end
 
+    local owned = {}
     for key, value in pairs(spec.options or {}) do
       if option_owner[key] then
         fail("option key %q claimed by both %q and %q", key, option_owner[key], spec.name)
       end
       option_owner[key] = spec.name
+      owned[key] = true
       built.options[key] = vim.deepcopy(value)
     end
+    collect_rules(spec, owned, built.rules)
   end
 
   return built
@@ -148,6 +187,13 @@ end
 --- Feature-owned config defaults, merged into `config.defaults()`.
 function M.options()
   return vim.deepcopy(get().options)
+end
+
+--- Validation rules features declared for their own options, keyed by config
+--- path. `epicenter.config` merges these over its own.
+--- @return { variants: table, enums: table, positive: table }
+function M.option_rules()
+  return vim.deepcopy(get().rules)
 end
 
 --- Test seam: forces a rebuild on next access.
