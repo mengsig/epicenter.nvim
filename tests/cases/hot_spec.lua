@@ -150,7 +150,11 @@ describe("hot spots against the fake navgraph server", function()
     vim.ui.open, toast.notify = original_open, original_notify
 
     expect.truthy(opened, "vim.ui.open was called")
-    expect.matches(opened, "%.navgraph[/\\]graph%-%x+%.html$", "the server chose the path, not the argument")
+    expect.matches(
+      opened,
+      "%.navgraph[/\\]graph%-%x+%.html$",
+      "the server chose the path, not the argument"
+    )
     expect.truthy((vim.uv or vim.loop).fs_stat(opened), "the file is really there")
     expect.matches(table.concat(vim.fn.readfile(opened), "\n"), "digraph navgraph")
     expect.truthy(#vim.tbl_filter(function(msg)

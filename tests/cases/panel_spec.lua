@@ -12,8 +12,10 @@ describe("panel close-then-jump ordering", function()
 
   before_each(function()
     require("epicenter.config").reset()
-    require("epicenter.config")
-      .setup({ ui = { icons = "ascii" }, animation = { close_ms = 60, open_ms = 10 } })
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animation = { close_ms = 60, open_ms = 10 },
+    })
     -- Real animation: this is exactly the case CI's reduce-motion default hid.
     vim.g.epicenter_reduce_motion = false
 
@@ -132,7 +134,11 @@ describe("panel shared keys (F12)", function()
         map.callback()
       end
     end
-    expect.eq(vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false), before, "toggling back restores the rows")
+    expect.eq(
+      vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false),
+      before,
+      "toggling back restores the rows"
+    )
   end)
 
   it("/ filters the rows and lets the feature refresh its own footer", function()

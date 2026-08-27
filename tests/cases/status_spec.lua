@@ -90,13 +90,16 @@ describe("status dashboard", function()
   it("sizes to the content instead of a fixed 62x14 (F14)", function()
     require("epicenter.config").setup({ ui = { icons = "ascii" } })
     local few = core.box_for({ "", "  root ~/proj", "  server running", "" })
-    local many = core.box_for(vim.list_extend({ "" }, (function()
-      local languages = {}
-      for i = 1, 8 do
-        table.insert(languages, ("  lang-%d              ########## %d"):format(i, i))
-      end
-      return languages
-    end)()))
+    local many = core.box_for(vim.list_extend(
+      { "" },
+      (function()
+        local languages = {}
+        for i = 1, 8 do
+          table.insert(languages, ("  lang-%d              ########## %d"):format(i, i))
+        end
+        return languages
+      end)()
+    ))
     expect.truthy(many.height > few.height, "more content rows means a taller box")
     expect.truthy(many.height >= 8, "does not clip the language list")
   end)

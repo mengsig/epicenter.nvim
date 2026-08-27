@@ -78,7 +78,14 @@ end
 
 local function node_of_extern(name, parent_key)
   local key = parent_key .. "/ext:" .. tostring(name)
-  return { type = "extern", key = key, identity = key, name = tostring(name), children = {}, loaded = true }
+  return {
+    type = "extern",
+    key = key,
+    identity = key,
+    name = tostring(name),
+    children = {},
+    loaded = true,
+  }
 end
 
 --- Children of `node` for a fetched `root_node` (the contract's `Node`):
@@ -116,7 +123,14 @@ function M.merge_children(view, node, root_node)
   if #ext_names > 0 then
     local group_key = node.key .. "/~ext"
     local group = previous[group_key]
-      or { type = "ext", key = group_key, identity = group_key, name = "ext", children = {}, loaded = true }
+      or {
+        type = "ext",
+        key = group_key,
+        identity = group_key,
+        name = "ext",
+        children = {},
+        loaded = true,
+      }
     local externs = {}
     for _, name in ipairs(ext_names) do
       local fresh = node_of_extern(name, node.key)
@@ -311,7 +325,12 @@ local function load_root(view, ref)
       return
     end
     local root_node = result.root
-    if not root_node or root_node == vim.NIL or not root_node.symbol or root_node.symbol == vim.NIL then
+    if
+      not root_node
+      or root_node == vim.NIL
+      or not root_node.symbol
+      or root_node.symbol == vim.NIL
+    then
       view.panel:notice("  no symbol to explore here")
       return
     end
@@ -436,11 +455,14 @@ local function open(direction, ctx)
   })
 
   view.tree = view.panel.tree
-  view.refresh_debounce = require("epicenter.ui.prompt").debounce(cfg.explore.debounce_ms, function()
-    if view.panel:valid() then
-      refresh_open(view)
+  view.refresh_debounce = require("epicenter.ui.prompt").debounce(
+    cfg.explore.debounce_ms,
+    function()
+      if view.panel:valid() then
+        refresh_open(view)
+      end
     end
-  end)
+  )
   view.unsubscribe = events.on(events.INDEXED, function()
     if view.panel:valid() then
       view.refresh_debounce.call()

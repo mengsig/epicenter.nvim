@@ -64,32 +64,39 @@ describe("tree flatten", function()
     expect.eq(tree.flatten({}, {}, OPTS), {})
   end)
 
-  it("cycle detection uses identity_of, not key_of, so a diamond is not a false cycle (F9)", function()
-    -- Two distinct ROWS (different keys, e.g. path-scoped) for the same
-    -- underlying node (same identity) must not trip recursion detection just
-    -- because they share one identity - only a real cycle on one path does.
-    local leaf1 = { name = "leaf", identity = "leaf", children = {} }
-    local leaf2 = { name = "leaf", identity = "leaf", children = {} }
-    local diamond = {
-      node("root", { node("alpha", { leaf1 }), node("beta", { leaf2 }) }),
-    }
-    local opts = {
-      key_of = function(n)
-        return n.name
-      end,
-      identity_of = function(n)
-        return n.identity or n.name
-      end,
-      children_of = OPTS.children_of,
-    }
-    local rows = tree.flatten(diamond, { root = true, alpha = true, beta = true }, opts)
-    local leaves = vim.tbl_filter(function(r)
-      return r.node.identity == "leaf"
-    end, rows)
-    expect.eq(#leaves, 2, "both rows render")
-    expect.eq(leaves[1].recursive, false, "reaching the same identity via two parents is not a cycle")
-    expect.eq(leaves[2].recursive, false)
-  end)
+  it(
+    "cycle detection uses identity_of, not key_of, so a diamond is not a false cycle (F9)",
+    function()
+      -- Two distinct ROWS (different keys, e.g. path-scoped) for the same
+      -- underlying node (same identity) must not trip recursion detection just
+      -- because they share one identity - only a real cycle on one path does.
+      local leaf1 = { name = "leaf", identity = "leaf", children = {} }
+      local leaf2 = { name = "leaf", identity = "leaf", children = {} }
+      local diamond = {
+        node("root", { node("alpha", { leaf1 }), node("beta", { leaf2 }) }),
+      }
+      local opts = {
+        key_of = function(n)
+          return n.name
+        end,
+        identity_of = function(n)
+          return n.identity or n.name
+        end,
+        children_of = OPTS.children_of,
+      }
+      local rows = tree.flatten(diamond, { root = true, alpha = true, beta = true }, opts)
+      local leaves = vim.tbl_filter(function(r)
+        return r.node.identity == "leaf"
+      end, rows)
+      expect.eq(#leaves, 2, "both rows render")
+      expect.eq(
+        leaves[1].recursive,
+        false,
+        "reaching the same identity via two parents is not a cycle"
+      )
+      expect.eq(leaves[2].recursive, false)
+    end
+  )
 
   it("without identity_of, cycle detection falls back to key_of unchanged", function()
     local a = node("a")

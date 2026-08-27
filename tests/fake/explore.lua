@@ -33,7 +33,8 @@ local CALLERS_PARAMS = merged(TARGET, SCOPE, { depth = true, refs = true })
 local PATH_PARAMS = { from = true, to = true }
 local OUTLINE_PARAMS = merged(SCOPE, { path = true, kinds = true, limit = true })
 local HOT_PARAMS = merged(SCOPE, { path = true, limit = true })
-local UNUSED_PARAMS = merged(SCOPE, { path = true, noPublic = true, followImports = true, limit = true })
+local UNUSED_PARAMS =
+  merged(SCOPE, { path = true, noPublic = true, followImports = true, limit = true })
 local GRAPH_PARAMS = merged(SCOPE, { path = true })
 
 -- Call graph -------------------------------------------------------------------
@@ -234,7 +235,18 @@ end
 -- Call trees ---------------------------------------------------------------------
 
 --- The contract's `Node` tree for `navgraph/callers` / `navgraph/calls`.
-local function node_for(index, graph, symbol, exact, lines, direction, opts, on_path, level, max_depth)
+local function node_for(
+  index,
+  graph,
+  symbol,
+  exact,
+  lines,
+  direction,
+  opts,
+  on_path,
+  level,
+  max_depth
+)
   local node = {
     symbol = symbol_of(index, symbol),
     exact = exact,
@@ -253,7 +265,18 @@ local function node_for(index, graph, symbol, exact, lines, direction, opts, on_
     if passes(opts, other, edge.exact) then
       table.insert(
         node.children,
-        node_for(index, graph, other, edge.exact, edge.lines, direction, opts, on_path, level + 1, max_depth)
+        node_for(
+          index,
+          graph,
+          other,
+          edge.exact,
+          edge.lines,
+          direction,
+          opts,
+          on_path,
+          level + 1,
+          max_depth
+        )
       )
     end
   end
@@ -323,9 +346,11 @@ return {
     if not chain then
       return { path = {} }
     end
-    return { path = vim.tbl_map(function(symbol)
-      return symbol_of(ctx.index, symbol)
-    end, chain) }
+    return {
+      path = vim.tbl_map(function(symbol)
+        return symbol_of(ctx.index, symbol)
+      end, chain),
+    }
   end,
 
   ["navgraph/outline"] = function(ctx, params)
@@ -430,7 +455,10 @@ return {
           include, marked_test_only = test_only, test_only
         end
         if include then
-          table.insert(items, { symbol = symbol_of(ctx.index, symbol), testOnly = marked_test_only })
+          table.insert(
+            items,
+            { symbol = symbol_of(ctx.index, symbol), testOnly = marked_test_only }
+          )
         end
       end
     end
@@ -464,7 +492,8 @@ return {
     vim.fn.mkdir(navgraph_dir, "p")
     local hash = vim.fn.sha256(content):sub(1, 8)
     local rel = vim.fs.joinpath(".navgraph", ("graph-%s.html"):format(hash))
-    local fh = assert(io.open(vim.fs.joinpath(ctx.root, rel), "w"), "fake server could not write graph file")
+    local fh =
+      assert(io.open(vim.fs.joinpath(ctx.root, rel), "w"), "fake server could not write graph file")
     fh:write(content)
     fh:close()
     return { path = rel }

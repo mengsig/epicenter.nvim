@@ -41,7 +41,10 @@ describe("the fake answers the real navgraph/* shapes", function()
     local err, result = support.request(root, "navgraph/calls", { symbol = "M.handle_request" })
     expect.eq(err, nil)
     expect.truthy(#result.root.children > 0)
-    expect.eq(keys_of(result.root.children[1]), { "children", "exact", "ext", "lines", "recursion", "symbol" })
+    expect.eq(
+      keys_of(result.root.children[1]),
+      { "children", "exact", "ext", "lines", "recursion", "symbol" }
+    )
   end)
 
   it("navgraph/callers rejects a param the contract does not define", function()
@@ -51,11 +54,16 @@ describe("the fake answers the real navgraph/* shapes", function()
   end)
 
   it("navgraph/path returns only {path}, a flat Symbol[]", function()
-    local err, result = support.request(root, "navgraph/path", { from = "M.start", to = "log_request" })
+    local err, result =
+      support.request(root, "navgraph/path", { from = "M.start", to = "log_request" })
     expect.eq(err, nil)
     expect.eq(keys_of(result), { "path" })
     expect.truthy(#result.path > 0)
-    expect.eq(type(result.path[1].qualified), "string", "steps are Symbols directly, not {symbol=...} wrappers")
+    expect.eq(
+      type(result.path[1].qualified),
+      "string",
+      "steps are Symbols directly, not {symbol=...} wrappers"
+    )
   end)
 
   it("navgraph/outline returns {files:[{file,lang,symbols}]}, symbols flat", function()
@@ -65,7 +73,11 @@ describe("the fake answers the real navgraph/* shapes", function()
     expect.eq(#result.files, 1)
     expect.eq(keys_of(result.files[1]), { "file", "lang", "symbols" })
     expect.eq(result.files[1].lang, "lua")
-    expect.eq(type(result.files[1].symbols[1].qualified), "string", "symbols is Symbol[], no children")
+    expect.eq(
+      type(result.files[1].symbols[1].qualified),
+      "string",
+      "symbols is Symbol[], no children"
+    )
   end)
 
   it("navgraph/hot items carry the contract's fan-in/out fields, not a bare Symbol", function()

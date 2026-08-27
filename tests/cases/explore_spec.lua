@@ -39,7 +39,8 @@ describe("explorer rows", function()
   end)
 
   it("shows the kind, the qualified name and the location", function()
-    local rendered = explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
+    local rendered =
+      explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
     expect.matches(rendered.text, "M%.handle_request")
     expect.matches(rendered.text, "app/server%.lua:9")
   end)
@@ -55,7 +56,8 @@ describe("explorer rows", function()
   end)
 
   it("omits the count badge for a single edge", function()
-    local rendered = explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
+    local rendered =
+      explore.render_row(row(node_of({ symbol = symbol(), exact = true, lines = { 9 } })))
     expect.falsy(rendered.text:match("1x"))
   end)
 
@@ -108,7 +110,11 @@ describe("explorer rows", function()
     parent.children = explore.merge_children(CALLERS, parent, {
       children = {
         { symbol = symbol({ callers = 1 }), exact = true, lines = { 9 } },
-        { symbol = symbol({ qualified = "M.start", name = "start", line = 14, callers = 0 }), exact = true, lines = { 15 } },
+        {
+          symbol = symbol({ qualified = "M.start", name = "start", line = 14, callers = 0 }),
+          exact = true,
+          lines = { 15 },
+        },
       },
       ext = {},
     })
@@ -117,7 +123,9 @@ describe("explorer rows", function()
     kept.children = { { key = "grandchild", type = "symbol" } }
 
     parent.children = explore.merge_children(CALLERS, parent, {
-      children = { { symbol = symbol({ endLine = 20, callers = 4 }), exact = true, lines = { 9, 10, 11 } } },
+      children = {
+        { symbol = symbol({ endLine = 20, callers = 4 }), exact = true, lines = { 9, 10, 11 } },
+      },
       ext = {},
     })
     expect.eq(#parent.children, 1, "M.start is gone")
@@ -129,9 +137,14 @@ describe("explorer rows", function()
 
   it("scopes the row key to the path, not just the symbol (F9)", function()
     local leaf = symbol({ qualified = "leaf", name = "leaf", line = 5 })
-    local under_alpha = explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/alpha")
-    local under_beta = explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/beta")
-    expect.truthy(under_alpha.key ~= under_beta.key, "distinct rows for the same symbol under two parents")
+    local under_alpha =
+      explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/alpha")
+    local under_beta =
+      explore.node_of_child(CALLERS, { symbol = leaf, exact = true, lines = { 1 } }, "root/beta")
+    expect.truthy(
+      under_alpha.key ~= under_beta.key,
+      "distinct rows for the same symbol under two parents"
+    )
     expect.eq(under_alpha.identity, under_beta.identity, "but the same symbol identity")
   end)
 
@@ -169,9 +182,15 @@ describe("explorer rows", function()
 
     local tree = require("epicenter.ui.tree")
     local opts = {
-      key_of = function(n) return n.key end,
-      identity_of = function(n) return n.identity end,
-      children_of = function(n) return n.children end,
+      key_of = function(n)
+        return n.key
+      end,
+      identity_of = function(n)
+        return n.identity
+      end,
+      children_of = function(n)
+        return n.children
+      end,
     }
     local expanded =
       { [root.key] = true, [alpha.key] = true, [leaf_under_alpha.key] = true, [beta.key] = true }
@@ -184,8 +203,16 @@ describe("explorer rows", function()
       end
     end
     expect.truthy(beta_leaf_row, "the row still renders")
-    expect.eq(beta_leaf_row.expanded, false, "opening leaf under alpha does not open it under beta too")
-    expect.eq(beta_leaf_row.node.type, "symbol", "beta's copy is a real fetched node, not a stuck placeholder")
+    expect.eq(
+      beta_leaf_row.expanded,
+      false,
+      "opening leaf under alpha does not open it under beta too"
+    )
+    expect.eq(
+      beta_leaf_row.node.type,
+      "symbol",
+      "beta's copy is a real fetched node, not a stuck placeholder"
+    )
     expect.eq(beta_leaf_row.node.symbol.qualified, "leaf")
   end)
 
@@ -320,8 +347,11 @@ describe("explorer against the fake navgraph server", function()
 
   it("coalesces a burst of reindexes into one debounced pass (F11)", function()
     require("epicenter.config").reset()
-    require("epicenter.config")
-      .setup({ ui = { icons = "ascii" }, animate = false, explore = { debounce_ms = 250 } })
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = false,
+      explore = { debounce_ms = 250 },
+    })
     panel = require("epicenter").run("callers", { "log_request" }, buf)
     wait_rows(2, "first level")
     panel.list:select(2)

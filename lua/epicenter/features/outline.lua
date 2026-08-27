@@ -152,7 +152,11 @@ local function is_source(bufnr)
 end
 
 local function target_of(row)
-  return { path = vim.uri_to_fname(row.symbol.uri), line = row.symbol.line, end_line = row.symbol.endLine }
+  return {
+    path = vim.uri_to_fname(row.symbol.uri),
+    line = row.symbol.line,
+    end_line = row.symbol.endLine,
+  }
 end
 
 --- Jumps in the source window and leaves the sidebar open - unlike every

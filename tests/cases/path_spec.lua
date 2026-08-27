@@ -23,7 +23,8 @@ describe("path ladder", function()
     -- The contract's navgraph/path returns a flat Symbol[] - no per-rung edge
     -- data (F4), so steps are Symbols directly, and the connector carries no
     -- calls/references label.
-    local chain = path.chain_lines({ symbol(), symbol({ qualified = "M.handle_request", line = 9 }) })
+    local chain =
+      path.chain_lines({ symbol(), symbol({ qualified = "M.handle_request", line = 9 }) })
     local text = table.concat(chain.lines, "\n")
     expect.matches(text, "M%.start")
     expect.matches(text, "M%.handle_request")
@@ -31,7 +32,8 @@ describe("path ladder", function()
   end)
 
   it("maps every symbol line to a jump target", function()
-    local chain = path.chain_lines({ symbol(), symbol({ qualified = "M.handle_request", line = 9 }) })
+    local chain =
+      path.chain_lines({ symbol(), symbol({ qualified = "M.handle_request", line = 9 }) })
     local lines = vim.tbl_keys(chain.targets)
     table.sort(lines)
     expect.eq(#lines, 2)

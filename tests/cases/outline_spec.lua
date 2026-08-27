@@ -146,7 +146,11 @@ describe("outline sidebar against the fake navgraph server", function()
     local before = panel:current().symbol.name
     press("k")
     expect.truthy(panel:current().symbol.name ~= before, "the selection actually moved")
-    expect.eq(names(), { "RequestHandler", "handle_request", "close", "dispatch" }, "k never touches the filter")
+    expect.eq(
+      names(),
+      { "RequestHandler", "handle_request", "close", "dispatch" },
+      "k never touches the filter"
+    )
   end)
 
   it("filters by name", function()
