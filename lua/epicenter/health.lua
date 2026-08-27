@@ -4,10 +4,10 @@ local M = {}
 local PROTOCOL_VERSION = 1
 
 local function check_neovim()
-  if vim.fn.has("nvim-0.10") == 1 then
+  if vim.fn.has("nvim-0.11") == 1 then
     vim.health.ok("neovim " .. tostring(vim.version()))
   else
-    vim.health.error("neovim 0.10 or newer is required")
+    vim.health.error("neovim 0.11 or newer is required")
   end
 end
 

@@ -22,7 +22,7 @@ unsaved edits.
 
 ## Install
 
-Needs Neovim 0.10+ and the `navgraph` binary (`:Epicenter install` fetches or
+Needs Neovim 0.11+ and the `navgraph` binary (`:Epicenter install` fetches or
 builds it for you).
 
 **[lazy.nvim](https://github.com/folke/lazy.nvim)**
