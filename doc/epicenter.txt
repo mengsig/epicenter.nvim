@@ -85,12 +85,13 @@ The binary is looked up in this order:
     grep     |epicenter-search|   Text search palette
     blast    |epicenter-blast|    Blast radius of the symbol under the cursor
     hover    |epicenter-blast|    What this symbol is, and who calls it
+    diff     |epicenter-blast|    Impact of the changes since a git ref
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
-    callers, callees, outline, hot, diff, path
+    callers, callees, outline, hot, path
              |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
@@ -103,6 +104,7 @@ change `keymaps.prefix`.
     <leader>eg      :Epicenter grep
     <leader>ee      :Epicenter blast
     <leader>ek      :Epicenter hover
+    <leader>ed      :Epicenter diff
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -199,6 +201,8 @@ blast.*              Blast panel defaults; see |epicenter-blast|.
 ripples              Mark the impacted lines in the code while a blast panel
                      is open. `false` turns the marks off.
 hover.*              Hover card; see |epicenter-blast|.
+badges               "cursor" (badge the definition the cursor is inside),
+                     "all" (badge every definition in the buffer), or `false`.
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -365,7 +369,19 @@ Options: >lua
       max_width = 80,
     },
 <
-                                                         *epicenter-ripples*
+                                                            *:Epicenter-diff*
+:Epicenter diff [{ref}]                                        *<leader>ed*
+    The same panel, rooted on every symbol the working tree changed rather
+    than on one symbol. The header reads `changes vs {ref}` ("HEAD" by
+    default) and the chips lead with how many symbols changed. Every panel key
+    works here too.
+
+    It refreshes on reindex like any panel, and navgraph indexes your open
+    buffers as overlays - so an edit you have not saved is already in the
+    answer.
+
+                                                         *epicenter-badges*
+                                                              *epicenter-ripples*
 While a panel is open every impacted definition line is marked in the code
 itself: a sign-column glyph and a tinted line, graded by ring, strongest at
 ring 1. The marks are dropped when the panel closes. `ripples = false` turns
@@ -378,6 +394,20 @@ them off.
 These three are derived from `EpicenterAccent` over the editor background
 (not the float background - they land in ordinary windows) and re-derived on
 `ColorScheme`.
+
+BADGES
+
+`badges` puts the fan-in and fan-out of a definition at the end of its line as
+muted virtual text, revealed left to right:
+
+    function M.handle_request(method, path)      1   2
+
+    "cursor"   the definition the cursor is inside, refreshed on |CursorHold|
+    "all"      every definition in the buffer
+    false      no badges
+
+Both modes read one `navgraph/outline` per buffer, cached and refreshed on
+every reindex - so the counts follow your unsaved edits.
 
 ==============================================================================
 9.3 CORE                                                       *epicenter-core*
@@ -417,7 +447,6 @@ a later release.
     callees   What the symbol under the cursor calls
     outline   Symbol outline of the current file
     hot       Hot spots ranked by fan-in
-    diff      Impact of changes since a git ref
     path      Call path between two symbols
 
 ==============================================================================

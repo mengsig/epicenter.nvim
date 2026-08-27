@@ -73,6 +73,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits included  |
 | `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol under the cursor   |
 | `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it         |
+| `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref         |
 
 Inside the palette:
 
@@ -97,13 +98,14 @@ Inside the palette:
 | `grep`     | Text search palette                                      |
 | `blast`    | Blast radius of the symbol under the cursor              |
 | `hover`    | What this symbol is, and who calls it                    |
+| `diff`     | Impact of the changes since a git ref                    |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
 | `log`      | Open the epicenter log                                   |
 
-`callers`, `callees`, `outline`, `hot`, `diff` and `path` complete today and
+`callers`, `callees`, `outline`, `hot` and `path` complete today and
 announce themselves as coming in a later release.
 
 ### Inside the blast panel
@@ -126,6 +128,14 @@ The hover card does not take focus; press `<leader>ek` again (or `K`) to step
 into it, then `j`/`k` through the callers and `<CR>` to jump. On a buffer where
 navgraph is the hover provider — under `lsp.fallback_only`, one no other
 language server covers — `K` opens the card too.
+
+`:Epicenter diff [ref]` reuses the panel with every changed symbol as a root
+(`changes vs HEAD` in the header). Your open buffers reach navgraph as
+overlays, so an unsaved edit is already in the answer.
+
+`badges` puts a definition's fan-in and fan-out at the end of its line as muted
+virtual text — `"cursor"` for the definition you are inside, `"all"` for every
+definition in the buffer, `false` for none.
 
 ## Configuration
 
@@ -188,6 +198,7 @@ require("epicenter").setup({
   },
   ripples = true,             -- mark impacted lines in the code while a panel is open
   hover = { callers = 5, max_width = 80 },
+  badges = "cursor",          -- "cursor" | "all" | false
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```

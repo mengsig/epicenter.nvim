@@ -24,10 +24,17 @@ M.options = {
     callers = 5,
     max_width = 80,
   },
+  --- "cursor" badges the definition the cursor is inside, "all" badges every
+  --- definition in the buffer, `false` badges nothing.
+  badges = "cursor",
 }
 
 M.option_rules = {
+  variants = {
+    ["badges"] = { "string", "boolean" },
+  },
   enums = {
+    ["badges"] = { "cursor", "all", false },
     ["blast.direction"] = { "callers", "callees" },
     ["blast.tests"] = { "with", "without", "only" },
     ["blast.layout"] = { "float", "vsplit" },
@@ -79,6 +86,8 @@ end
 
 --- @param cfg table resolved config
 function M.setup(cfg)
+  require("epicenter.features.blast.badges").setup(cfg)
+
   local group = vim.api.nvim_create_augroup("EpicenterBlastFeature", { clear = true })
   if cfg.keymaps == false then
     return
@@ -114,11 +123,23 @@ M.commands = {
       return require("epicenter.features.blast.hover").open(ctx.bufnr)
     end,
   },
+  {
+    name = "diff",
+    desc = "Impact of the changes since a git ref",
+    run = function(ctx)
+      return require("epicenter.features.blast.panel").open({
+        kind = "diff",
+        target = { ref = ctx.args[1] or "HEAD" },
+        bufnr = ctx.bufnr,
+      })
+    end,
+  },
 }
 
 M.keymaps = {
   { suffix = "e", command = "blast", desc = "Epicenter: blast radius" },
   { suffix = "k", command = "hover", desc = "Epicenter: hover card" },
+  { suffix = "d", command = "diff", desc = "Epicenter: diff impact" },
 }
 
 return M
