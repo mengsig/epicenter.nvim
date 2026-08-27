@@ -252,6 +252,9 @@ The same events are available in-process: >lua
     (debounced 40ms). Rows show the kind icon, the qualified name with the
     matched characters lit, `file:line`, and the fan-in count.
 
+    `navgraph/search` items carry `matches`: 0-based byte indices into the
+    symbol's `qualified` name (not the row, and not 1-based like `line`).
+
                                                             *:Epicenter-grep*
 :Epicenter grep                                                *<leader>eg*
     Repo-wide text search over the server's in-memory sources, so unsaved

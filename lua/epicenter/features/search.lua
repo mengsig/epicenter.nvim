@@ -67,7 +67,8 @@ end
 
 --- Row for a `navgraph/search` item: kind icon, qualified name with the
 --- matched characters lit, location, fan-in.
---- @param item { symbol: table, matches: integer[] }
+--- @param item { symbol: table, matches: integer[] } matches: 0-based byte
+---   indices into symbol.qualified (contract pinned in protocol.md, not row-relative)
 function M.render_symbol(item)
   local icons = require("epicenter.ui.icons")
   local symbol = item.symbol

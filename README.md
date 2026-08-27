@@ -179,7 +179,8 @@ epicenter.nvim runs `navgraph lsp`, which speaks LSP over stdio — the standard
 subset (`definition`, `references`, `hover`, `documentSymbol`,
 `workspace/symbol`) plus custom `navgraph/*` methods for the graph queries.
 One server per workspace root. Your open buffers are sent as overlays, so
-answers include edits you have not saved yet.
+answers include edits you have not saved yet. Match highlight indices in
+`navgraph/search` are 0-based byte offsets into the symbol's qualified name.
 
 With `lsp.fallback_only` (the default), navgraph's standard providers are
 hidden on buffers that already have a real language server, so `gd`, `gr` and
