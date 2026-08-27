@@ -132,18 +132,38 @@ describe("outline sidebar against the fake navgraph server", function()
     end, 5000, "the sidebar follows the cursor")
   end)
 
-  it("cycles the kind filter", function()
+  it("cycles the kind filter on <C-k>, not k (F8)", function()
     open("app/handlers.py")
-    press("k")
+    press("<C-K>")
     expect.eq(names(), { "handle_request", "close", "dispatch" }, "functions and methods only")
-    press("k")
+    press("<C-K>")
     expect.eq(names(), { "RequestHandler" }, "types only")
+  end)
+
+  it("k moves up instead of cycling the filter (F8)", function()
+    open("app/handlers.py")
+    panel.list:select(3) -- "close"
+    local before = panel:current().symbol.name
+    press("k")
+    expect.truthy(panel:current().symbol.name ~= before, "the selection actually moved")
+    expect.eq(names(), { "RequestHandler", "handle_request", "close", "dispatch" }, "k never touches the filter")
   end)
 
   it("filters by name", function()
     open("app/handlers.py")
     panel:set_filter("close")
     expect.eq(names(), { "close" })
+  end)
+
+  it("y, <C-v> and <C-t> come from the panel's target_of (F12)", function()
+    open("app/handlers.py")
+    local mapped = {}
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+      mapped[map.lhs] = true
+    end
+    for _, lhs in ipairs({ "y", "<C-V>", "<C-T>", "?", "/" }) do
+      expect.truthy(mapped[lhs], "outline maps " .. lhs)
+    end
   end)
 
   it("rebuilds itself when the index changes", function()

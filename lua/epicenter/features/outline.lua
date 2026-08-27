@@ -5,6 +5,24 @@ local M = {}
 --- The one sidebar. `nil` when it is closed.
 local state = nil
 
+--- Nests a flat Symbol[] by qualified name: `A.b` sits under `A` when both
+--- are present in the file. The contract's outline is flat, in indexing
+--- order (`{file,lang,symbols:Symbol[]}`) - the nesting shown here is client
+--- rendering, not a protocol shape (F3).
+--- @param symbols table[]
+--- @return { symbol: table, children: table[] }[]
+function M.tree_of(symbols)
+  local nodes, by_qualified = {}, {}
+  for _, symbol in ipairs(symbols or {}) do
+    local node = { symbol = symbol, children = {} }
+    local parent_key = symbol.qualified:match("^(.*)%.[%w_]+$")
+    local parent = parent_key and by_qualified[parent_key]
+    by_qualified[symbol.qualified] = node
+    table.insert(parent and parent.children or nodes, node)
+  end
+  return nodes
+end
+
 --- Rows in display order. Pure.
 --- @param nodes { symbol: table, children?: table[] }[]
 --- @return { symbol: table, depth: integer }[]
@@ -74,8 +92,11 @@ end
 
 local function request()
   local client = require("epicenter.client")
+  local root_mod = require("epicenter.root")
   local uri = state.uri
-  client.outline({ uri = uri }, function(err, result)
+  local root = root_mod.find(state.source_buf)
+  local path = root_mod.relative(state.source_buf, root)
+  client.outline({ path = path }, function(err, result)
     if not state or not state.panel:valid() or state.uri ~= uri then
       return
     end
@@ -83,7 +104,16 @@ local function request()
       state.panel:notice("  " .. (err.message or "navgraph did not answer"))
       return
     end
-    apply(M.rows_of(result and result.nodes or {}))
+    local files = result and result.files or {}
+    local matched
+    for _, entry in ipairs(files) do
+      if entry.file == path then
+        matched = entry
+        break
+      end
+    end
+    matched = matched or files[1]
+    apply(M.rows_of(M.tree_of(matched and matched.symbols)))
   end, { bufnr = state.source_buf, channel = "outline" })
 end
 
@@ -121,17 +151,19 @@ local function is_source(bufnr)
     and vim.api.nvim_buf_get_name(bufnr) ~= ""
 end
 
+local function target_of(row)
+  return { path = vim.uri_to_fname(row.symbol.uri), line = row.symbol.line, end_line = row.symbol.endLine }
+end
+
+--- Jumps in the source window and leaves the sidebar open - unlike every
+--- other panel's `<CR>`, this one is a persistent widget you keep browsing
+--- from, so it overrides `ui.panel`'s default close-then-jump action.
 local function jump_from_sidebar(row)
   local panel_mod = require("epicenter.ui.panel")
-  local target = {
-    path = vim.uri_to_fname(row.symbol.uri),
-    line = row.symbol.line,
-    end_line = row.symbol.endLine,
-  }
   if state.source_win and vim.api.nvim_win_is_valid(state.source_win) then
     vim.api.nvim_set_current_win(state.source_win)
   end
-  panel_mod.jump(target, "edit")
+  panel_mod.jump(target_of(row), "edit")
 end
 
 local function sidebar_box()
@@ -188,36 +220,25 @@ local function open(ctx)
     text_of = function(row)
       return row.symbol.name
     end,
+    target_of = target_of,
+    hints = { ["<C-k>"] = "cycle the kind filter" },
+    on_filter = function()
+      set_footer()
+    end,
     keys = {
+      -- Overrides `ui.panel`'s default <CR> (which closes before jumping):
+      -- the sidebar is persistent, not a one-shot picker.
       ["<CR>"] = function(self)
         local row = self:current()
         if row then
           jump_from_sidebar(row)
         end
       end,
-      o = function(self)
-        local row = self:current()
-        if row then
-          panel_mod.peek({
-            path = vim.uri_to_fname(row.symbol.uri),
-            line = row.symbol.line,
-            end_line = row.symbol.endLine,
-          })
-        end
-      end,
-      k = function()
+      ["<C-k>"] = function()
         local cycle = kind_cycle()
         state.kind_index = (state.kind_index % #cycle) + 1
         state.panel:set_items(visible(state.rows, state.kind_index))
         set_footer()
-      end,
-      ["/"] = function()
-        vim.ui.input({ prompt = "outline filter: " }, function(text)
-          if text and state and state.panel:valid() then
-            state.panel:set_filter(text)
-            set_footer()
-          end
-        end)
       end,
       ["<Up>"] = function(self)
         self.list:move(-1)

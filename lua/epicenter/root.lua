@@ -50,4 +50,23 @@ function M.find(bufnr, markers)
   return M.find_from(dir, markers) or cwd
 end
 
+--- Root-relative path of a buffer, as the contract's `file` fields are
+--- (`docs/lsp.md`: "root-relative paths, as the CLI prints them"). `nil` for
+--- an unnamed buffer or one outside `root`.
+--- @param bufnr integer
+--- @param root string
+--- @return string|nil
+function M.relative(bufnr, root)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then
+    return nil
+  end
+  local normalized = vim.fs.normalize(name)
+  local root_norm = vim.fs.normalize(root)
+  if not vim.startswith(normalized, root_norm .. "/") then
+    return nil
+  end
+  return normalized:sub(#root_norm + 2)
+end
+
 return M
