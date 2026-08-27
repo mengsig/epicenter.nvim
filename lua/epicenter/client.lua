@@ -204,6 +204,11 @@ function M.start(opts)
   local root = vim.fs.normalize(opts.root)
   local existing = servers[root]
   if existing and vim.lsp.get_client_by_id(existing.client_id) then
+    if opts.cmd and not vim.deep_equal(opts.cmd, existing.cmd) then
+      -- The caller asked for a specific binary; reusing whatever already
+      -- runs there would silently ignore it. Restart with the requested cmd.
+      return M.restart({ root = root, cmd = opts.cmd, bufnr = opts.bufnr })
+    end
     if opts.bufnr then
       vim.lsp.buf_attach_client(opts.bufnr, existing.client_id)
       existing.buffers[opts.bufnr] = true

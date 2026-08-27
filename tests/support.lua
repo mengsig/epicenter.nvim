@@ -27,13 +27,21 @@ end
 function M.start_fake()
   local client = require("epicenter.client")
   local root = M.fixture_root()
-  local id, err = client.start({ root = root, cmd = M.fake_cmd(root) })
+  local cmd = M.fake_cmd(root)
+  local id, err = client.start({ root = root, cmd = cmd })
   assert(id, err)
   local ok = vim.wait(15000, function()
     local c = vim.lsp.get_client_by_id(id)
     return c ~= nil and c.initialized == true and client.session_for_root(root) ~= nil
   end, 10)
   assert(ok, "fake navgraph server did not initialize")
+  -- Hermeticity guard: if a real navgraph on $PATH ever won the race to
+  -- attach first, client.start would otherwise adopt it instead of the fake.
+  local adopted = vim.lsp.get_client_by_id(id)
+  assert(
+    adopted and vim.deep_equal(adopted.config.cmd, cmd),
+    "start_fake() adopted a non-fake client - the suite is not hermetic"
+  )
   return root
 end
 

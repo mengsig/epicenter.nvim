@@ -115,4 +115,25 @@ describe("client against the fake navgraph server", function()
       return #vim.lsp.get_clients({ bufnr = buf1 }) > 0 and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
     end, 5000, "both buffers re-attached to the restarted server")
   end)
+
+  it("restarts with the caller's cmd instead of silently keeping the running one", function()
+    local original_cmd = support.fake_cmd(root)
+    local different_cmd = vim.deepcopy(original_cmd)
+    table.insert(different_cmd, "--tag=different")
+
+    local id = client.start({ root = root, cmd = original_cmd })
+    local buf = vim.api.nvim_get_current_buf()
+
+    local new_id = client.start({ root = root, cmd = different_cmd, bufnr = buf })
+    expect.ne(new_id, id, "a cmd mismatch must restart the server, not silently reuse it")
+
+    wait(function()
+      local c = vim.lsp.get_client_by_id(new_id)
+      return c ~= nil and vim.deep_equal(c.config.cmd, different_cmd)
+    end, 10000, "the new client to run the cmd the caller asked for")
+
+    wait(function()
+      return #vim.lsp.get_clients({ bufnr = buf }) > 0
+    end, 5000, "the buffer to be attached to the restarted client")
+  end)
 end)
