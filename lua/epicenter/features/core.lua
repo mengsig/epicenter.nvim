@@ -176,6 +176,23 @@ local function open_log()
   vim.cmd.split(path)
 end
 
+--- Box sized to `lines`' content, clamped to the screen (F14): a fixed
+--- 62x14 float either clipped six-plus-language repos or wasted space on a
+--- one-language one.
+function M.box_for(lines)
+  local cfg = require("epicenter.config").get()
+  local width = 0
+  for _, line in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(line) + 4)
+  end
+  return require("epicenter.ui.window").box({
+    width = math.max(width, 40),
+    height = math.max(#lines, 3),
+    max_width = cfg.ui.max_width,
+    max_height = cfg.ui.max_height,
+  })
+end
+
 --- The dashboard: what the index knows, and the actions that change it.
 local function show_status(ctx)
   local client = require("epicenter.client")
@@ -184,12 +201,17 @@ local function show_status(ctx)
   local root = root_for(ctx)
   local ns = vim.api.nvim_create_namespace("epicenter.status")
 
+  local last_lines = { "", "  loading...", "" }
+
   local win = window.open({
-    box = window.box({ width = 62, height = 14 }),
+    box = M.box_for(last_lines),
     title = (" %s navgraph "):format(icons.ui("dot")),
     footer = " r rescan · R restart · l log · q close ",
     filetype = "epicenter-status",
     enter = true,
+    reflow = function()
+      return M.box_for(last_lines)
+    end,
   })
 
   local function paint(view)
@@ -197,6 +219,8 @@ local function show_status(ctx)
       return
     end
     local rendered = M.dashboard_lines(view)
+    last_lines = rendered.lines
+    win:set_geometry(M.box_for(rendered.lines))
     win:set_lines(rendered.lines)
     vim.api.nvim_buf_clear_namespace(win.buf, ns, 0, -1)
     for _, span in ipairs(rendered.spans) do
