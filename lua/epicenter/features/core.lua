@@ -74,6 +74,13 @@ return {
       end,
     },
     {
+      name = "install",
+      desc = "Download or build the navgraph binary",
+      run = function()
+        require("epicenter.install").install()
+      end,
+    },
+    {
       name = "restart",
       desc = "Restart the navgraph server for this project",
       run = function(ctx)

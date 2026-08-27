@@ -62,7 +62,8 @@ Session.__index = Session
 
 --- Wraps any rpc transport. Kept independent of `vim.lsp` so the sequencing,
 --- cancellation and stale-drop rules are testable against a fake transport.
---- @param rpc { request: fun(method: string, params: table, handler: fun(err, result)): boolean, integer?, cancel: fun(id: integer) }
+--- @param rpc { request: fun(method, params, handler): boolean, integer?, cancel: fun(id: integer) }
+---   `request` returns ok plus the request id; `cancel` takes that id.
 --- @return epicenter.Session
 function M.session(rpc)
   return setmetatable({ rpc = rpc, seq = {}, dropped = 0 }, Session)
@@ -315,6 +316,17 @@ end
 --- Roots with a live server, for `:Epicenter status` and health.
 function M.roots()
   return vim.tbl_keys(servers)
+end
+
+--- @param root string
+--- @return { client_id: integer|nil, protocol_version: integer|nil, restarts: integer }
+function M.info(root)
+  local state = servers[vim.fs.normalize(root)] or {}
+  return {
+    client_id = state.client_id,
+    protocol_version = state.protocol_version,
+    restarts = state.restarts or 0,
+  }
 end
 
 --- Registers a session directly. Tests use it to drive the request layer

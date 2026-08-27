@@ -26,6 +26,25 @@ local function install_keymaps(cfg)
   end
 end
 
+local function install_autocmds(cfg)
+  local group = vim.api.nvim_create_augroup("Epicenter", { clear = true })
+  if not cfg.lsp.auto_start then
+    return
+  end
+  vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+    group = group,
+    callback = function(event)
+      require("epicenter.client").attach(event.buf)
+    end,
+  })
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = group,
+    callback = function()
+      require("epicenter.client").stop_all()
+    end,
+  })
+end
+
 --- @param opts? table
 --- @return table resolved config
 function M.setup(opts)
@@ -33,6 +52,7 @@ function M.setup(opts)
   did_setup = true
   require("epicenter.ui.theme").setup()
   install_keymaps(cfg)
+  install_autocmds(cfg)
   return cfg
 end
 

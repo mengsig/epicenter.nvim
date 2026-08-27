@@ -8,7 +8,6 @@ local animate = require("epicenter.ui.animate")
 local uv = vim.uv or vim.loop
 
 local WIDTH = 46
-local GAP = 1
 local DEFAULT_TIMEOUT = 3000
 
 local LEVEL_HL = {

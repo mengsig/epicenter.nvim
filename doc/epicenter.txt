@@ -1,0 +1,347 @@
+*epicenter.txt*   Your code graph, live in the editor            *epicenter*
+
+Author:   Marcus Engsig
+Licence:  MIT
+Requires: Neovim 0.10+ and the `navgraph` binary
+
+==============================================================================
+CONTENTS                                                   *epicenter-contents*
+
+  1. Introduction ............................. |epicenter-introduction|
+  2. Installation ............................. |epicenter-installation|
+  3. Commands ................................. |epicenter-commands|
+  4. Mappings ................................. |epicenter-mappings|
+  5. Configuration ............................ |epicenter-configuration|
+  6. Highlights ............................... |epicenter-highlights|
+  7. Health ................................... |epicenter-health|
+  8. Events ................................... |epicenter-events|
+  9. Features
+     9.1 search ............................... |epicenter-search|
+     9.2 core ................................. |epicenter-core|
+     9.3 planned .............................. |epicenter-planned|
+ 10. Extending ................................ |epicenter-extending|
+
+==============================================================================
+1. INTRODUCTION                                        *epicenter-introduction*
+
+epicenter.nvim drives NavGraph, a code-graph engine, from inside Neovim: fuzzy
+symbol search, repo-wide grep, and (in later releases) blast radius, callers,
+callees, outlines, hot spots and diff impact.
+
+The engine runs as `navgraph lsp`, an LSP server over stdio speaking the
+standard subset plus custom `navgraph/*` methods. One server per workspace
+root. Open buffers are sent as overlays, so answers include unsaved edits.
+
+Nothing on the UI path blocks: every request is asynchronous and cancellable,
+and a response superseded by a newer keystroke is dropped rather than painted.
+
+==============================================================================
+2. INSTALLATION                                        *epicenter-installation*
+
+Install the plugin with any plugin manager, then get the binary: >
+
+    :Epicenter install
+    :checkhealth epicenter
+<
+With lazy.nvim, wire the installer to the build hook: >lua
+
+    {
+      "mengsig/epicenter.nvim",
+      build = function() require("epicenter").install() end,
+      opts = {},
+    }
+<
+Calling |epicenter.setup()| is optional; the defaults apply on their own.
+
+                                                          *epicenter.install()*
+require("epicenter").install()
+    Downloads a release with `gh` when it is authenticated, otherwise clones
+    and builds with `zig`. Reports exactly which tool is missing when neither
+    route is available. Installs to `stdpath("data")/epicenter/bin/navgraph`.
+
+The binary is looked up in this order:
+    1. `navgraph.path` from |epicenter.setup()|
+    2. `navgraph` on `$PATH`
+    3. `stdpath("data")/epicenter/bin/navgraph`
+
+==============================================================================
+3. COMMANDS                                                *epicenter-commands*
+
+                                                                  *:Epicenter*
+:Epicenter {subcommand} [args]
+    Runs a subcommand. Completion lists every subcommand, and each may complete
+    its own arguments. With no subcommand, runs `status`.
+
+    search   |epicenter-search|   Symbol search palette
+    grep     |epicenter-search|   Text search palette
+    status   |epicenter-core|     What the index knows about this project
+    install  |epicenter-core|     Download or build the navgraph binary
+    restart  |epicenter-core|     Restart the server for this project
+    rescan   |epicenter-core|     Re-stat every file and rebuild the index
+    log      |epicenter-core|     Open the epicenter log
+    blast, callers, callees, outline, hot, diff, path
+             |epicenter-planned|  Announced, shipping in this release
+
+==============================================================================
+4. MAPPINGS                                                *epicenter-mappings*
+
+One prefix, `<leader>e` by default. Set `keymaps = false` to install none, or
+change `keymaps.prefix`.
+
+    <leader>es      :Epicenter search
+    <leader>eg      :Epicenter grep
+
+Panel keys are listed with each feature below, and `?` in normal mode shows
+them inside the panel.
+
+==============================================================================
+5. CONFIGURATION                                      *epicenter-configuration*
+
+                                                            *epicenter.setup()*
+require("epicenter").setup({opts})
+    Merges {opts} over the defaults. An unknown key or a wrong type is an
+    error naming the exact option - a typo never silently does nothing.
+
+Defaults: >lua
+
+    {
+      navgraph = {
+        path = nil,
+        args = {},
+        repo = "mengsig/NavGraph",
+        install_ref = nil,
+      },
+      lsp = {
+        auto_start = true,
+        root_markers = { ".navgraph", ".git" },
+        fallback_only = true,
+        init_options = {
+          tests = "with",
+          strict = false,
+          debounceMs = 120,
+          watch = true,
+          watchIntervalMs = 2000,
+          depth = 3,
+        },
+        restart = { max = 3, backoff_ms = { 500, 2000, 5000 } },
+      },
+      ui = {
+        border = "rounded",
+        width = 0.8,
+        height = 0.8,
+        max_width = 120,
+        max_height = 30,
+        winblend = 0,
+        icons = "auto",
+        preview = true,
+      },
+      animate = true,
+      animation = {
+        open_ms = 120,
+        close_ms = 90,
+        stagger_ms = 8,
+        fps = 60,
+        frame_budget_ms = 8,
+      },
+      highlights = {},
+      keymaps = { prefix = "<leader>e" },
+      search = { debounce_ms = 40, limit = 50 },
+      grep = { debounce_ms = 60, limit = 200 },
+      log = { level = "warn", file = nil },
+    }
+<
+navgraph.path        Explicit binary path. When set but not executable this is
+                     an error, not a silent fallback.
+navgraph.args        Extra arguments appended to `navgraph lsp`.
+navgraph.repo        Source repository for |epicenter.install()|.
+navgraph.install_ref Git ref to build from on the source route.
+
+lsp.auto_start       Start a server automatically for indexed buffers.
+lsp.root_markers     Checked in order at each level walking upward from the
+                     buffer; the first hit is the workspace root, else the cwd.
+lsp.fallback_only    Hide navgraph's `definition`, `references`, `hover` and
+                     `documentSymbol` on buffers that already have another
+                     language server offering them, so `gd`, `gr` and `K`
+                     never return duplicates. Set false to keep them all.
+lsp.init_options     Passed verbatim as LSP `initializationOptions`.
+lsp.restart          Crash recovery: at most `max` restarts, waiting
+                     `backoff_ms[n]` before each. After that a notice names the
+                     log path.
+
+ui.width, ui.height  Fractions of the editor when <= 1, absolute cells when >1.
+ui.max_width,        Upper bounds in cells.
+ui.max_height
+ui.icons             "auto" (nerd glyphs when |g:have_nerd_font| is set),
+                     "nerd", or "ascii".
+ui.preview           Show a preview pane when the editor is wide enough.
+
+animate              Master motion switch. |g:epicenter_reduce_motion| also
+                     turns motion off, and wins over this.
+animation.*          Durations in ms. `frame_budget_ms` drops the next frame
+                     after any frame that cost more than it.
+
+keymaps              `false`, or a table with `prefix`.
+log.level            "error", "warn", "info", "debug" or "trace".
+log.file             Defaults to `stdpath("state")/epicenter.log`.
+
+                                                  *g:epicenter_reduce_motion*
+Set `vim.g.epicenter_reduce_motion = true` to disable every animation for the
+session. Widgets land on exactly the same final state.
+
+==============================================================================
+6. HIGHLIGHTS                                            *epicenter-highlights*
+
+Groups are derived at runtime from the active colourscheme (`Normal`,
+`NormalFloat`, `FloatBorder`, `Comment`, `Title`, `Function`, `Special`,
+`DiagnosticInfo`) and re-derived on `ColorScheme`. Override any of them via
+`highlights` in |epicenter.setup()|.
+
+    EpicenterNormal     panel background and text
+    EpicenterBorder     panel border
+    EpicenterTitle      panel title
+    EpicenterAccent     the one accent colour
+    EpicenterMatch      matched characters in a result
+    EpicenterMuted      secondary text (paths, hints)
+    EpicenterCount      fan-in and other counts
+    EpicenterInfo       informational notices
+    EpicenterSelection  the selected row
+    EpicenterPrompt     the prompt line
+    EpicenterHint       footer hints
+    EpicenterRange      the highlighted range in a preview
+
+==============================================================================
+7. HEALTH                                                    *epicenter-health*
+
+`:checkhealth epicenter` reports the Neovim version, the resolved navgraph
+binary and its version, the negotiated protocol version of every running
+server (and any restarts it has needed), and whether nerd-font glyphs are in
+use.
+
+==============================================================================
+8. EVENTS                                                    *epicenter-events*
+
+                                                          *EpicenterIndexed*
+Fired after every (re)index, mirrored from the server's `navgraph/indexed`
+notification. `data` carries `reason`, `files`, `symbols`, `edges`, `ms` and
+`changedFiles`. >lua
+
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "EpicenterIndexed",
+      callback = function(ev) print(ev.data.symbols) end,
+    })
+<
+The same events are available in-process: >lua
+
+    local events = require("epicenter.events")
+    local unsubscribe = events.on(events.INDEXED, function(payload) end)
+<
+==============================================================================
+9.1 SEARCH                                                   *epicenter-search*
+
+                                                          *:Epicenter-search*
+:Epicenter search                                              *<leader>es*
+    Fuzzy symbol search across the project, re-queried on every keystroke
+    (debounced 40ms). Rows show the kind icon, the qualified name with the
+    matched characters lit, `file:line`, and the fan-in count.
+
+                                                            *:Epicenter-grep*
+:Epicenter grep                                                *<leader>eg*
+    Repo-wide text search over the server's in-memory sources, so unsaved
+    edits are included. Same palette, different source.
+
+Keys inside either palette:
+
+    <CR>            jump to the result, pushing the jumplist
+    <C-t>           open in a new tab
+    <C-v>           open in a vertical split
+    <C-x>           open in a split
+    <C-n>, <Down>   next result
+    <C-p>, <Up>     previous result
+    j, k            next / previous result (normal mode)
+    <C-r>           search: toggle reference mode; grep: toggle regex
+    <C-k>           search: cycle the kind filter
+                    (all -> functions -> types -> values)
+    <C-y>           yank `file:line`
+    ?               toggle the key help (normal mode)
+    <Esc>, q        close
+
+Options: >lua
+
+    search = { debounce_ms = 40, limit = 50 },
+    grep   = { debounce_ms = 60, limit = 200 },
+<
+==============================================================================
+9.2 CORE                                                       *epicenter-core*
+
+                                                          *:Epicenter-status*
+:Epicenter status
+    A panel with the workspace root, the server version and protocol version,
+    file/symbol/edge counts, languages, the number of unsaved overlays, and
+    how long the last index took. `q` closes it.
+
+                                                         *:Epicenter-install*
+:Epicenter install
+    See |epicenter.install()|.
+
+                                                         *:Epicenter-restart*
+:Epicenter restart
+    Stops and restarts the server for this project. An intentional restart
+    resets the crash backoff.
+
+                                                          *:Epicenter-rescan*
+:Epicenter rescan [full]
+    Re-stats every file and rebuilds the index; `full` ignores the cache.
+    Use it after a git checkout or an external formatter run.
+
+                                                             *:Epicenter-log*
+:Epicenter log
+    Opens the epicenter log in a split. The path is `log.file`, defaulting to
+    `stdpath("state")/epicenter.log`.
+
+==============================================================================
+9.3 PLANNED                                                 *epicenter-planned*
+
+These subcommands complete today and print a one-line notice; they ship in
+this release.
+
+    blast     Blast radius of the symbol under the cursor
+    callers   Who calls the symbol under the cursor
+    callees   What the symbol under the cursor calls
+    outline   Symbol outline of the current file
+    hot       Hot spots ranked by fan-in
+    diff      Impact of changes since a git ref
+    path      Call path between two symbols
+
+==============================================================================
+10. EXTENDING                                            *epicenter-extending*
+
+A feature is one file under `lua/epicenter/features/` returning a spec, plus
+one `require` line in `lua/epicenter/features/init.lua`: >lua
+
+    local M = {}
+    M.name = "blast"
+    M.summary = "Blast radius of the symbol under the cursor"
+    M.options = { blast = { depth = 3 } }
+    M.commands = {
+      { name = "blast", desc = "Blast radius", run = function(ctx) end },
+    }
+    M.keymaps = { { suffix = "b", command = "blast", desc = "Epicenter: blast" } }
+    return M
+<
+`lua/epicenter/registry.lua` collects the specs; `:Epicenter` completion, the
+keymap installer, `:checkhealth` and the config defaults all iterate it. Two
+features claiming the same subcommand or option key is a hard error.
+
+Feature modules must not require `epicenter.config` at file scope - config
+builds its defaults from the registry, so that would be a cycle.
+
+The UI kit is the public contract:
+`epicenter.ui.window`, `.animate`, `.easing`, `.theme`, `.icons`, `.list`,
+`.tree`, `.prompt`, `.preview`, `.toast`, `.palette`. Server access goes
+through `epicenter.client`, which has a helper for every `navgraph/*` method
+and returns a handle with `:cancel()`.
+
+Add a documentation section per feature with its own `*epicenter-<name>*` tag,
+so two features being written in parallel never edit the same region.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
