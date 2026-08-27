@@ -380,7 +380,14 @@ end
 --- @return { cancel: fun() }
 function M.request(method, params, cb, opts)
   opts = opts or {}
-  local session = opts.root and M.session_for_root(opts.root) or M.session_for_buf(opts.bufnr)
+  local session
+  if opts.root then
+    -- A caller naming a root wants that project or an explicit error, never
+    -- another root's server (an `and/or` here would silently fall through).
+    session = M.session_for_root(opts.root)
+  else
+    session = M.session_for_buf(opts.bufnr)
+  end
   if not session then
     cb({ code = -32002, message = "navgraph is not running for this project" }, nil)
     return { cancel = function() end }

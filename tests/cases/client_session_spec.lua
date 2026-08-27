@@ -117,6 +117,31 @@ describe("client session", function()
     end, { root = "/nonexistent/root/for/spec" })
     expect.matches(err.message, "not running")
   end)
+
+  it("never falls through to the buffer's root when an explicit root has no server", function()
+    -- A caller naming a root with no server must get -32002, never a
+    -- different project's answer just because the current buffer has one.
+    local root_mod = require("epicenter.root")
+    local original_find = root_mod.find
+    root_mod.find = function()
+      return "/tmp/epicenter-spec-buffer-root"
+    end
+
+    local rpc = fake_rpc()
+    client.register_session("/tmp/epicenter-spec-buffer-root", client.session(rpc.rpc))
+
+    local err, result = nil, nil
+    client.request("navgraph/status", {}, function(e, r)
+      err, result = e, r
+    end, { root = "/tmp/epicenter-spec-explicit-root-with-no-server" })
+
+    root_mod.find = original_find
+
+    expect.eq(#rpc.sent, 0, "the wrong root's session must never receive the request")
+    expect.eq(result, nil, "no answer must come back when the named root has no server")
+    expect.truthy(err ~= nil)
+    expect.matches(err.message, "not running")
+  end)
 end)
 
 describe("client supported files", function()
