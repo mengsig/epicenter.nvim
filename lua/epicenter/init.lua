@@ -9,11 +9,15 @@ local did_setup = false
 --- Keys this plugin installed, so a second setup() can take them back down.
 local installed_keys = {}
 
-local function install_keymaps(cfg)
+local function remove_keymaps()
   for _, lhs in ipairs(installed_keys) do
     pcall(vim.keymap.del, "n", lhs)
   end
   installed_keys = {}
+end
+
+local function install_keymaps(cfg)
+  remove_keymaps()
   if cfg.keymaps == false then
     return
   end
@@ -113,7 +117,7 @@ end
 --- Test seam: forgets setup state and config.
 function M.reset()
   did_setup = false
-  installed_keys = {}
+  remove_keymaps()
   config.reset()
   registry.reset()
 end

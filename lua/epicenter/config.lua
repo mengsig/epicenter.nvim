@@ -105,6 +105,10 @@ local POSITIVE = {
 
 local FRACTION = { ["ui.width"] = true, ["ui.height"] = true }
 
+--- A boolean here is only ever meaningful as `false`; `true` would silently
+--- mean "the default table", which install_keymaps never does.
+local FALSE_ONLY = { ["keymaps"] = true }
+
 local function fail(fmt, ...)
   error("epicenter.setup: " .. fmt:format(...), 0)
 end
@@ -123,6 +127,9 @@ local function check_value(path, value)
   end
   if FRACTION[path] and (type(value) ~= "number" or value <= 0) then
     fail("%s must be > 0 (a fraction of the editor, or absolute cells when > 1)", path)
+  end
+  if FALSE_ONLY[path] and type(value) == "boolean" and value ~= false then
+    fail("%s must be a table or `false`, got true", path)
   end
 end
 

@@ -64,6 +64,12 @@ describe("config", function()
     expect.eq(config.setup({ ui = { border = { "1", "2" } } }).ui.border, { "1", "2" })
   end)
 
+  it("rejects keymaps = true, the only boolean it does not mean 'no keymaps'", function()
+    expect.errors(function()
+      config.setup({ keymaps = true })
+    end, "keymaps must be a table or `false`")
+  end)
+
   it("enforces enums", function()
     expect.errors(function()
       config.setup({ ui = { icons = "emoji" } })
