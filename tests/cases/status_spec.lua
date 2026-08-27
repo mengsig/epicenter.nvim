@@ -86,6 +86,20 @@ describe("status dashboard", function()
       expect.matches(rendered.lines[span.row + 1]:sub(span.from + 1, span.to), "^%a")
     end
   end)
+
+  it("sizes to the content instead of a fixed 62x14 (F14)", function()
+    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+    local few = core.box_for({ "", "  root ~/proj", "  server running", "" })
+    local many = core.box_for(vim.list_extend({ "" }, (function()
+      local languages = {}
+      for i = 1, 8 do
+        table.insert(languages, ("  lang-%d              ########## %d"):format(i, i))
+      end
+      return languages
+    end)()))
+    expect.truthy(many.height > few.height, "more content rows means a taller box")
+    expect.truthy(many.height >= 8, "does not clip the language list")
+  end)
 end)
 
 describe("status dashboard against the fake navgraph server", function()
@@ -133,7 +147,7 @@ describe("status dashboard against the fake navgraph server", function()
     end, 10000, "status dashboard")
     expect.matches(body(), "running")
     expect.matches(body(), "protocol 1")
-    expect.matches(body(), "%.lua%s+#")
+    expect.matches(body(), "lua%s+#")
     expect.matches(body(), vim.pesc(vim.fn.fnamemodify(log_path, ":~")))
   end)
 

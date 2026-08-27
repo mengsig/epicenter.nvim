@@ -5,4 +5,8 @@ doc/tags
 # .navgraph marker is committed on purpose.
 /.navgraph/
 
+# The fake navgraph/graph handler writes real, content-hashed HTML files
+# under the fixture's .navgraph/ on every test run; the marker itself stays.
+tests/fixtures/proj/.navgraph/graph-*.html
+
 *.log

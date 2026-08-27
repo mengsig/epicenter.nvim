@@ -1,14 +1,44 @@
---- Exploration area of the fake navgraph server: the call graph behind
---- callers/calls, and the queries built on it.
+--- Exploration area of the fake navgraph server: `navgraph/callers`,
+--- `navgraph/calls`, `navgraph/path`, `navgraph/outline`, `navgraph/hot`,
+--- `navgraph/unused` and `navgraph/graph`, in the shapes `docs/lsp.md` v1
+--- specifies and no others.
 ---
---- The edges are derived from the fixture sources rather than hard-coded, so a
---- fixture edit cannot silently drift from what the specs assert. Resolution
---- mirrors the real engine's two tiers: an exact qualified-name hit is a solid
---- edge, a trailing-name hit is a heuristic one (`?` in the UI, dropped by
---- `strict`).
-local index_mod = require("fakelib.index")
+--- Params are checked against the contract; an unknown key is a `-32602`: a
+--- client that drifts from the protocol must fail here, loudly, rather than
+--- against a shape the fake invented to be friendly. The call graph is
+--- derived from the fixture sources rather than hard-coded, so a fixture edit
+--- cannot silently drift from what the specs assert.
 
---- Words that end in `(` but are never a call.
+--- @param code integer JSON-RPC error code the server should answer with
+local function fail(code, fmt, ...)
+  error({ code = code, message = fmt:format(...) }, 0)
+end
+
+local function check_params(method, params, allowed)
+  for key in pairs(params or {}) do
+    if not allowed[key] then
+      fail(-32602, "%s: unknown param %q", method, tostring(key))
+    end
+  end
+end
+
+local function merged(...)
+  return vim.tbl_extend("force", {}, ...)
+end
+
+local SCOPE = { strict = true, tests = true }
+local TARGET = { uri = true, position = true, symbol = true }
+
+local CALLERS_PARAMS = merged(TARGET, SCOPE, { depth = true, refs = true })
+local PATH_PARAMS = { from = true, to = true }
+local OUTLINE_PARAMS = merged(SCOPE, { path = true, kinds = true, limit = true })
+local HOT_PARAMS = merged(SCOPE, { path = true, limit = true })
+local UNUSED_PARAMS = merged(SCOPE, { path = true, noPublic = true, followImports = true, limit = true })
+local GRAPH_PARAMS = merged(SCOPE, { path = true })
+
+-- Call graph -------------------------------------------------------------------
+
+--- Words on `line` immediately followed by `(`, skipping control-flow keywords.
 local KEYWORDS = {
   ["return"] = true,
   ["if"] = true,
@@ -25,8 +55,123 @@ local KEYWORDS = {
   ["end"] = true,
 }
 
---- One graph per index build; a reindex builds a fresh index table.
+local function called_names(line)
+  local names = {}
+  for name in line:gmatch("([%a_][%w_]*)%s*%(") do
+    if not KEYWORDS[name] then
+      table.insert(names, name)
+    end
+  end
+  return names
+end
+
+--- One edge per (from,to) pair; `lines` accumulates every call-site line.
+local function record(graph, from, to, exact, line)
+  local key = ("%d:%d"):format(from.id, to.id)
+  local edge = graph.by_key[key]
+  if not edge then
+    edge = { from = from, to = to, exact = exact, lines = {} }
+    graph.by_key[key] = edge
+    table.insert(graph.callers[to.id], edge)
+    table.insert(graph.callees[from.id], edge)
+  end
+  table.insert(edge.lines, line)
+end
+
+--- A call resolved inside the caller's own file is exact; when no definition
+--- of that name lives in the file, every same-named definition elsewhere
+--- becomes a heuristic edge (mirrors `docs/lsp.md`'s exact/heuristic tiers).
+local function build_graph(index)
+  local by_name = {}
+  local graph = { by_key = {}, callers = {}, callees = {}, ext = {} }
+  for _, symbol in ipairs(index.symbols) do
+    by_name[symbol.name] = by_name[symbol.name] or {}
+    table.insert(by_name[symbol.name], symbol)
+    graph.callers[symbol.id] = {}
+    graph.callees[symbol.id] = {}
+    graph.ext[symbol.id] = {}
+  end
+
+  for _, from in ipairs(index.symbols) do
+    local lines = index.sources[from.file] or {}
+    for i = from.line + 1, math.min(from.endLine, #lines) do
+      for _, name in ipairs(called_names(lines[i])) do
+        local same_file, elsewhere = {}, {}
+        for _, candidate in ipairs(by_name[name] or {}) do
+          table.insert(candidate.file == from.file and same_file or elsewhere, candidate)
+        end
+        local targets = #same_file > 0 and same_file or elsewhere
+        if #targets == 0 then
+          if not vim.tbl_contains(graph.ext[from.id], name) then
+            table.insert(graph.ext[from.id], name)
+          end
+        end
+        for _, to in ipairs(targets) do
+          if to.id ~= from.id then
+            record(graph, from, to, #same_file > 0, i)
+          end
+        end
+      end
+    end
+  end
+  return graph
+end
+
+--- Cached per index build; a reindex produces a new table and a new graph.
 local graphs = setmetatable({}, { __mode = "k" })
+
+local function graph_of(index)
+  local graph = graphs[index]
+  if not graph then
+    graph = build_graph(index)
+    graphs[index] = graph
+  end
+  return graph
+end
+
+--- The contract's `Symbol`: a copy carrying real edge counts.
+local function symbol_of(index, symbol)
+  local graph = graph_of(index)
+  local out = vim.tbl_extend("force", {}, symbol)
+  out.callers = #(graph.callers[symbol.id] or {})
+  out.callees = #(graph.callees[symbol.id] or {})
+  return out
+end
+
+--- @param opts { strict?: boolean, tests?: string }
+local function passes(opts, other, exact)
+  if opts.strict and not exact then
+    return false
+  end
+  local tests = opts.tests or "with"
+  if tests == "without" and other.test then
+    return false
+  end
+  if tests == "only" and not other.test then
+    return false
+  end
+  return true
+end
+
+-- Target resolution --------------------------------------------------------------
+
+--- Exact qualified name first, then a bare-name hit.
+local function find_named(index, name)
+  if type(name) ~= "string" or name == "" then
+    return nil
+  end
+  for _, symbol in ipairs(index.symbols) do
+    if symbol.qualified == name then
+      return symbol
+    end
+  end
+  for _, symbol in ipairs(index.symbols) do
+    if symbol.name == name then
+      return symbol
+    end
+  end
+  return nil
+end
 
 --- Identifiers on `line`, each flagged as a call when a `(` follows it.
 local function mentions(line)
@@ -46,116 +191,11 @@ local function mentions(line)
   end
 end
 
-local function graph_of(index)
-  if graphs[index] then
-    return graphs[index]
-  end
-
-  local by_qualified, by_name = {}, {}
-  for _, symbol in ipairs(index.symbols) do
-    by_qualified[symbol.qualified] = by_qualified[symbol.qualified] or symbol
-    by_name[symbol.name] = by_name[symbol.name] or {}
-    table.insert(by_name[symbol.name], symbol)
-  end
-
-  local edges, seen = {}, {}
-  local function add(from, to, name, kind, heuristic)
-    local key = ("%s|%s|%s"):format(tostring(from), tostring(to or name), kind)
-    if seen[key] then
-      seen[key].count = seen[key].count + 1
-      return
-    end
-    local edge =
-      { from = from, to = to, name = name, kind = kind, heuristic = heuristic, count = 1 }
-    seen[key] = edge
-    table.insert(edges, edge)
-  end
-
-  for _, from in ipairs(index.symbols) do
-    local lines = index.sources[from.file] or {}
-    for i = from.line + 1, math.min(from.endLine, #lines) do
-      for _, mention in ipairs(mentions(lines[i])) do
-        local bare = mention.word:match("[%w_]+$")
-        if not KEYWORDS[bare] then
-          local kind = mention.call and "call" or "ref"
-          local exact = by_qualified[mention.word]
-          if exact then
-            add(from, exact, exact.qualified, kind, false)
-          else
-            local candidates = by_name[bare] or {}
-            for _, to in ipairs(candidates) do
-              add(from, to, to.qualified, kind, true)
-            end
-            -- An unresolved *call* is an external edge; an unresolved bare
-            -- mention is noise (a string, a parameter) and is dropped.
-            if #candidates == 0 and mention.call then
-              add(from, nil, mention.word, kind, true)
-            end
-          end
-        end
-      end
-    end
-  end
-
-  graphs[index] = edges
-  return edges
-end
-
---- @param opts { refs?: boolean, strict?: boolean, tests?: string }
-local function allowed(edge, other, opts)
-  if edge.kind == "ref" and not opts.refs then
-    return false
-  end
-  if opts.strict and edge.heuristic then
-    return false
-  end
-  local tests = opts.tests or "with"
-  if tests == "without" and other and other.test then
-    return false
-  end
-  if tests == "only" and not (other and other.test) then
-    return false
-  end
-  return true
-end
-
---- Edges leaving `symbol` (callees) or arriving at it (callers).
---- @param direction "callers"|"callees"
-local function level(edges, symbol, direction, opts)
-  local out = {}
-  for _, edge in ipairs(edges) do
-    if direction == "callees" and edge.from == symbol and allowed(edge, edge.to, opts) then
-      table.insert(out, { node = edge.to, edge = edge })
-    elseif direction == "callers" and edge.to == symbol and allowed(edge, edge.from, opts) then
-      table.insert(out, { node = edge.from, edge = edge })
-    end
-  end
-  return out
-end
-
---- Exact qualified name first, then a bare-name hit.
-local function find_named(ctx, name)
-  if type(name) ~= "string" or name == "" then
-    return nil
-  end
-  for _, symbol in ipairs(ctx.index.symbols) do
-    if symbol.qualified == name then
-      return symbol
-    end
-  end
-  for _, symbol in ipairs(ctx.index.symbols) do
-    if symbol.name == name then
-      return symbol
-    end
-  end
-  return nil
-end
-
 --- Symbol the request points at: an explicit name, else the word under the
 --- cursor, else the symbol whose body encloses the cursor.
 local function root_symbol(ctx, params)
   if type(params.symbol) == "string" and params.symbol ~= "" then
-    return find_named(ctx, params.symbol)
+    return find_named(ctx.index, params.symbol)
   end
 
   if not params.uri or not params.position then
@@ -188,145 +228,169 @@ local function root_symbol(ctx, params)
       end
     end
   end
-  return index_mod.enclosing(ctx.index, file, row)
+  return require("fakelib.index").enclosing(ctx.index, file, row)
 end
 
-local function opts_of(params)
-  return { refs = params.refs == true, strict = params.strict == true, tests = params.tests }
+-- Call trees ---------------------------------------------------------------------
+
+--- The contract's `Node` tree for `navgraph/callers` / `navgraph/calls`.
+local function node_for(index, graph, symbol, exact, lines, direction, opts, on_path, level, max_depth)
+  local node = {
+    symbol = symbol_of(index, symbol),
+    exact = exact,
+    lines = lines,
+    children = {},
+    ext = graph.ext[symbol.id] or {},
+    recursion = on_path[symbol.id] == true,
+  }
+  if node.recursion or level >= max_depth then
+    return node
+  end
+  on_path[symbol.id] = true
+  local edges_of = direction == "callees" and graph.callees or graph.callers
+  for _, edge in ipairs(edges_of[symbol.id] or {}) do
+    local other = direction == "callees" and edge.to or edge.from
+    if passes(opts, other, edge.exact) then
+      table.insert(
+        node.children,
+        node_for(index, graph, other, edge.exact, edge.lines, direction, opts, on_path, level + 1, max_depth)
+      )
+    end
+  end
+  on_path[symbol.id] = nil
+  return node
 end
 
-local function respond(ctx, params, direction)
-  local edges = graph_of(ctx.index)
-  local opts = opts_of(params)
+local function tree_for(ctx, params, direction, method)
+  check_params(method, params, CALLERS_PARAMS)
   local root = root_symbol(ctx, params)
   if not root then
-    return { root = vim.NIL, edges = {} }
+    fail(-32001, "%s: symbol not found", method)
   end
-
-  local found = level(edges, root, direction, opts)
-  local limit = params.limit or 100
-  local items = {}
-  for _, entry in ipairs(vim.list_slice(found, 1, math.min(#found, limit))) do
-    table.insert(items, {
-      symbol = entry.node or nil,
-      name = entry.node and entry.node.qualified or entry.edge.name,
-      resolved = entry.node ~= nil,
-      heuristic = entry.edge.heuristic,
-      kind = entry.edge.kind,
-      count = entry.edge.count,
-      degree = entry.node and #level(edges, entry.node, direction, opts) or 0,
-    })
-  end
-
-  return {
-    root = { symbol = root, degree = #found },
-    edges = items,
-    truncated = #found > #items,
-  }
+  local graph = graph_of(ctx.index)
+  local opts = { strict = params.strict == true, tests = params.tests }
+  local depth = math.max(1, math.floor(params.depth or 1))
+  return { root = node_for(ctx.index, graph, root, true, {}, direction, opts, {}, 0, depth) }
 end
 
 --- Shortest call chain from `from` to `to`, breadth-first so the answer is the
 --- shortest one and the search cannot loop on a cycle.
-local function shortest_path(edges, from, to, opts)
-  if from == to then
-    return { { symbol = from } }
+local function shortest_path(graph, from, to)
+  if from.id == to.id then
+    return { from }
   end
-  local came_from, queue, seen = {}, { from }, { [from] = true }
+  local came_from, queue, seen = {}, { from }, { [from.id] = true }
   local at = 1
   while at <= #queue do
     local node = queue[at]
     at = at + 1
-    for _, step in ipairs(level(edges, node, "callees", opts)) do
-      local next_node = step.node
-      if next_node and not seen[next_node] then
-        seen[next_node] = true
-        came_from[next_node] = { previous = node, edge = step.edge }
-        if next_node == to then
-          local steps, cursor = {}, to
+    for _, edge in ipairs(graph.callees[node.id] or {}) do
+      local next_symbol = edge.to
+      if not seen[next_symbol.id] then
+        seen[next_symbol.id] = true
+        came_from[next_symbol.id] = node
+        if next_symbol.id == to.id then
+          local chain, cursor = {}, next_symbol
           while cursor do
-            local link = came_from[cursor]
-            table.insert(steps, 1, {
-              symbol = cursor,
-              edge = link and { kind = link.edge.kind, heuristic = link.edge.heuristic } or nil,
-            })
-            cursor = link and link.previous or nil
+            table.insert(chain, 1, cursor)
+            cursor = came_from[cursor.id]
           end
-          return steps
+          return chain
         end
-        table.insert(queue, next_node)
+        table.insert(queue, next_symbol)
       end
     end
   end
   return nil
 end
 
---- Call sites reaching `symbol`, which is what "most depended-on" means here.
-local function fan_in(edges, symbol, opts)
-  local total = 0
-  for _, step in ipairs(level(edges, symbol, "callers", opts)) do
-    total = total + step.edge.count
-  end
-  return total
-end
-
---- A path parameter, as a root-relative file.
-local function relative_path(ctx, path)
-  if type(path) ~= "string" or path == "" then
-    return nil
-  end
-  local normalized = vim.fs.normalize(path)
-  if ctx.root and vim.startswith(normalized, ctx.root) then
-    return normalized:sub(#ctx.root + 2)
-  end
-  return normalized
-end
-
---- Symbols of one file, nested: `A.b` sits under `A` when both are in the file.
-local function outline_nodes(ctx, file)
-  local nodes, by_qualified = {}, {}
-  for _, symbol in ipairs(ctx.index.symbols) do
-    if symbol.file == file then
-      local node = { symbol = symbol, children = {} }
-      local parent = by_qualified[symbol.qualified:match("^(.*)%.[%w_]+$") or ""]
-      by_qualified[symbol.qualified] = node
-      table.insert(parent and parent.children or nodes, node)
-    end
-  end
-  return nodes
-end
-
 return {
   ["navgraph/callers"] = function(ctx, params)
-    return respond(ctx, params, "callers")
+    return tree_for(ctx, params, "callers", "navgraph/callers")
   end,
 
   ["navgraph/calls"] = function(ctx, params)
-    return respond(ctx, params, "callees")
+    return tree_for(ctx, params, "callees", "navgraph/calls")
   end,
 
   ["navgraph/path"] = function(ctx, params)
-    local from, to = find_named(ctx, params.from), find_named(ctx, params.to)
+    check_params("navgraph/path", params, PATH_PARAMS)
+    local from, to = find_named(ctx.index, params.from), find_named(ctx.index, params.to)
     if not from or not to then
-      return { found = false, steps = {} }
+      return { path = {} }
     end
-    local steps = shortest_path(graph_of(ctx.index), from, to, opts_of(params))
-    return { found = steps ~= nil, steps = steps or {} }
+    local chain = shortest_path(graph_of(ctx.index), from, to)
+    if not chain then
+      return { path = {} }
+    end
+    return { path = vim.tbl_map(function(symbol)
+      return symbol_of(ctx.index, symbol)
+    end, chain) }
   end,
 
   ["navgraph/outline"] = function(ctx, params)
-    return { nodes = outline_nodes(ctx, ctx.to_relative(params.uri)) }
+    check_params("navgraph/outline", params, OUTLINE_PARAMS)
+    local limit = params.limit or 300
+    local tests = params.tests or "with"
+    local files, order, count = {}, {}, 0
+    for _, symbol in ipairs(ctx.index.symbols) do
+      local matches_path = not params.path or symbol.file:find(params.path, 1, true) ~= nil
+      local matches_kind = not params.kinds
+        or #params.kinds == 0
+        or vim.tbl_contains(params.kinds, symbol.kind)
+      local matches_tests = true
+      if tests == "without" then
+        matches_tests = not symbol.test
+      elseif tests == "only" then
+        matches_tests = symbol.test == true
+      end
+      if matches_path and matches_kind and matches_tests and count < limit then
+        count = count + 1
+        if not files[symbol.file] then
+          files[symbol.file] = { file = symbol.file, lang = symbol.language, symbols = {} }
+          table.insert(order, files[symbol.file])
+        end
+        table.insert(files[symbol.file].symbols, symbol_of(ctx.index, symbol))
+      end
+    end
+    return { files = order }
   end,
 
   ["navgraph/hot"] = function(ctx, params)
-    local edges = graph_of(ctx.index)
-    local opts = opts_of(params)
-    local file = relative_path(ctx, params.path)
+    check_params("navgraph/hot", params, HOT_PARAMS)
+    local graph = graph_of(ctx.index)
     local items = {}
     for _, symbol in ipairs(ctx.index.symbols) do
-      if not file or symbol.file == file then
-        local count = fan_in(edges, symbol, opts)
-        if count > 0 then
-          table.insert(items, { symbol = symbol, fanIn = count })
+      if not params.path or symbol.file == params.path then
+        local fan_in, fan_in_exact, fan_in_test = 0, 0, 0
+        for _, edge in ipairs(graph.callers[symbol.id] or {}) do
+          local n = #edge.lines
+          fan_in = fan_in + n
+          if edge.exact then
+            fan_in_exact = fan_in_exact + n
+          end
+          if edge.from.test then
+            fan_in_test = fan_in_test + n
+          end
+        end
+        local fan_out, fan_out_exact = 0, 0
+        for _, edge in ipairs(graph.callees[symbol.id] or {}) do
+          local n = #edge.lines
+          fan_out = fan_out + n
+          if edge.exact then
+            fan_out_exact = fan_out_exact + n
+          end
+        end
+        local strict_ok = params.strict ~= true or fan_in_exact > 0 or fan_out_exact > 0
+        if fan_in > 0 and strict_ok then
+          table.insert(items, {
+            symbol = symbol_of(ctx.index, symbol),
+            fanIn = fan_in,
+            fanInExact = fan_in_exact,
+            fanInTest = fan_in_test,
+            fanOut = fan_out,
+            fanOutExact = fan_out_exact,
+          })
         end
       end
     end
@@ -336,47 +400,73 @@ return {
       end
       return a.symbol.qualified < b.symbol.qualified
     end)
-    local limit = params.limit or 30
-    return {
-      items = vim.list_slice(items, 1, math.min(#items, limit)),
-      max = items[1] and items[1].fanIn or 0,
-      total = #items,
-    }
+    local limit = params.limit or 25
+    return { items = vim.list_slice(items, 1, math.min(#items, limit)) }
   end,
 
   ["navgraph/unused"] = function(ctx, params)
-    local edges = graph_of(ctx.index)
+    check_params("navgraph/unused", params, UNUSED_PARAMS)
+    local graph = graph_of(ctx.index)
+    local tests = params.tests or "with"
     local items = {}
     for _, symbol in ipairs(ctx.index.symbols) do
-      local reached = fan_in(edges, symbol, {}) > 0
-      if not reached and not (params.noPublic == true and symbol.exported) then
-        table.insert(items, symbol)
+      local matches_path = not params.path or symbol.file:find(params.path, 1, true) ~= nil
+      if matches_path and not (params.noPublic == true and symbol.exported) then
+        local callers = graph.callers[symbol.id] or {}
+        local non_test_callers = 0
+        for _, edge in ipairs(callers) do
+          if not edge.from.test then
+            non_test_callers = non_test_callers + 1
+          end
+        end
+        local unreached = #callers == 0
+        local test_only = #callers > 0 and non_test_callers == 0
+        local include, marked_test_only = false, false
+        if tests == "with" then
+          include = unreached
+        elseif tests == "without" then
+          include, marked_test_only = unreached or test_only, test_only
+        elseif tests == "only" then
+          include, marked_test_only = test_only, test_only
+        end
+        if include then
+          table.insert(items, { symbol = symbol_of(ctx.index, symbol), testOnly = marked_test_only })
+        end
       end
     end
-    local limit = params.limit or 200
-    return {
-      items = vim.list_slice(items, 1, math.min(#items, limit)),
-      total = #items,
-    }
+    local limit = params.limit or 300
+    return { items = vim.list_slice(items, 1, math.min(#items, limit)) }
   end,
 
-  --- Writes DOT whatever `format` asks for: the fake has no renderer, and
-  --- saying so beats returning a path to a file that is not what it claims.
+  --- Writes a standalone HTML file under `.navgraph/`, content-hashed so a
+  --- repeated request for the same view reuses one file. `path` is a filter
+  --- over which subgraph to draw - the server always chooses the output path.
   ["navgraph/graph"] = function(ctx, params)
-    local out = params.path
-    if type(out) ~= "string" or out == "" then
-      out = vim.fn.tempname() .. ".dot"
-    end
-    local edges = graph_of(ctx.index)
-    local fh = assert(io.open(out, "w"), "fake server could not write " .. out)
-    fh:write("digraph navgraph {\n")
-    for _, edge in ipairs(edges) do
-      if edge.to then
-        fh:write(("  %q -> %q;\n"):format(edge.from.qualified, edge.to.qualified))
+    check_params("navgraph/graph", params, GRAPH_PARAMS)
+    local graph = graph_of(ctx.index)
+    local edges = {}
+    for _, symbol in ipairs(ctx.index.symbols) do
+      if not params.path or symbol.file:find(params.path, 1, true) ~= nil then
+        for _, edge in ipairs(graph.callees[symbol.id] or {}) do
+          table.insert(edges, edge)
+        end
       end
     end
-    fh:write("}\n")
+
+    local lines = { "<!doctype html><title>navgraph</title><pre>digraph navgraph {" }
+    for _, edge in ipairs(edges) do
+      table.insert(lines, ("  %q -> %q;"):format(edge.from.qualified, edge.to.qualified))
+    end
+    table.insert(lines, "}</pre>")
+    local content = table.concat(lines, "\n") .. "\n"
+
+    local navgraph_dir = vim.fs.joinpath(ctx.root, ".navgraph")
+    vim.fn.mkdir(navgraph_dir, "p")
+    local hash = vim.fn.sha256(content):sub(1, 8)
+    local rel = vim.fs.joinpath(".navgraph", ("graph-%s.html"):format(hash))
+    local fh = assert(io.open(vim.fs.joinpath(ctx.root, rel), "w"), "fake server could not write graph file")
+    fh:write(content)
     fh:close()
-    return { path = out, format = "dot", nodes = #ctx.index.symbols, edges = #edges }
+    return { path = rel }
   end,
 }

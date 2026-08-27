@@ -48,10 +48,18 @@ end
 
 return {
   ["navgraph/status"] = function(ctx)
+    -- languages:{<lang>:files} per the contract, so key by the CLI's short
+    -- language tag (already on every symbol), not the file extension.
+    local lang_of_file = {}
+    for _, symbol in ipairs(ctx.index.symbols) do
+      lang_of_file[symbol.file] = lang_of_file[symbol.file] or symbol.language
+    end
     local languages = {}
     for _, file in ipairs(ctx.index.files) do
-      local ext = file:match("(%.[%w_]+)$")
-      languages[ext] = (languages[ext] or 0) + 1
+      local lang = lang_of_file[file]
+      if lang then
+        languages[lang] = (languages[lang] or 0) + 1
+      end
     end
     return {
       root = ctx.root,
