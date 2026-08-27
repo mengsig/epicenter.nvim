@@ -38,7 +38,8 @@ describe("client against the fake navgraph server", function()
   it("answers refs:true with use sites, not the identical definition list", function()
     local err, defs = support.request(root, "navgraph/search", { query = "log_request" })
     expect.eq(err, nil)
-    local err2, refs = support.request(root, "navgraph/search", { query = "log_request", refs = true })
+    local err2, refs =
+      support.request(root, "navgraph/search", { query = "log_request", refs = true })
     expect.eq(err2, nil)
     expect.ne(
       defs.items[1].symbol.qualified,
@@ -112,7 +113,8 @@ describe("client against the fake navgraph server", function()
     local id = client.start({ root = root, cmd = support.fake_cmd(root), bufnr = buf1 })
     client.start({ root = root, bufnr = buf2 })
     wait(function()
-      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0 and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
+      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0
+        and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
     end, 5000, "both buffers attached before the crash")
 
     -- Crash it: exit without shutdown first, exactly what a killed process
@@ -125,7 +127,8 @@ describe("client against the fake navgraph server", function()
     end, 10000, "navgraph to restart after the crash")
 
     wait(function()
-      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0 and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
+      return #vim.lsp.get_clients({ bufnr = buf1 }) > 0
+        and #vim.lsp.get_clients({ bufnr = buf2 }) > 0
     end, 5000, "both buffers re-attached to the restarted server")
   end)
 

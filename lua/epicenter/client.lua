@@ -48,6 +48,11 @@ local FALLBACK_METHODS = {
   ["textDocument/documentSymbol"] = true,
 }
 
+--- How long a run must stay healthy (no crash) before the streak forgets a
+--- prior crash - three restarts spread over hours must not permanently trip
+--- the lsp.restart.max ceiling.
+local RESTART_FORGIVE_MS = 60000
+
 --- @param path string
 function M.is_supported(path)
   local ext = path:match("(%.[%w_]+)$")
@@ -163,7 +168,13 @@ local function install_fallback_guard(client)
     end
     if FALLBACK_METHODS[method] and bufnr and vim.api.nvim_buf_is_valid(bufnr) then
       for _, other in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-        if other.id ~= client.id and other:supports_method(method, bufnr) then
+        -- Two navgraph clients on one buffer would recurse into each
+        -- other's guard without bound; only defer to a different server.
+        if
+          other.id ~= client.id
+          and other.name ~= "navgraph"
+          and other:supports_method(method, bufnr)
+        then
           return false
         end
       end
@@ -226,8 +237,14 @@ function M.start(opts)
     cmd = vim.list_extend({ bin, "lsp" }, cfg.navgraph.args)
   end
 
-  local state =
-    { cmd = cmd, restarts = opts.restarts or 0, root = root, stopping = false, buffers = {} }
+  local state = {
+    cmd = cmd,
+    restarts = opts.restarts or 0,
+    root = root,
+    stopping = false,
+    buffers = {},
+    starting = true,
+  }
   servers[root] = state
 
   local client_id = vim.lsp.start({
@@ -245,10 +262,20 @@ function M.start(opts)
       if cfg.lsp.fallback_only then
         install_fallback_guard(client)
       end
+      state.starting = false
       state.session = M.session(lsp_rpc(client.id))
       local experimental = vim.tbl_get(client.server_capabilities or {}, "experimental", "navgraph")
       state.protocol_version = experimental and experimental.protocolVersion or nil
       log.info("navgraph attached to %s (protocol %s)", root, tostring(state.protocol_version))
+      -- A crash streak must not disable the server forever: forgive it once
+      -- this run has stayed healthy for a while.
+      if state.restarts > 0 then
+        vim.defer_fn(function()
+          if servers[root] == state then
+            state.restarts = 0
+          end
+        end, RESTART_FORGIVE_MS)
+      end
     end,
     on_exit = function(code, signal)
       local crashed = not state.stopping and (code ~= 0 or signal ~= 0)
@@ -348,7 +375,9 @@ function M.stop(root)
 end
 
 function M.stop_all()
-  for root in pairs(vim.deepcopy(servers)) do
+  -- vim.tbl_keys(servers): just the keys, not a deep copy of every session,
+  -- rpc closure and buffer set - M.stop() only ever needs the root name.
+  for _, root in ipairs(vim.tbl_keys(servers)) do
     M.stop(root)
   end
 end
@@ -385,6 +414,8 @@ end
 --- @return { cancel: fun() }
 function M.request(method, params, cb, opts)
   opts = opts or {}
+  local root = opts.root and vim.fs.normalize(opts.root)
+    or root_mod.find(opts.bufnr, config.get().lsp.root_markers)
   local session
   if opts.root then
     -- A caller naming a root wants that project or an explicit error, never
@@ -394,7 +425,17 @@ function M.request(method, params, cb, opts)
     session = M.session_for_buf(opts.bufnr)
   end
   if not session then
-    cb({ code = -32002, message = "navgraph is not running for this project" }, nil)
+    local state = servers[root]
+    -- Requests between vim.lsp.start() returning and on_init are normal, not
+    -- an absent server: say so, instead of an alarming "not running".
+    if state and state.starting then
+      cb(
+        { code = -32002, message = "navgraph is starting for this project, try again shortly" },
+        nil
+      )
+    else
+      cb({ code = -32002, message = "navgraph is not running for this project" }, nil)
+    end
     return { cancel = function() end }
   end
   return session:request(method, params, cb, { channel = opts.channel })

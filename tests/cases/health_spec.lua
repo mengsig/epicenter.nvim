@@ -31,4 +31,34 @@ describe("checkhealth epicenter", function()
     local report = run_checkhealth()
     expect.matches(report, "no navgraph server running yet")
   end)
+
+  it(
+    "reports the resolved binary version hermetically, distinguishing OK from ERROR (F19)",
+    function()
+      -- With a real navgraph on $PATH, this used to shell out to it for real -
+      -- non-hermetic, and the old assertions were weak enough to pass either way.
+      local install = require("epicenter.install")
+      local original_resolve, original_system = install.resolve, vim.system
+      install.resolve = function()
+        return "/fake/navgraph", nil
+      end
+      vim.system = function(_, _)
+        return {
+          wait = function()
+            return { code = 0, stdout = "navgraph 9.9.9\n", stderr = "" }
+          end,
+        }
+      end
+
+      local ok, report = pcall(run_checkhealth)
+
+      install.resolve = original_resolve
+      vim.system = original_system
+
+      expect.eq(ok, true, report)
+      expect.matches(report, "OK.*navgraph binary: /fake/navgraph")
+      expect.matches(report, "OK.*navgraph version: navgraph 9%.9%.9")
+      expect.falsy(report:match("ERROR"), "a healthy resolve must never report ERROR")
+    end
+  )
 end)

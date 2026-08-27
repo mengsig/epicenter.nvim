@@ -114,6 +114,7 @@ function Palette:_on_results(err, items, total)
   if err then
     self.list:set_items({})
     self.list.empty_text = "  " .. (err.message or "the search failed")
+    self.total = 0
     self.list:draw()
     self:_set_footer()
     return
@@ -176,14 +177,17 @@ function Palette:accept(action)
   if not item then
     return
   end
-  self:close()
+  -- Instant close: an animated fade would still be on screen when the
+  -- scheduled jump below runs, so the edit/cursor/zz happened underneath it.
+  self:close({ motion = false })
   -- After close, so the jump lands in the window the user came from.
   vim.schedule(function()
     self.spec.on_accept(item, action or "edit")
   end)
 end
 
-function Palette:close()
+--- @param opts? { motion?: boolean } forwarded to each window's close()
+function Palette:close(opts)
   if not self.open then
     return
   end
@@ -196,7 +200,7 @@ function Palette:close()
   self.prompt:close()
   for _, win in ipairs({ self.prompt_win, self.results_win, self.preview_win }) do
     if win then
-      win:close()
+      win:close(opts)
     end
   end
   vim.cmd("stopinsert")

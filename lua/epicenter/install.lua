@@ -128,6 +128,9 @@ local function run(cmd, opts, cb)
   end)
 end
 
+--- Copies the resolved binary into place. No checksum or signature check -
+--- `gh release download`/`git clone` from the configured repo is the trust
+--- root (see navgraph.repo in the README/vimdoc).
 local function install_binary(source_path, cb)
   local target = M.managed_path()
   vim.fn.mkdir(vim.fs.dirname(target), "p")

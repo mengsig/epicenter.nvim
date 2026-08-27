@@ -75,4 +75,32 @@ describe("palette query staleness", function()
     expect.eq(p.list:count(), 0, "the stale response must not repaint the cleared query")
     p:close()
   end)
+
+  it("does not leave a stale footer total on the error path (F19)", function()
+    local fail_next = false
+    local p = palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        if fail_next then
+          return cb({ message = "boom" })
+        end
+        cb(nil, { "a", "b", "c" }, 3)
+      end,
+      render_item = function(item)
+        return { text = tostring(item) }
+      end,
+      empty_text = "  no matches",
+    })
+    vim.wait(50, function()
+      return p.total ~= nil
+    end)
+    expect.eq(p.total, 3)
+
+    fail_next = true
+    p:query("x")
+    vim.wait(50)
+
+    expect.eq(p.total, 0, "an error must not leave the previous query's total behind")
+    p:close()
+  end)
 end)

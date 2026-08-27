@@ -47,6 +47,14 @@ local function install_autocmds(cfg)
       require("epicenter.client").stop_all()
     end,
   })
+  -- Buffers already loaded when setup() runs (the common case under
+  -- lazy-loading on cmd/keys) never fire BufReadPost/BufNewFile again.
+  local client = require("epicenter.client")
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      client.attach(bufnr)
+    end
+  end
 end
 
 --- @param opts? table

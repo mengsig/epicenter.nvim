@@ -123,7 +123,9 @@ return {
           require("epicenter").notify("nothing logged yet: " .. path, "info")
           return
         end
-        vim.cmd.split(vim.fn.fnameescape(path))
+        -- vim.cmd.X() args are literal, not re-parsed - fnameescape here
+        -- would double-escape and land backslashes in the filename.
+        vim.cmd.split(path)
       end,
     },
   },
