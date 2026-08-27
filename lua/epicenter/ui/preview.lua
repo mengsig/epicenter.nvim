@@ -76,6 +76,12 @@ function Preview:show(target)
     self:clear("  cannot read " .. vim.fn.fnamemodify(target.path, ":~:.") .. ": " .. tostring(err))
     return
   end
+  if #lines == 0 then
+    -- The index is newer than the file on disk (shrank, checked out, stale
+    -- cache): there is nothing at `from` to show.
+    self:clear("  " .. vim.fn.fnamemodify(target.path, ":~:.") .. " has no line " .. target.line)
+    return
+  end
 
   self.shown = key
   vim.bo[self.buf].modifiable = true
@@ -100,7 +106,7 @@ function Preview:show(target)
   end
 
   if vim.api.nvim_win_is_valid(self.win) then
-    vim.api.nvim_win_set_cursor(self.win, { math.max(1, first + 1), 0 })
+    vim.api.nvim_win_set_cursor(self.win, { math.min(math.max(1, first + 1), #lines), 0 })
     vim.wo[self.win].cursorline = true
   end
 end
