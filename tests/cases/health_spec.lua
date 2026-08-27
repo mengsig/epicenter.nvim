@@ -40,7 +40,11 @@ describe("checkhealth epicenter", function()
   local function expect_hermetic()
     expect.truthy(#system_calls > 0, "check_binary should have called vim.system")
     for _, cmd in ipairs(system_calls) do
-      expect.eq(cmd[1], "/fake/navgraph", "must not shell out to a real navgraph binary: " .. vim.inspect(cmd))
+      expect.eq(
+        cmd[1],
+        "/fake/navgraph",
+        "must not shell out to a real navgraph binary: " .. vim.inspect(cmd)
+      )
     end
   end
 

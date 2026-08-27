@@ -168,7 +168,10 @@ vim.notify = original_notify
 check("narrow-width open raised no error notification", notified_error == nil, notified_error)
 check(
   "narrow palette still has all three panes",
-  narrow.prompt_win:valid() and narrow.results_win:valid() and narrow.preview_win ~= nil and narrow.preview_win:valid()
+  narrow.prompt_win:valid()
+    and narrow.results_win:valid()
+    and narrow.preview_win ~= nil
+    and narrow.preview_win:valid()
 )
 narrow:close({ motion = false })
 vim.o.columns = 160

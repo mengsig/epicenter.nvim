@@ -45,7 +45,10 @@ describe("palette layout", function()
       for _, want_preview in ipairs({ false, true }) do
         local boxes = palette.layout(wide, want_preview)
         expect.truthy(boxes.prompt ~= nil and boxes.results ~= nil, ("width %d"):format(width))
-        expect.truthy(boxes.prompt.width > 0 and boxes.results.width > 0, ("width %d"):format(width))
+        expect.truthy(
+          boxes.prompt.width > 0 and boxes.results.width > 0,
+          ("width %d"):format(width)
+        )
         if want_preview and width >= 80 then
           expect.truthy(boxes.preview ~= nil, ("width %d should keep a preview"):format(width))
           expect.truthy(boxes.preview.width > 0, ("width %d"):format(width))
