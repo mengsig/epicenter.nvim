@@ -73,6 +73,28 @@ describe("documentation stays in sync", function()
     end
   end)
 
+  it("lists every highlight group - core and feature-owned - in the canonical section", function()
+    -- A group mentioned only in its own feature's subsection (e.g. ripples)
+    -- would still pass a whole-document substring search, so slice out just
+    -- the *epicenter-highlights* section and check membership there.
+    local start = doc:find("*epicenter-highlights*", 1, true)
+    expect.truthy(start ~= nil, "doc/epicenter.txt has no *epicenter-highlights* tag")
+    local separator = ("="):rep(78)
+    local stop = doc:find(separator, start, true) or (#doc + 1)
+    local section = doc:sub(start, stop)
+
+    local groups = vim.list_extend(
+      vim.deepcopy(require("epicenter.ui.theme").GROUPS),
+      require("epicenter.features.blast.ripples").GROUPS
+    )
+    for _, group in ipairs(groups) do
+      expect.truthy(
+        section:find(group, 1, true) ~= nil,
+        "the *epicenter-highlights* section does not list " .. group
+      )
+    end
+  end)
+
   it("documents every top-level config key with a real default line", function()
     -- Every top-level key name here (ui, log, search, ...) also occurs
     -- incidentally in prose throughout both files - anchor on the one place

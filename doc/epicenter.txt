@@ -18,6 +18,8 @@ CONTENTS                                                   *epicenter-contents*
   9. Features
      9.1 search ............................... |epicenter-search|
      9.2 blast ................................ |epicenter-blast|
+         ripples .............................. |epicenter-ripples|
+         badges ............................... |epicenter-badges|
      9.3 core ................................. |epicenter-core|
      9.4 planned .............................. |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
@@ -26,8 +28,11 @@ CONTENTS                                                   *epicenter-contents*
 1. INTRODUCTION                                        *epicenter-introduction*
 
 epicenter.nvim drives NavGraph, a code-graph engine, from inside Neovim: fuzzy
-symbol search, repo-wide grep, and (in later releases) blast radius, callers,
-callees, outlines, hot spots and diff impact.
+symbol search, repo-wide grep, a live blast radius panel with ripples in the
+code, a hover card of callers, fan-in/fan-out badges, and diff impact against
+a git ref - all live on every keystroke. Standalone callers, callees,
+outline, hot spots and a call path between two symbols ship in later
+releases.
 
 The engine runs as `navgraph lsp`, an LSP server over stdio speaking the
 standard subset plus custom `navgraph/*` methods. One server per workspace
@@ -162,6 +167,19 @@ Defaults: >lua
       keymaps = { prefix = "<leader>e" },
       search = { debounce_ms = 40, limit = 50 },
       grep = { debounce_ms = 60, limit = 200 },
+      blast = {
+        depth = 2,
+        max_depth = 6,
+        direction = "callers",
+        tests = "with",
+        strict = false,
+        layout = "float",
+        follow_debounce_ms = 80,
+        realtime_debounce_ms = 150,
+      },
+      ripples = true,
+      hover = { callers = 5, max_width = 80 },
+      badges = "cursor",
       log = { level = "warn", file = nil },
     }
 <
@@ -232,6 +250,9 @@ Groups are derived at runtime from the active colourscheme (`Normal`,
     EpicenterPrompt     the prompt line
     EpicenterHint       footer hints
     EpicenterRange      the highlighted range in a preview
+    EpicenterRipple1    ripple ring 1, the strongest grade (see |epicenter-ripples|)
+    EpicenterRipple2    ripple ring 2
+    EpicenterRipple3    ripple ring 3 and deeper
 
 ==============================================================================
 7. HEALTH                                                    *epicenter-health*
@@ -319,7 +340,7 @@ Options: >lua
 Keys inside the panel:
 
     <CR>            jump to the symbol
-    o               peek at it without leaving the panel
+    o               toggle a peek at it without leaving the panel
     y               yank `file:line`
     +, -            deeper / shallower - re-queries
     d               flip callers <-> callees

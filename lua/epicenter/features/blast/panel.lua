@@ -32,17 +32,17 @@ local SPLIT_WINHIGHLIGHT = table.concat({
 M.HELP = {
   "  keys",
   "",
-  "  <CR>    jump to the symbol",
-  "  o       peek at it without leaving the panel",
-  "  y       yank file:line",
-  "  +/-     deeper / shallower (re-queries)",
-  "  d       flip callers <-> callees",
-  "  t       cycle the tests scope (with/without/only)",
-  "  s       toggle strict resolution",
-  "  f       follow the cursor",
-  "  j/k     move",
-  "  ?       toggle this help",
-  "  q       close",
+  "  <CR>       jump to the symbol",
+  "  o          toggle a peek at it without leaving the panel",
+  "  y          yank file:line",
+  "  +/-        deeper / shallower (re-queries)",
+  "  d          flip callers <-> callees",
+  "  t          cycle the tests scope (with/without/only)",
+  "  s          toggle strict resolution",
+  "  f          follow the cursor",
+  "  j/k/gg/G   move",
+  "  ?          toggle this help",
+  "  q, <Esc>   close",
 }
 
 -- Surface ----------------------------------------------------------------------

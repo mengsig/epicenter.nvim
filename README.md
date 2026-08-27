@@ -8,9 +8,10 @@ who calls it, and what breaks if you change it, and get the answer while you
 type. No daemon to babysit, no index to rebuild by hand, no language servers
 required for the graph itself.
 
-This release ships the foundation and the **search palette**: fuzzy symbol
-search and repo-wide grep, both live on every keystroke, both including your
-unsaved edits.
+This release ships the **search palette** (fuzzy symbol search and repo-wide
+grep) and **blast radius** (a live impact panel with ripples in the code, a
+hover card of callers, fan-in/fan-out badges, and diff impact against a git
+ref) — all live on every keystroke, all including your unsaved edits.
 
 ```
  >  handle_request                                  ┌──────────────────────────┐
@@ -113,7 +114,7 @@ announce themselves as coming in a later release.
 | Key            | Does                                                     |
 | -------------- | -------------------------------------------------------- |
 | `<CR>`         | Jump to the symbol                                       |
-| `o`            | Peek at it without leaving the panel                     |
+| `o`            | Toggle a peek at it without leaving the panel             |
 | `y`            | Yank `file:line`                                         |
 | `+` / `-`      | Deeper / shallower (re-queries)                          |
 | `d`            | Flip callers ↔ callees                                   |
@@ -126,8 +127,8 @@ announce themselves as coming in a later release.
 
 The hover card does not take focus; press `<leader>ek` again (or `K`) to step
 into it, then `j`/`k` through the callers and `<CR>` to jump. On a buffer where
-navgraph is the hover provider — under `lsp.fallback_only`, one no other
-language server covers — `K` opens the card too.
+navgraph is the hover provider — which under `lsp.fallback_only` means no
+other language server offers one — `K` opens the card too.
 
 `:Epicenter diff [ref]` reuses the panel with every changed symbol as a root
 (`changes vs HEAD` in the header). Your open buffers reach navgraph as

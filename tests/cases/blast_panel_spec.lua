@@ -1,6 +1,7 @@
 local support = require("support")
 local epicenter = require("epicenter")
 local model = require("epicenter.features.blast.model")
+local panel_module = require("epicenter.features.blast.panel")
 
 --- Opens a fixture file with the cursor on `line`.
 local function open_fixture(root, relative, line)
@@ -188,6 +189,18 @@ describe("blast panel against the fake navgraph server", function()
     expect.matches(body(panel), "flip callers")
     panel:toggle_help()
     expect.matches(body(panel), "ring 1")
+  end)
+
+  it("documents every key it installs, so `?` never lies (#F10)", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    local help_text = table.concat(panel_module.HELP, "\n")
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.surface.buf, "n")) do
+      expect.truthy(
+        help_text:find(map.lhs, 1, true) ~= nil,
+        "`?` help does not mention " .. map.lhs
+      )
+    end
   end)
 
   it("cleans up its marks and subscriptions on close", function()
