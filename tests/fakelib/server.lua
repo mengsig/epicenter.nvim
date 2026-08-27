@@ -15,10 +15,14 @@ local function capabilities(methods)
   table.sort(navgraph_methods)
   -- Only advertise what tests/fake actually implements: the client's
   -- FALLBACK_METHODS guard reads these at face value, and the real
-  -- navgraph must be able to trust that too.
+  -- navgraph must be able to trust that too. hoverProvider is the one
+  -- exception - blast's K routing (navgraph_owns_hover) reads it as a
+  -- capability signal and never issues a literal textDocument/hover
+  -- request, matching real navgraph's own protocol.
   return {
     textDocumentSync = { openClose = true, change = 1, save = { includeText = false } },
     definitionProvider = true,
+    hoverProvider = true,
     documentSymbolProvider = true,
     positionEncoding = "utf-8",
     experimental = {
