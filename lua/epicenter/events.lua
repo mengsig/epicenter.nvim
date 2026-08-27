@@ -3,8 +3,6 @@
 local M = {}
 
 M.INDEXED = "EpicenterIndexed"
-M.ATTACHED = "EpicenterAttached"
-M.DETACHED = "EpicenterDetached"
 
 local subscribers = {}
 local next_id = 0
