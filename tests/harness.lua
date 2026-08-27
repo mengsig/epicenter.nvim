@@ -204,6 +204,14 @@ end
 --- language server running and no floating window left over. Without this a
 --- leaked server from one file blocks the event loop in the next.
 local function isolate()
+  -- Route through epicenter.client first: a raw client:stop() below never
+  -- sets its state.stopping, so its on_exit reads the stop as a crash and
+  -- schedule_restart respawns a zombie server the next file never sees.
+  local ok, client_mod = pcall(require, "epicenter.client")
+  if ok then
+    client_mod.stop_all()
+  end
+
   -- Graceful stop, never force: the fake server blocks on a stdin read, so a
   -- SIGTERM only lands once it returns. shutdown/exit over stdio does land.
   for _, client in ipairs(vim.lsp.get_clients()) do
