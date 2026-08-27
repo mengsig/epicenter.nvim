@@ -130,8 +130,16 @@ function Palette:query(text)
     return
   end
   self.query_text = text
+  -- The widget owns query identity, not the transport: a source that answers
+  -- synchronously (e.g. an empty-query short-circuit) must not race a slower
+  -- in-flight request for a query the user already replaced.
+  self.generation = self.generation + 1
+  local generation = self.generation
   self.spec.source(text, self.state, function(err, items, total)
     vim.schedule(function()
+      if generation ~= self.generation then
+        return
+      end
       self:_on_results(err, items or {}, total)
     end)
   end)
@@ -272,6 +280,7 @@ function M.open(spec)
     want_preview = cfg.ui.preview and spec.preview_of ~= nil,
     previous_win = vim.api.nvim_get_current_win(),
     query_text = "",
+    generation = 0,
   }, Palette)
 
   self.box = self:_box()

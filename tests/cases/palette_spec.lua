@@ -38,3 +38,41 @@ describe("palette layout", function()
     end
   end)
 end)
+
+describe("palette query staleness", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+  end)
+
+  it("drops a slow response for a query a synchronous later query already replaced", function()
+    local pending = nil
+    local p = palette.open({
+      title = " test ",
+      -- Mimics grep's empty-query short-circuit: "" answers synchronously,
+      -- anything else stays in flight until the test resolves it.
+      source = function(query, _, cb)
+        if query == "" then
+          cb(nil, {}, 0)
+        else
+          pending = cb
+        end
+      end,
+      render_item = function(item)
+        return { text = tostring(item) }
+      end,
+      empty_text = "  no matches",
+    })
+
+    p:query("a")
+    expect.truthy(pending ~= nil, "the query for 'a' must still be in flight")
+    p:query("") -- backspace: the empty query answers synchronously, in-place
+
+    -- The stale "a" response arrives after the user already cleared the query.
+    pending(nil, { "stale-result" }, 1)
+    vim.wait(50)
+
+    expect.eq(p.list:count(), 0, "the stale response must not repaint the cleared query")
+    p:close()
+  end)
+end)
