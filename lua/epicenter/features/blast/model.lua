@@ -192,21 +192,24 @@ end
 function M.rows(nodes)
   local rows = {}
   local depth, file = nil, nil
-  local ring_row, file_row = nil, nil
+  -- Indices into `rows`, not table references: luacheck's dead-store check
+  -- cannot see that a stored reference's field mutations are observable
+  -- through `rows` itself, and flags it as write-only.
+  local ring_at, file_at = nil, nil
 
   for _, node in ipairs(nodes) do
     if node.depth ~= depth then
       depth, file = node.depth, nil
-      ring_row = { kind = "ring", depth = depth, count = 0 }
-      table.insert(rows, ring_row)
+      table.insert(rows, { kind = "ring", depth = depth, count = 0 })
+      ring_at = #rows
     end
     if node.symbol.file ~= file then
       file = node.symbol.file
-      file_row = { kind = "file", depth = depth, file = file, count = 0 }
-      table.insert(rows, file_row)
+      table.insert(rows, { kind = "file", depth = depth, file = file, count = 0 })
+      file_at = #rows
     end
-    ring_row.count = ring_row.count + 1
-    file_row.count = file_row.count + 1
+    rows[ring_at].count = rows[ring_at].count + 1
+    rows[file_at].count = rows[file_at].count + 1
     table.insert(rows, { kind = "node", depth = depth, file = file, node = node })
   end
   return rows

@@ -41,7 +41,6 @@ local GREP_HELP = {
   "  ?           toggle this help (normal mode)",
   "  <Esc>       close",
 }
-
 --- Opens `path` at `line` (1-based), leaving the jumplist entry behind.
 local function jump(target, action)
   vim.cmd("normal! m'")

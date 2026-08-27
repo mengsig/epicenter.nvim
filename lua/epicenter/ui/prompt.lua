@@ -2,6 +2,8 @@
 local M = {}
 
 local uv = vim.uv or vim.loop
+-- rawget: presence is genuinely conditional (5.2+ vs 5.1/LuaJIT), so a
+-- static `table.unpack` reference reads as an undefined field under luajit.
 local unpack_args = rawget(table, "unpack") or unpack
 
 --- Coalesces rapid calls: `fn` runs once, `ms` after the last `call()`.
