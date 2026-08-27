@@ -111,12 +111,27 @@ describe("search palette against the fake navgraph server", function()
     p:close()
   end)
 
-  it("reflows in place on a resize instead of animating", function()
+  it("reflows the whole palette, list height included, on a real VimResized", function()
     local p = epicenter.run("search", {}, buf)
-    local before = p.results_win:geometry()
-    p:reflow()
-    expect.eq(p.results_win:geometry(), before, "same editor size, same geometry")
+    local before_box = p.results_win:geometry()
+    expect.eq(p.list.height, before_box.height, "list height starts in sync with the box")
+
+    vim.o.lines = 20
+    -- The real path: production never calls Palette:reflow() directly, only
+    -- the autocmd does (that gap is exactly what let the list desync, F4).
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    vim.o.lines = 40
+
+    local after_box = p.results_win:geometry()
+    expect.truthy(after_box.height < before_box.height, "the resize must shrink the box")
+    expect.eq(p.list.height, after_box.height, "the list height must track the shrunken box")
     expect.eq(p.tween, nil, "a reflow never starts a tween")
+
+    local painted = vim.api.nvim_buf_get_lines(p.results_win.buf, 0, -1, false)
+    expect.truthy(
+      #painted <= after_box.height,
+      "no more rows may be painted than the shrunken window can show"
+    )
     p:close()
   end)
 

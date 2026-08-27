@@ -179,6 +179,7 @@ function Palette:close()
     return
   end
   self.open = false
+  pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
   if self.tween then
     self.tween.cancel()
     self.tween = nil
@@ -281,18 +282,12 @@ function M.open(spec)
     title = spec.title,
     focusable = false,
     zindex = 100,
-    reflow = function()
-      return M.layout(self:_box(), self.want_preview).results
-    end,
   })
   if boxes.preview then
     self.preview_win = window.open({
       box = boxes.preview,
       focusable = false,
       zindex = 100,
-      reflow = function()
-        return M.layout(self:_box(), self.want_preview).preview
-      end,
     })
   end
   self.prompt_win = window.open({
@@ -300,11 +295,20 @@ function M.open(spec)
     footer = " ↵ jump · ^t/^v/^x open · ^n/^p move · ? help ",
     enter = true,
     zindex = 110,
-    reflow = function()
-      return M.layout(self:_box(), self.want_preview).prompt
-    end,
     on_close = function()
       self:close()
+    end,
+  })
+
+  -- One autocmd owns the whole palette's resize: the three windows must
+  -- reflow together, including the list/preview heights (see Palette:reflow).
+  self.augroup = vim.api.nvim_create_augroup("EpicenterPalette" .. self.prompt_win.buf, {
+    clear = true,
+  })
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = self.augroup,
+    callback = function()
+      self:reflow()
     end,
   })
 
