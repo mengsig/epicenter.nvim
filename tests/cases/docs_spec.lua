@@ -89,6 +89,31 @@ describe("documentation stays in sync", function()
     end
   end)
 
+  it("gives every blast keymap a collision-safe help tag, not a bare one", function()
+    local prefix = require("epicenter.config").defaults().keymaps.prefix
+    for _, map in ipairs(registry.keymaps()) do
+      if map.feature == "blast" then
+        local lhs = prefix .. map.suffix
+        expect.truthy(
+          doc:find(("*epicenter-%s*"):format(lhs), 1, true) ~= nil,
+          "doc/epicenter.txt has no *epicenter-" .. lhs .. "*"
+        )
+        expect.falsy(
+          doc:find(("*%s*"):format(lhs), 1, true) ~= nil,
+          "doc/epicenter.txt still has a bare *" .. lhs .. "* tag"
+        )
+      end
+    end
+  end)
+
+  it("does not register a bare *K* help tag that hijacks Vim's builtin :help K", function()
+    expect.falsy(doc:find("*K*", 1, true) ~= nil, "doc/epicenter.txt still has a bare *K* tag")
+    expect.truthy(
+      doc:find("*epicenter-K*", 1, true) ~= nil,
+      "doc/epicenter.txt has no *epicenter-K* tag"
+    )
+  end)
+
   it("builds helptags", function()
     local ok = pcall(vim.cmd, "helptags " .. vim.fn.fnameescape(vim.fs.joinpath(repo, "doc")))
     expect.eq(ok, true)

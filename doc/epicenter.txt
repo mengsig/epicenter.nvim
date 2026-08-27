@@ -301,7 +301,7 @@ Options: >lua
 9.2 BLAST                                                     *epicenter-blast*
 
                                                            *:Epicenter-blast*
-:Epicenter blast [{symbol}]                                    *<leader>ee*
+:Epicenter blast [{symbol}]                            *epicenter-<leader>ee*
     What breaks if this symbol changes. Without an argument the target is the
     symbol under the cursor; with one, the symbol of that name.
 
@@ -347,7 +347,7 @@ Options: >lua
     ripples = true,
 <
                                                            *:Epicenter-hover*
-:Epicenter hover                                               *<leader>ek*
+:Epicenter hover                                       *epicenter-<leader>ek*
     A card for the symbol under the cursor: kind and signature (syntax
     highlighted), `N callers` / `M callees`, `file:line-endLine`, the doc
     comment above the definition, and the top callers.
@@ -356,7 +356,7 @@ Options: >lua
     into it: `j`/`k` move through the callers, `<CR>` jumps to one, `q` or
     `<Esc>` closes. Moving the cursor dismisses it.
 
-                                                                        *K*
+                                                                *epicenter-K*
     On a buffer where navgraph is the hover provider - which under
     `lsp.fallback_only` means no other language server offers one - `K` opens
     this card. Where another server does answer hover, `K` stays that server's
@@ -370,7 +370,7 @@ Options: >lua
     },
 <
                                                             *:Epicenter-diff*
-:Epicenter diff [{ref}]                                        *<leader>ed*
+:Epicenter diff [{ref}]                                *epicenter-<leader>ed*
     The same panel, rooted on every symbol the working tree changed rather
     than on one symbol. The header reads `changes vs {ref}` ("HEAD" by
     default) and the chips lead with how many symbols changed. Every panel key
