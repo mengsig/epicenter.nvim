@@ -1,0 +1,6 @@
+<!doctype html><title>navgraph</title><pre>digraph navgraph {
+  "RequestHandler.handle_request" -> "dispatch";
+  "M.handle_request" -> "log_request";
+  "M.handle_request" -> "M.route";
+  "M.start" -> "M.handle_request";
+}</pre>

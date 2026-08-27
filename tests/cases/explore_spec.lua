@@ -85,14 +85,14 @@ describe("explorer rows", function()
   end)
 
   it("renders the not-yet-fetched child as a quiet placeholder", function()
-    local node = explore.seed({ key = "k", degree = 3, children = {} })
-    expect.eq(#node.children, 1)
+    local node = node_of({ symbol = symbol(), degree = 3 })
+    expect.eq(#node.children, 1, "a node with edges is expandable before it is fetched")
     expect.eq(node.children[1].type, "pending")
     expect.matches(explore.render_row(row(node.children[1])).text, "%.%.%.")
   end)
 
   it("gives a node with no edges nothing to expand", function()
-    expect.eq(#explore.seed({ key = "k", degree = 0, children = {} }).children, 0)
+    expect.eq(#node_of({ symbol = symbol(), degree = 0 }).children, 0)
   end)
 
   it("keeps an already-loaded subtree across a refresh, and drops what is gone", function()
@@ -160,6 +160,14 @@ describe("explorer against the fake navgraph server", function()
     return vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false)
   end
 
+  local function wait_row(at, pattern, label)
+    wait(function()
+      local line = rows()[at]
+      return line ~= nil and line:match(pattern) ~= nil
+    end, 10000, label)
+    return rows()
+  end
+
   local function wait_rows(count, label)
     wait(function()
       return panel.list:count() == count
@@ -190,6 +198,7 @@ describe("explorer against the fake navgraph server", function()
     expect.matches(lines[1], "log_request")
     expect.matches(lines[2], "M%.handle_request")
     expect.matches(lines[2], "app/server%.lua:9")
+    expect.matches(lines[2], "^  >", "a row with more to fetch shows it before you ask")
   end)
 
   it("roots the tree at the symbol under the cursor", function()
@@ -205,8 +214,7 @@ describe("explorer against the fake navgraph server", function()
     wait_rows(2, "first level")
     panel.list:select(2)
     press("l")
-    local lines = wait_rows(3, "second level")
-    expect.matches(lines[3], "M%.start")
+    local lines = wait_row(3, "M%.start", "second level")
     expect.matches(lines[3], "2x", "M.start calls it twice")
 
     press("h")
@@ -241,7 +249,7 @@ describe("explorer against the fake navgraph server", function()
     wait_rows(2, "first level")
     panel.list:select(2)
     press("l")
-    wait_rows(3, "second level")
+    wait_row(3, "M%.start", "second level")
 
     support.request(root, "navgraph/rescan", {})
     wait(function()

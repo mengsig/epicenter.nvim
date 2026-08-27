@@ -33,12 +33,23 @@ local function symbol_key(symbol)
   return ("%s#%s@%d"):format(symbol.uri, symbol.qualified, symbol.line)
 end
 
+--- A node with edges it has not fetched yet still needs a chevron, so it
+--- carries one placeholder child until `l` replaces it with the real level.
+local function seed(node)
+  if not node.loaded then
+    node.children = node.degree > 0
+        and { { type = "pending", key = node.key .. "/...", name = "" } }
+      or {}
+  end
+  return node
+end
+
 --- @param edge { symbol?: table, name?: string, resolved?: boolean,
 ---   heuristic?: boolean, kind?: string, count?: integer, degree?: integer }
 local function node_of_edge(edge, parent_key)
   local resolved = edge.resolved ~= false and edge.symbol ~= nil and edge.symbol ~= vim.NIL
   local symbol = resolved and edge.symbol or nil
-  return {
+  return seed({
     type = resolved and "symbol" or "extern",
     key = resolved and symbol_key(symbol) or (parent_key .. "/ext:" .. tostring(edge.name)),
     name = resolved and symbol.qualified or tostring(edge.name),
@@ -51,7 +62,7 @@ local function node_of_edge(edge, parent_key)
     degree = resolved and (edge.degree or 0) or 0,
     children = {},
     loaded = false,
-  }
+  })
 end
 
 --- Children of `node` for `edges`, keeping already-loaded subtrees whose key
@@ -77,7 +88,7 @@ function M.merge_children(node, edges)
     if kept then
       kept.symbol, kept.name, kept.edge, kept.degree =
         fresh.symbol, fresh.name, fresh.edge, fresh.degree
-      fresh = kept
+      fresh = seed(kept)
     end
     table.insert(fresh.type == "extern" and externs or resolved, fresh)
   end
@@ -91,14 +102,6 @@ function M.merge_children(node, edges)
   return resolved
 end
 
---- A node that has edges but has not fetched them yet still needs a chevron,
---- so it carries one placeholder child until `l` loads the real ones.
-local function seed(node)
-  node.children = node.degree > 0 and { { type = "pending", key = node.key .. "/...", name = "" } }
-    or {}
-  return node
-end
-
 -- Rendering --------------------------------------------------------------------
 
 --- One display row. Pure, so the layout is testable without a server.
@@ -110,7 +113,8 @@ function M.render_row(row)
   local indent = ("  "):rep(row.depth)
 
   if node.type == "pending" then
-    return { text = indent .. "   ...", spans = { { hl = "EpicenterMuted", from = 0, to = 6 } } }
+    local text = indent .. "   ..."
+    return { text = text, spans = { { hl = "EpicenterMuted", from = 0, to = #text } } }
   end
 
   local chevron = "  "
@@ -209,7 +213,7 @@ local function expand(view, node)
     end
     if err then
       require("epicenter").notify(err.message or "navgraph did not answer", "error")
-      node.children = {}
+      seed(node)
       view.panel:refresh_tree()
       return
     end
@@ -227,7 +231,16 @@ local function refresh_open(view)
   local function walk(node)
     if node.loaded and view.tree:is_expanded(node.key) then
       fetch(view, ref_of(node), node.key, function(err, result)
-        if err or not view.panel:valid() then
+        if not view.panel:valid() then
+          return
+        end
+        if err then
+          -- A background refresh keeps the rows it has; the log carries why.
+          require("epicenter.log").warn(
+            "explorer refresh failed for %s: %s",
+            node.name,
+            err.message
+          )
           return
         end
         node.children = M.merge_children(node, result.edges or {})
@@ -259,16 +272,15 @@ local function load_root(view, ref)
       view.panel:notice("  no symbol to explore here")
       return
     end
-    view.root = seed({
+    view.root = {
       type = "symbol",
       key = symbol_key(root.symbol),
       name = root.symbol.qualified,
       symbol = root.symbol,
       degree = root.degree or 0,
       children = {},
-      loaded = false,
-    })
-    view.root.loaded = true
+      loaded = true,
+    }
     view.root.children = M.merge_children(view.root, result.edges or {})
     view.panel:set_roots({ view.root }, { expand_roots = true })
     view.panel:set_title((" %s %s "):format(view.direction, root.symbol.qualified))
@@ -337,11 +349,11 @@ local function open(direction, ctx)
         if not row or row.recursive then
           return
         end
-        if row.node.type == "symbol" and not row.node.loaded and row.node.degree > 0 then
-          seed(row.node)
-          expand(view, row.node)
-          return
+        local node = row.node
+        if node.type == "symbol" and not node.loaded and node.degree > 0 then
+          expand(view, node)
         end
+        -- Opens now, so the placeholder shows while the level is in flight.
         self.tree:set_open(true)
         self:draw()
       end,
@@ -410,10 +422,7 @@ M.keymaps = {
   { suffix = "C", command = "callees", desc = "Epicenter: callees" },
 }
 
-M.TESTS_CYCLE = TESTS_CYCLE
 M.node_of_edge = node_of_edge
-M.symbol_key = symbol_key
-M.seed = seed
 M.next_tests = next_tests
 
 return M

@@ -11,7 +11,10 @@ required for the graph itself.
 This release ships the **search palette** (fuzzy symbol search and repo-wide
 grep) and **blast radius** (a live impact panel with ripples in the code, a
 hover card of callers, fan-in/fan-out badges, and diff impact against a git
-ref) — all live on every keystroke, all including your unsaved edits.
+ref) — all live on every keystroke, all including your unsaved edits. On top
+of it come the exploration panels: callers and callees as a tree that fetches
+a level at a time, the call path between two symbols, a live outline sidebar,
+fan-in hot spots, unused symbols, a graph export, and the status dashboard.
 
 ```
  >  handle_request                                  ┌──────────────────────────┐
@@ -80,6 +83,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>ep` | `:Epicenter path`    | Call chain between two symbols                |
 | `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer     |
 | `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, with fan-in bars    |
+| `<leader>ex` | `:Epicenter status`  | Dashboard: index, server, languages, log      |
 
 Inside the palette:
 
@@ -112,7 +116,7 @@ Inside the palette:
 | `hot`      | Most depended-on symbols, ranked by fan-in               |
 | `unused`   | Symbols nothing in the index reaches                     |
 | `graph`    | Write the call graph to a file and open it               |
-| `status`   | What the index knows about this project                  |
+| `status`   | Dashboard: index, server state, languages, log, actions  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |

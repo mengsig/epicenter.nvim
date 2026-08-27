@@ -250,6 +250,4 @@ M.keymaps = {
   { suffix = "p", command = "path", desc = "Epicenter: path between symbols" },
 }
 
-M.EDGE_LABEL = EDGE_LABEL
-
 return M

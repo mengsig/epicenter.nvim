@@ -34,9 +34,9 @@ CONTENTS                                                   *epicenter-contents*
 epicenter.nvim drives NavGraph, a code-graph engine, from inside Neovim: fuzzy
 symbol search, repo-wide grep, a live blast radius panel with ripples in the
 code, a hover card of callers, fan-in/fan-out badges, and diff impact against
-a git ref - all live on every keystroke. Standalone callers, callees,
-outline, hot spots and a call path between two symbols ship in later
-releases.
+a git ref, callers and callees, the call path between two symbols, a live
+outline, hot spots, unused symbols, and a graph export - all live on every
+keystroke.
 
 The engine runs as `navgraph lsp`, an LSP server over stdio speaking the
 standard subset plus custom `navgraph/*` methods. One server per workspace
@@ -124,6 +124,7 @@ change `keymaps.prefix`.
     <leader>ep      :Epicenter path
     <leader>eo      :Epicenter outline
     <leader>eh      :Epicenter hot
+    <leader>ex      :Epicenter status
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -574,6 +575,7 @@ Options: >lua
     notice names it either way.
 
     <CR>            jump to the symbol (hot, unused)
+    <C-v>, <C-t>    open in a vertical split / a new tab
     o               peek at it
     y               yank `file:line`
     b               hot: buffer / repo scope
@@ -590,10 +592,19 @@ Options: >lua
 9.7 CORE                                                       *epicenter-core*
 
                                                           *:Epicenter-status*
-:Epicenter status
-    A panel with the workspace root, the server version and protocol version,
-    file/symbol/edge counts, languages, the number of unsaved overlays, and
-    how long the last index took. `q` closes it.
+:Epicenter status                                              *<leader>ex*
+    The dashboard: workspace root, whether the server is up and how to
+    identify it, file/symbol/edge counts, unsaved overlays, how long the last
+    index took, a bar per language, and the log path. A server that does not
+    answer is reported as such rather than left blank.
+
+    The pid is the one `navgraph/status` reports; Neovim does not expose the
+    child process itself, so without it the panel names the LSP client.
+
+    r               rescan and repaint
+    R               restart the server and repaint
+    l               open the log
+    q, <Esc>        close
 
                                                          *:Epicenter-install*
 :Epicenter install

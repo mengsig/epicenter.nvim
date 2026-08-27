@@ -179,6 +179,58 @@ check(
 narrow:close({ motion = false })
 vim.o.columns = 160
 
+-- The graph panels, in the same real Neovim with animation still on.
+local function press(panel, lhs)
+  for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+    if map.lhs == lhs and map.callback then
+      return map.callback()
+    end
+  end
+  error("no mapping for " .. lhs)
+end
+
+local source = vim.api.nvim_get_current_buf()
+local explorer = require("epicenter").run("callers", { "log_request" }, source)
+wait_for("explorer listed the callers", function()
+  return explorer.list:count() == 2
+end)
+local tree_lines = vim.api.nvim_buf_get_lines(explorer.win.buf, 0, -1, false)
+check("explorer roots at the symbol", tree_lines[1]:match("log_request") ~= nil, tree_lines[1])
+check("its caller is the child row", tree_lines[2]:match("M%.handle_request") ~= nil, tree_lines[2])
+explorer.list:select(2)
+press(explorer, "l")
+wait_for("expanding fetched the caller's caller", function()
+  local line = vim.api.nvim_buf_get_lines(explorer.win.buf, 0, -1, false)[3]
+  return line ~= nil and line:match("M%.start") ~= nil
+end)
+check("the level replaced the placeholder", explorer.list:count() == 3)
+explorer:close()
+
+local outline = require("epicenter").run("outline", {}, source)
+wait_for("outline listed the buffer's symbols", function()
+  return outline.list:count() >= 3
+end)
+check("the sidebar is anchored on the left", outline.win:geometry().col == 0)
+outline:close()
+
+local hot = require("epicenter").run("hot", {}, source)
+wait_for("hot spots ranked the file", function()
+  return hot.list:count() > 0
+end)
+check(
+  "the busiest symbol carries a bar",
+  vim.api.nvim_buf_get_lines(hot.win.buf, 0, -1, false)[1]:match("[#\226\150\136]") ~= nil
+)
+hot:close()
+
+local dashboard = require("epicenter").run("status", {}, source)
+wait_for("dashboard reported the index", function()
+  return table
+    .concat(vim.api.nvim_buf_get_lines(dashboard.buf, 0, -1, false), "\n")
+    :match("3 files") ~= nil
+end)
+dashboard:close()
+
 local messages = vim.api.nvim_exec2("messages", { output = true }).output
 local bad = {}
 for _, line in ipairs(vim.split(messages, "\n", { plain = true })) do
