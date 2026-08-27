@@ -317,10 +317,10 @@ function Card:_watch()
     group = self.augroup,
     buffer = self.origin_buf,
     callback = function()
-      if not self:valid() or vim.api.nvim_get_current_win() == self.win.win then
-        return
-      end
       vim.schedule(function()
+        if not self:valid() or vim.api.nvim_get_current_win() == self.win.win then
+          return
+        end
         self:close()
       end)
     end,

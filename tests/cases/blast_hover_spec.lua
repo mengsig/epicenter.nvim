@@ -102,6 +102,66 @@ describe("hover card contents", function()
   end)
 end)
 
+describe("hover card focus lifetime with motion on", function()
+  local root, buf, card, saved
+
+  before_each(function()
+    saved = vim.g.epicenter_reduce_motion
+    vim.g.epicenter_reduce_motion = nil
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = true })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if card then
+      card:close()
+      card = nil
+    end
+    vim.g.epicenter_reduce_motion = saved
+  end)
+
+  it("survives the BufLeave fired by the second K, and j/<CR> reach the caller", function()
+    card = require("epicenter").run("hover", {}, buf)
+    wait(function()
+      return card.answered > 0
+    end, 10000, "hover answer")
+
+    -- Second `K`: focuses the card, which fires BufLeave on origin_buf and
+    -- queues the dismiss guard.
+    local same = require("epicenter").run("hover", {}, buf)
+    expect.eq(same, card)
+    expect.eq(vim.api.nvim_get_current_win(), card.win.win)
+
+    -- Drain the event loop so the scheduled close guard actually runs.
+    vim.wait(1200)
+    expect.truthy(card:valid(), "the card must not self-dismiss once focused")
+    expect.eq(vim.api.nvim_get_current_win(), card.win.win)
+
+    local function press(keys)
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "x", false)
+    end
+    local jumping = card
+    card = nil -- close() starts below; after_each must not double-close it
+    press("j")
+    press("<CR>")
+    wait(function()
+      return vim.api.nvim_win_get_cursor(0)[1] == 14
+    end, 5000, "jump to M.start via real keypresses")
+    expect.matches(vim.api.nvim_get_current_line(), "function M%.start")
+
+    -- The jump starts a fade-out tween; drain it so the card's own module
+    -- state (hover.lua's `current`) is clear before the next spec runs.
+    wait(function()
+      return jumping.closed or nil
+    end, 2000, "hover card close animation to finish")
+  end)
+end)
+
 describe("hover card against the fake navgraph server", function()
   local root, buf, card
 
