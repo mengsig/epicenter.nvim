@@ -55,6 +55,30 @@ describe("blast model", function()
     expect.eq(nodes[1].depth, 1)
   end)
 
+  it("keeps two distinct same-named definitions in one file as two rows (#F5)", function()
+    local nodes = model.nodes(result({
+      { "M.start", "app/server.lua", 10, 1 },
+      { "M.start", "app/server.lua", 20, 1 },
+    }))
+    expect.eq(#nodes, 2, "two different definitions must not collapse into one")
+    local lines = vim.tbl_map(function(node)
+      return node.symbol.line
+    end, nodes)
+    table.sort(lines)
+    expect.eq(lines, { 10, 20 })
+    -- Keys stay distinct so diff/transition track each independently.
+    expect.ne(nodes[1].key, nodes[2].key)
+  end)
+
+  it("does not disambiguate by line when only one definition owns a key (#F5)", function()
+    -- A single symbol's key must stay line-free so a realtime re-index -
+    -- which shifts lines - still reads it as the same node (no key churn).
+    local before = model.nodes(result({ { "M.start", "app/server.lua", 14, 1 } }))
+    local after = model.nodes(result({ { "M.start", "app/server.lua", 20, 1 } }))
+    expect.eq(before[1].key, after[1].key)
+    expect.eq(model.diff(before, after), { added = {}, removed = {} })
+  end)
+
   it("survives a result with no nodes at all", function()
     expect.eq(model.nodes(nil), {})
     expect.eq(model.nodes({}), {})

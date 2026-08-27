@@ -84,16 +84,26 @@ end
 --- @param result table|nil a `navgraph/blast` payload
 --- @return epicenter.blast.Node[]
 function M.nodes(result)
-  local seen, nodes = {}, {}
+  local by_identity, occupied, nodes = {}, {}, {}
   for _, entry in ipairs(result and result.nodes or {}) do
     local symbol = entry.symbol
     if symbol then
-      local key = node_key(symbol)
-      local node = seen[key]
+      local base_key = node_key(symbol)
+      -- Distinguishes the SAME definition reached twice (fold, keep min
+      -- depth) from a DIFFERENT definition that happens to share base_key.
+      local identity = base_key .. "\0" .. tostring(symbol.line)
       local depth = math.max(1, math.floor(entry.depth or 1))
+      local node = by_identity[identity]
       if not node then
+        -- Two distinct definitions can share a uri#qualified key (same-named
+        -- locals, overloads); disambiguate the second and later by line so
+        -- neither collapses into the first. The first keeps the line-free
+        -- key so an unrelated re-index (which shifts lines) still reads it
+        -- as the same node.
+        local key = occupied[base_key] and (base_key .. "@" .. tostring(symbol.line)) or base_key
+        occupied[base_key] = true
         node = { key = key, symbol = symbol, depth = depth, exact = entry.exact ~= false }
-        seen[key] = node
+        by_identity[identity] = node
         table.insert(nodes, node)
       elseif depth < node.depth then
         node.depth = depth
