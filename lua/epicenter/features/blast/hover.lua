@@ -204,18 +204,21 @@ function Card:_show(err, result)
   if self.closed then
     return
   end
-  local root = result and result.root
-  local missing = err and err.code == TARGET_NOT_FOUND
-  if missing or not root or root == vim.NIL then
-    self.closed = true
-    current = nil
-    require("epicenter").notify("no symbol under the cursor", "info")
-    return
-  end
   if err then
     self.closed = true
     current = nil
-    require("epicenter").notify(err.message or "navgraph did not answer", "error")
+    if err.code == TARGET_NOT_FOUND then
+      require("epicenter").notify("no symbol under the cursor", "info")
+    else
+      require("epicenter").notify(err.message or "navgraph did not answer", "error")
+    end
+    return
+  end
+  local root = result and result.root
+  if not root or root == vim.NIL then
+    self.closed = true
+    current = nil
+    require("epicenter").notify("no symbol under the cursor", "info")
     return
   end
 

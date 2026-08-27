@@ -102,6 +102,57 @@ describe("hover card contents", function()
   end)
 end)
 
+describe("hover card error reporting", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, lsp = { auto_start = false } })
+  end)
+
+  local function notify_stub()
+    local notices = {}
+    local toast = require("epicenter.ui.toast")
+    local original = toast.notify
+    toast.notify = function(msg, opts)
+      table.insert(notices, { msg = msg, level = opts and opts.level })
+    end
+    return notices, function()
+      toast.notify = original
+    end
+  end
+
+  it("still says 'no symbol under the cursor' for a target-not-found error", function()
+    local card = setmetatable({ answered = 0 }, hover.Card)
+    local notices, restore = notify_stub()
+    card:_show({ code = -32001, message = "target not found" }, nil)
+    restore()
+    expect.eq(#notices, 1)
+    expect.matches(notices[1].msg, "no symbol under the cursor")
+    expect.eq(notices[1].level, "info")
+    expect.truthy(card.closed)
+  end)
+
+  it("reports the real error instead of masking every failure as 'no symbol'", function()
+    local card = setmetatable({ answered = 0 }, hover.Card)
+    local notices, restore = notify_stub()
+    card:_show({ code = -32603, message = "navgraph: internal fault" }, nil)
+    restore()
+    expect.eq(#notices, 1)
+    expect.matches(notices[1].msg, "navgraph: internal fault")
+    expect.eq(notices[1].level, "error")
+    expect.truthy(card.closed)
+  end)
+
+  it("falls back to a generic error message when the server sends none", function()
+    local card = setmetatable({ answered = 0 }, hover.Card)
+    local notices, restore = notify_stub()
+    card:_show({ code = -32002 }, nil)
+    restore()
+    expect.eq(#notices, 1)
+    expect.matches(notices[1].msg, "navgraph did not answer")
+    expect.eq(notices[1].level, "error")
+  end)
+end)
+
 describe("hover card focus lifetime with motion on", function()
   local root, buf, card, saved
 
