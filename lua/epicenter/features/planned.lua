@@ -6,8 +6,6 @@ return {
   name = "planned",
   summary = "Subcommands announced but not yet implemented",
   commands = {
-    { name = "callers", desc = "Who calls the symbol under the cursor", status = "planned" },
-    { name = "callees", desc = "What the symbol under the cursor calls", status = "planned" },
     { name = "outline", desc = "Symbol outline of the current file", status = "planned" },
     { name = "hot", desc = "Hot spots ranked by fan-in", status = "planned" },
     { name = "path", desc = "Call path between two symbols", status = "planned" },

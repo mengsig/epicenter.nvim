@@ -94,6 +94,19 @@ function Tree:current()
   return self.list:current()
 end
 
+--- Opens or closes `key` without it being under the cursor: a lazily loaded
+--- tree expands the node whose children have just arrived.
+--- @param key string
+--- @param open boolean
+function Tree:set_expanded(key, open)
+  self.expanded[key] = open or nil
+end
+
+--- @param key string
+function Tree:is_expanded(key)
+  return self.expanded[key] == true
+end
+
 --- @param open boolean|nil nil toggles
 function Tree:set_open(open)
   local row = self:current()

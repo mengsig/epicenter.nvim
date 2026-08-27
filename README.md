@@ -75,6 +75,8 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol under the cursor   |
 | `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it         |
 | `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref         |
+| `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor         |
+| `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls        |
 
 Inside the palette:
 
@@ -100,14 +102,16 @@ Inside the palette:
 | `blast`    | Blast radius of the symbol under the cursor              |
 | `hover`    | What this symbol is, and who calls it                    |
 | `diff`     | Impact of the changes since a git ref                    |
+| `callers`  | Tree of who calls the symbol under the cursor            |
+| `callees`  | Tree of what the symbol under the cursor calls           |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
 | `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
 | `log`      | Open the epicenter log                                   |
 
-`callers`, `callees`, `outline`, `hot` and `path` complete today and
-announce themselves as coming in a later release.
+`outline`, `hot` and `path` complete today and announce themselves as coming
+in a later release.
 
 ### Inside the blast panel
 
@@ -137,6 +141,19 @@ overlays, so an unsaved edit is already in the answer.
 `badges` puts a definition's fan-in and fan-out at the end of its line as muted
 virtual text — `"cursor"` for the definition you are inside, `"all"` for every
 definition in the buffer, `false` for none.
+
+### Inside the callers/callees tree
+
+| Key            | Does                                                    |
+| -------------- | ------------------------------------------------------- |
+| `l` / `h`      | Expand (fetching that level) / collapse                 |
+| `<CR>`         | Jump to the symbol                                      |
+| `o`            | Peek at the definition without leaving the panel        |
+| `y`            | Yank `file:line`                                        |
+| `r`            | Toggle reference edges                                  |
+| `s`            | Strict mode - drop the `?` (heuristic) edges            |
+| `t`            | Cycle the test scope: with / without / only             |
+| `q` / `<Esc>`  | Close                                                   |
 
 ## Configuration
 
@@ -200,6 +217,7 @@ require("epicenter").setup({
   ripples = true,             -- mark impacted lines in the code while a panel is open
   hover = { callers = 5, max_width = 80 },
   badges = "cursor",          -- "cursor" | "all" | false
+  explore = { limit = 100 },   -- edges fetched per expansion in callers/callees
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```
@@ -296,7 +314,9 @@ inside `run`.
 
 The UI kit is the public contract for features:
 `ui/window`, `ui/animate`, `ui/easing`, `ui/theme`, `ui/icons`, `ui/list`,
-`ui/tree`, `ui/prompt`, `ui/preview`, `ui/toast`, `ui/palette`.
+`ui/tree`, `ui/prompt`, `ui/preview`, `ui/toast`, `ui/palette`, `ui/panel`.
+`ui/palette` is the prompt+list+preview widget; `ui/panel` is the float that
+carries a list or a tree plus the shared jump/peek/yank keys.
 Server access goes through `epicenter.client`, which already has a helper for
 every `navgraph/*` method.
 

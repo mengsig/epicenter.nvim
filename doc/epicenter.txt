@@ -20,8 +20,9 @@ CONTENTS                                                   *epicenter-contents*
      9.2 blast ................................ |epicenter-blast|
          ripples .............................. |epicenter-ripples|
          badges ............................... |epicenter-badges|
-     9.3 core ................................. |epicenter-core|
-     9.4 planned .............................. |epicenter-planned|
+     9.3 explore ............................... |epicenter-explore|
+     9.4 core .................................. |epicenter-core|
+     9.5 planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
 
 ==============================================================================
@@ -91,12 +92,14 @@ The binary is looked up in this order:
     blast    |epicenter-blast|    Blast radius of the symbol under the cursor
     hover    |epicenter-blast|    What this symbol is, and who calls it
     diff     |epicenter-blast|    Impact of the changes since a git ref
+    callers  |epicenter-explore|  Who calls the symbol under the cursor
+    callees  |epicenter-explore|  What the symbol under the cursor calls
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
-    callers, callees, outline, hot, path
+    outline, hot, path
              |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
@@ -110,6 +113,8 @@ change `keymaps.prefix`.
     <leader>ee      :Epicenter blast
     <leader>ek      :Epicenter hover
     <leader>ed      :Epicenter diff
+    <leader>ec      :Epicenter callers
+    <leader>eC      :Epicenter callees
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -180,6 +185,7 @@ Defaults: >lua
       ripples = true,
       hover = { callers = 5, max_width = 80 },
       badges = "cursor",
+      explore = { limit = 100 },
       log = { level = "warn", file = nil },
     }
 <
@@ -221,6 +227,8 @@ ripples              Mark the impacted lines in the code while a blast panel
 hover.*              Hover card; see |epicenter-blast|.
 badges               "cursor" (badge the definition the cursor is inside),
                      "all" (badge every definition in the buffer), or `false`.
+explore.limit        Most edges fetched per expansion in the callers/callees
+                     explorer.
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -433,7 +441,53 @@ Both modes read one `navgraph/outline` per buffer, cached and refreshed on
 every reindex - so the counts follow your unsaved edits.
 
 ==============================================================================
-9.3 CORE                                                       *epicenter-core*
+9.3 EXPLORE                                                 *epicenter-explore*
+
+                                                        *:Epicenter-callers*
+:Epicenter callers [symbol]                                    *<leader>ec*
+    A tree of who calls the symbol under the cursor. Pass {symbol} to root the
+    tree at a name instead. Only the first level is fetched; `l` asks the
+    server for the next one, so the panel opens in one request whatever the
+    size of the graph.
+
+                                                        *:Epicenter-callees*
+:Epicenter callees [symbol]                                    *<leader>eC*
+    The same tree in the other direction: what the symbol calls.
+
+Rows carry the kind icon, the qualified name, `file:line`, and:
+
+    2x              the edge occurs more than once
+    ref             a mention rather than a call (see `r`)
+    ?               a heuristic edge - resolved by trailing name, not by an
+                    exact qualified match
+    recursive       the node is already open further up this branch, so the
+                    tree stops rather than looping
+    ~ ext           the muted group holding calls that resolve to nothing in
+                    the index (external or unknown)
+
+Keys inside the panel:
+
+    j, k            next / previous row
+    l               expand (fetching the level on first open)
+    h               collapse
+    <CR>            jump to the symbol, pushing the jumplist
+    <C-v>, <C-t>    open in a vertical split / a new tab
+    o               peek at the definition without leaving the panel
+    y               yank `file:line`
+    r               toggle reference edges
+    s               toggle strict mode (drops the `?` edges)
+    t               cycle the test scope (with -> without -> only)
+    q, <Esc>        close
+
+The open rows are re-fetched on |EpicenterIndexed| and the changed rows are
+replaced in place, so an edit updates the tree without collapsing it.
+
+Options: >lua
+
+    explore = { limit = 100 },
+<
+==============================================================================
+9.4 CORE                                                       *epicenter-core*
 
                                                           *:Epicenter-status*
 :Epicenter status
@@ -461,13 +515,11 @@ every reindex - so the counts follow your unsaved edits.
     `stdpath("state")/epicenter.log`.
 
 ==============================================================================
-9.4 PLANNED                                                 *epicenter-planned*
+9.5 PLANNED                                                 *epicenter-planned*
 
 These subcommands complete today and print a one-line notice; they ship in
 a later release.
 
-    callers   Who calls the symbol under the cursor
-    callees   What the symbol under the cursor calls
     outline   Symbol outline of the current file
     hot       Hot spots ranked by fan-in
     path      Call path between two symbols
@@ -507,9 +559,9 @@ builds its defaults from the registry, so that would be a cycle.
 
 The UI kit is the public contract:
 `epicenter.ui.window`, `.animate`, `.easing`, `.theme`, `.icons`, `.list`,
-`.tree`, `.prompt`, `.preview`, `.toast`, `.palette`. Server access goes
-through `epicenter.client`, which has a helper for every `navgraph/*` method
-and returns a handle with `:cancel()`.
+`.tree`, `.prompt`, `.preview`, `.toast`, `.palette`, `.panel`. Server access
+goes through `epicenter.client`, which has a helper for every `navgraph/*`
+method and returns a handle with `:cancel()`.
 
 Add a documentation section per feature with its own `*epicenter-<name>*` tag,
 so two features being written in parallel never edit the same region.
