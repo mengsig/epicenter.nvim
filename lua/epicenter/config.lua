@@ -10,7 +10,7 @@ local BASE = {
   navgraph = {
     --- Explicit binary path; otherwise `$PATH`, then the managed install.
     path = nil,
-    --- Extra arguments appended to `navgraph serve`.
+    --- Extra arguments appended to `navgraph lsp`.
     args = {},
     --- GitHub repo used by `:Epicenter install`.
     repo = "mengsig/NavGraph",

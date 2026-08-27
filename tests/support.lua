@@ -1,7 +1,8 @@
 --- Shared helpers for specs: fixture paths and the fake-server lifecycle.
 local M = {}
 
-local repo = _G.EPICENTER_ROOT
+-- Self-locating: the smoke script loads this without the test init.
+local repo = vim.fn.fnamemodify(vim.fn.resolve(debug.getinfo(1, "S").source:sub(2)), ":p:h:h")
 
 function M.fixture_root()
   return vim.fs.normalize(repo .. "/tests/fixtures/proj")
@@ -15,7 +16,7 @@ function M.fake_cmd(root)
     "--clean",
     "-l",
     repo .. "/tests/fake_navgraph.lua",
-    "serve",
+    "lsp",
     "--root",
     root,
   }

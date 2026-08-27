@@ -47,6 +47,7 @@ end
 --- @param name string
 --- @param args? string[]
 --- @param bufnr? integer
+--- @return any panel handle when the subcommand opened one
 function M.run(name, args, bufnr)
   local cmd = registry.command(name)
   if not cmd then
@@ -57,7 +58,8 @@ function M.run(name, args, bufnr)
     M.notify(("%s is coming in this release"):format(name), "info")
     return
   end
-  cmd.run({ args = args or {}, bufnr = bufnr or vim.api.nvim_get_current_buf() })
+  -- The command's return value is its panel handle, if it opened one.
+  return cmd.run({ args = args or {}, bufnr = bufnr or vim.api.nvim_get_current_buf() })
 end
 
 --- Single user-facing notice path, so every message looks the same.

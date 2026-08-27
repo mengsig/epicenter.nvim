@@ -1,12 +1,15 @@
 NVIM ?= nvim
 LUA_FILES := $(shell find lua plugin tests -name '*.lua' -not -path 'tests/fixtures/*')
 
-.PHONY: test lint fmt doc all
+.PHONY: test smoke lint fmt doc all
 
 all: lint test
 
 test:
 	$(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/run.lua
+
+smoke:
+	$(NVIM) --headless --clean --cmd 'set runtimepath^=.' -l tests/smoke.lua
 
 lint:
 	@if command -v stylua >/dev/null 2>&1; then \

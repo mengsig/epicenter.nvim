@@ -216,7 +216,7 @@ function M.start(opts)
     if not bin then
       return nil, err
     end
-    cmd = vim.list_extend({ bin, "serve" }, cfg.navgraph.args)
+    cmd = vim.list_extend({ bin, "lsp" }, cfg.navgraph.args)
   end
 
   local state = { cmd = cmd, restarts = opts.restarts or 0, root = root, stopping = false }

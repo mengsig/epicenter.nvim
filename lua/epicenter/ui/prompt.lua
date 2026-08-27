@@ -113,7 +113,13 @@ function Prompt:set_text(text)
   vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, { self.prefix .. text })
 end
 
+--- Puts the cursor at the end of the prompt, ready to type.
+--- Without a UI there is no keyboard to read from and entering insert mode
+--- would park the event loop, so headless sessions stay in normal mode.
 function Prompt:start_insert()
+  if #vim.api.nvim_list_uis() == 0 then
+    return
+  end
   vim.cmd("startinsert!")
 end
 

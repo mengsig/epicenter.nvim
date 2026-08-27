@@ -228,7 +228,10 @@ function Window:reveal(opts)
   local target = self.box
   local from = opts.from or 0.86
   self:_stop_tween()
-  self.tween = animate.tween({
+  -- With motion off the tween finishes inside this call, so only keep the
+  -- handle when it is still running.
+  local running = true
+  local handle = animate.tween({
     duration = opts.duration or cfg.animation.open_ms,
     easing = easing.out_cubic,
     motion = opts.motion,
@@ -236,6 +239,7 @@ function Window:reveal(opts)
       self:set_geometry(M.scale(target, easing.lerp(from, 1, eased)))
     end,
     on_done = function()
+      running = false
       self:set_geometry(target)
       self.tween = nil
       if opts.on_done then
@@ -243,6 +247,7 @@ function Window:reveal(opts)
       end
     end,
   })
+  self.tween = running and handle or nil
 end
 
 function Window:_stop_tween()
@@ -262,7 +267,8 @@ function Window:close(opts)
   local cfg = require("epicenter.config").get()
   local base = vim.wo[self.win].winblend
   self:_stop_tween()
-  self.tween = animate.tween({
+  local running = true
+  local handle = animate.tween({
     duration = opts.duration or cfg.animation.close_ms,
     easing = easing.linear,
     motion = opts.motion,
@@ -272,6 +278,7 @@ function Window:close(opts)
       end
     end,
     on_done = function()
+      running = false
       self.tween = nil
       if vim.api.nvim_win_is_valid(self.win) then
         vim.api.nvim_win_close(self.win, true)
@@ -279,6 +286,7 @@ function Window:close(opts)
       self:_cleanup()
     end,
   })
+  self.tween = running and handle or nil
 end
 
 --- The single teardown path: reached by `close()` and by `WinClosed`.

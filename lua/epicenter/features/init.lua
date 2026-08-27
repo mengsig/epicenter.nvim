@@ -3,6 +3,7 @@
 --- completion order and the vimdoc section order.
 --- @type epicenter.FeatureSpec[]
 return {
+  require("epicenter.features.search"),
   require("epicenter.features.planned"),
   require("epicenter.features.core"),
 }

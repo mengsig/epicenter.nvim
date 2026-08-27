@@ -204,16 +204,19 @@ function List:draw(opts)
   local cfg = require("epicenter.config").get()
   local count = #rendered.lines
   paint(self, rendered, 1)
-  self.reveal = animate.tween({
+  local running = true
+  local handle = animate.tween({
     duration = math.min(cfg.animation.open_ms, cfg.animation.stagger_ms * count),
     on_frame = function(eased)
       paint(self, rendered, math.max(1, math.ceil(eased * count)))
     end,
     on_done = function()
+      running = false
       self.reveal = nil
       paint(self, rendered)
     end,
   })
+  self.reveal = running and handle or nil
 end
 
 --- Installs the shared panel keys on a list buffer: j/k move, <CR> selects.

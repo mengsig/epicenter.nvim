@@ -200,7 +200,25 @@ end
 
 -- Runner ---------------------------------------------------------------------
 
-local function purge_modules()
+--- Per-file isolation: a spec file starts with no epicenter module loaded, no
+--- language server running and no floating window left over. Without this a
+--- leaked server from one file blocks the event loop in the next.
+local function isolate()
+  -- Graceful stop, never force: the fake server blocks on a stdin read, so a
+  -- SIGTERM only lands once it returns. shutdown/exit over stdio does land.
+  for _, client in ipairs(vim.lsp.get_clients()) do
+    client:stop()
+  end
+  vim.wait(5000, function()
+    return #vim.lsp.get_clients() == 0
+  end, 10)
+
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_config(win).relative ~= "" then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+
   for name in pairs(package.loaded) do
     if
       name == "epicenter"
@@ -216,7 +234,7 @@ end
 --- Runs each spec file in module-isolation. Returns passed, failed, results.
 function M.run(files)
   for _, file in ipairs(files) do
-    purge_modules()
+    isolate()
     state.stack = {}
     state.file = file
     local chunk, load_err = loadfile(file)
