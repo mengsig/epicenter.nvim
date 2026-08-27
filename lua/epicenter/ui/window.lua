@@ -142,6 +142,7 @@ function M.open(spec)
     owns_buf = owns_buf,
     closed = false,
     tween = nil,
+    reveal_target = nil,
   }, Window)
 
   self.augroup = vim.api.nvim_create_augroup("EpicenterWin" .. win, { clear = true })
@@ -177,12 +178,7 @@ function Window:geometry()
   return vim.deepcopy(self.box)
 end
 
---- @param box epicenter.Box
-function Window:set_geometry(box)
-  assert(box ~= nil, "Window:set_geometry: box must not be nil")
-  if not self:valid() then
-    return
-  end
+local function apply_geometry(self, box)
   self.box = box
   vim.api.nvim_win_set_config(self.win, {
     relative = "editor",
@@ -191,6 +187,23 @@ function Window:set_geometry(box)
     width = box.width,
     height = box.height,
   })
+end
+
+--- @param box epicenter.Box
+function Window:set_geometry(box)
+  assert(box ~= nil, "Window:set_geometry: box must not be nil")
+  if not self:valid() then
+    return
+  end
+  if self.tween and self.reveal_target then
+    -- A reveal tween owns the geometry until it settles (F1): retarget the
+    -- running tween instead of jumping the window now, which the tween's
+    -- own next frame would immediately undo back to its stale target. The
+    -- next frame (or `on_done`, if this lands after the last one) applies it.
+    self.reveal_target = box
+    return
+  end
+  apply_geometry(self, box)
 end
 
 function Window:set_lines(lines)
@@ -225,13 +238,16 @@ function Window:focus()
   end
 end
 
---- Scale-in from `from` (default 0.86) to full size.
+--- Scale-in from `from` (default 0.86) to full size. `self.reveal_target` is
+--- the tween's own live target (F1): `set_geometry` retargets it in place
+--- rather than fighting the tween's next frame, so a `paint` that lands new
+--- content mid-reveal is not immediately undone by a stale captured target.
 function Window:reveal(opts)
   opts = opts or {}
   local cfg = require("epicenter.config").get()
-  local target = self.box
   local from = opts.from or 0.86
   self:_stop_tween()
+  self.reveal_target = self.box
   -- With motion off the tween finishes inside this call, so only keep the
   -- handle when it is still running.
   local running = true
@@ -240,12 +256,13 @@ function Window:reveal(opts)
     easing = easing.out_cubic,
     motion = opts.motion,
     on_frame = function(eased)
-      self:set_geometry(M.scale(target, easing.lerp(from, 1, eased)))
+      apply_geometry(self, M.scale(self.reveal_target, easing.lerp(from, 1, eased)))
     end,
     on_done = function()
       running = false
-      self:set_geometry(target)
+      apply_geometry(self, self.reveal_target)
       self.tween = nil
+      self.reveal_target = nil
       if opts.on_done then
         opts.on_done()
       end
@@ -259,6 +276,7 @@ function Window:_stop_tween()
     self.tween.cancel()
     self.tween = nil
   end
+  self.reveal_target = nil
 end
 
 --- Fades out, then closes. Cleanup runs exactly once, from `_cleanup`.

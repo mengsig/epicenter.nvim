@@ -197,3 +197,51 @@ describe("status dashboard against the fake navgraph server", function()
     expect.matches(table.concat(notices, "\n"), "nothing logged yet")
   end)
 end)
+
+describe("status dashboard geometry with animation on (F1)", function()
+  -- Real animation: F1 is invisible under CI's default reduce-motion
+  -- (tests/minimal_init.lua sets vim.g.epicenter_reduce_motion = true,
+  -- which finishes the reveal tween synchronously inside `reveal()` -
+  -- before the async `navgraph/status` answer has even landed). A content
+  -- assertion cannot catch it either: `make smoke` runs with motion on and
+  -- exercises this dashboard, but only checks buffer text, never geometry.
+  local root, buf, win
+
+  before_each(function()
+    vim.g.epicenter_reduce_motion = false
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    vim.g.epicenter_reduce_motion = true
+    if win and win:valid() then
+      win:close({ motion = false })
+    end
+    win = nil
+  end)
+
+  it("settles on the content's box, not the loading box the open tween started from", function()
+    win = require("epicenter").run("status", {}, buf)
+    local loading_height = vim.api.nvim_win_get_config(win.win).height
+    wait(function()
+      return win.tween == nil
+    end, 10000, "the open tween settled")
+    local settled_height = vim.api.nvim_win_get_config(win.win).height
+    expect.truthy(
+      settled_height > loading_height,
+      ("loading box was %d tall, settled at %d - expected taller than the loading box"):format(
+        loading_height,
+        settled_height
+      )
+    )
+    expect.truthy(
+      settled_height >= 8,
+      "settled height should fit root/server/index/overlays/last index/language rows"
+    )
+  end)
+end)
