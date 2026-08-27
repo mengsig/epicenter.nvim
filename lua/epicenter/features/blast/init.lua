@@ -19,6 +19,11 @@ M.options = {
   },
   --- Ring-graded marks on the impacted lines while a panel is open.
   ripples = true,
+  hover = {
+    --- Top callers listed on the card.
+    callers = 5,
+    max_width = 80,
+  },
 }
 
 M.option_rules = {
@@ -32,6 +37,8 @@ M.option_rules = {
     ["blast.max_depth"] = true,
     ["blast.follow_debounce_ms"] = true,
     ["blast.realtime_debounce_ms"] = true,
+    ["hover.callers"] = true,
+    ["hover.max_width"] = true,
   },
 }
 
@@ -44,6 +51,47 @@ function M.cursor_target(bufnr)
     uri = vim.uri_from_bufnr(bufnr),
     position = { line = cursor[1] - 1, character = cursor[2] },
   }
+end
+
+--- True when navgraph is the buffer's hover provider - which, under
+--- `lsp.fallback_only`, means no other language server offers one.
+local function navgraph_owns_hover(bufnr)
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr, name = "navgraph" })) do
+    if client:supports_method("textDocument/hover", bufnr) then
+      return true
+    end
+  end
+  return false
+end
+
+--- `K` shows the card only where navgraph answers hover; anywhere else it
+--- stays the language server's key. Decided at press time, because clients
+--- attach in any order.
+local function install_hover_key(bufnr)
+  vim.keymap.set("n", "K", function()
+    if navgraph_owns_hover(bufnr) then
+      require("epicenter").run("hover", {}, bufnr)
+    else
+      vim.lsp.buf.hover()
+    end
+  end, { buffer = bufnr, desc = "Epicenter: hover card", silent = true })
+end
+
+--- @param cfg table resolved config
+function M.setup(cfg)
+  local group = vim.api.nvim_create_augroup("EpicenterBlastFeature", { clear = true })
+  if cfg.keymaps == false then
+    return
+  end
+  vim.api.nvim_create_autocmd("LspAttach", {
+    group = group,
+    callback = function(event)
+      local client = vim.lsp.get_client_by_id(event.data.client_id)
+      if client and client.name == "navgraph" then
+        install_hover_key(event.buf)
+      end
+    end,
+  })
 end
 
 M.commands = {
@@ -59,10 +107,18 @@ M.commands = {
       })
     end,
   },
+  {
+    name = "hover",
+    desc = "What this symbol is, and who calls it",
+    run = function(ctx)
+      return require("epicenter.features.blast.hover").open(ctx.bufnr)
+    end,
+  },
 }
 
 M.keymaps = {
   { suffix = "e", command = "blast", desc = "Epicenter: blast radius" },
+  { suffix = "k", command = "hover", desc = "Epicenter: hover card" },
 }
 
 return M

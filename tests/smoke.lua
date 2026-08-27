@@ -39,6 +39,7 @@ local EXPECTED_COMMANDS = {
   "search",
   "grep",
   "blast",
+  "hover",
   "callers",
   "callees",
   "outline",

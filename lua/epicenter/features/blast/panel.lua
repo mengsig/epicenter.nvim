@@ -207,6 +207,8 @@ function M.open(opts)
     empty_text = "  nothing impacted",
     --- Bumped every time a query is answered - the panel's "settled" signal.
     answered = 0,
+    --- Bumped on every query; a callback from an older one is discarded.
+    generation = 0,
     --- Test seam: forwarded to every tween this panel starts.
     animate_opts = {},
     ns = vim.api.nvim_create_namespace("epicenter.blast"),
@@ -262,30 +264,37 @@ function Panel:query(opts)
     return
   end
   self:_cancel_pending()
+  self.generation = self.generation + 1
+  local generation = self.generation
 
   if self.kind == "diff" then
-    return self:_request(
-      "diff",
-      model.params(self.state, { ref = self.target.ref or "HEAD" }),
-      opts
-    )
+    local params = model.params(self.state, { ref = self.target.ref or "HEAD" })
+    return self:_request("diff", params, opts, generation)
   end
   if self.target.symbol then
-    return self:_request("blast", model.params(self.state, self.target), opts)
+    return self:_request("blast", model.params(self.state, self.target), opts, generation)
   end
-  self:_resolve_cursor(opts)
+  self:_resolve_cursor(opts, generation)
+end
+
+--- A response for a query the panel has already replaced. The transport drops
+--- these too, but only up to the moment it hands one over - the callback runs
+--- a scheduler tick later, by which time a key may have re-queried.
+function Panel:_superseded(generation)
+  return not self:valid() or generation ~= self.generation
 end
 
 --- Turns a cursor position into a symbol before querying, so the header can
 --- name the root and a position with no definition says so.
-function Panel:_resolve_cursor(opts)
+function Panel:_resolve_cursor(opts, generation)
   local client = require("epicenter.client")
   self.pending = client.symbol_at({
     uri = self.target.uri,
     position = self.target.position,
   }, function(err, result)
+    self.pending = nil
     vim.schedule(function()
-      if not self:valid() then
+      if self:_superseded(generation) then
         return
       end
       if err then
@@ -306,16 +315,21 @@ function Panel:_resolve_cursor(opts)
           symbol = symbol.qualified,
           uri = symbol.uri,
         }),
-        opts
+        opts,
+        generation
       )
     end)
   end, { bufnr = self.origin_buf, channel = CHANNEL })
 end
 
-function Panel:_request(method, params, opts)
+function Panel:_request(method, params, opts, generation)
   local client = require("epicenter.client")
   self.pending = client[method](params, function(err, result)
+    self.pending = nil
     vim.schedule(function()
+      if self:_superseded(generation) then
+        return
+      end
       self:_on_result(err, result, opts)
     end)
   end, { bufnr = self.origin_buf, channel = CHANNEL })

@@ -84,6 +84,7 @@ The binary is looked up in this order:
     search   |epicenter-search|   Symbol search palette
     grep     |epicenter-search|   Text search palette
     blast    |epicenter-blast|    Blast radius of the symbol under the cursor
+    hover    |epicenter-blast|    What this symbol is, and who calls it
     status   |epicenter-core|     What the index knows about this project
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
@@ -101,6 +102,7 @@ change `keymaps.prefix`.
     <leader>es      :Epicenter search
     <leader>eg      :Epicenter grep
     <leader>ee      :Epicenter blast
+    <leader>ek      :Epicenter hover
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -196,6 +198,7 @@ animation.*          Durations in ms. `frame_budget_ms` drops the next frame
 blast.*              Blast panel defaults; see |epicenter-blast|.
 ripples              Mark the impacted lines in the code while a blast panel
                      is open. `false` turns the marks off.
+hover.*              Hover card; see |epicenter-blast|.
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -338,6 +341,29 @@ Options: >lua
       realtime_debounce_ms = 150,
     },
     ripples = true,
+<
+                                                           *:Epicenter-hover*
+:Epicenter hover                                               *<leader>ek*
+    A card for the symbol under the cursor: kind and signature (syntax
+    highlighted), `N callers` / `M callees`, `file:line-endLine`, the doc
+    comment above the definition, and the top callers.
+
+    The card does not take focus. Press `<leader>ek` (or `K`) again to step
+    into it: `j`/`k` move through the callers, `<CR>` jumps to one, `q` or
+    `<Esc>` closes. Moving the cursor dismisses it.
+
+                                                                        *K*
+    On a buffer where navgraph is the hover provider - which under
+    `lsp.fallback_only` means no other language server offers one - `K` opens
+    this card. Where another server does answer hover, `K` stays that server's
+    key. `keymaps = false` installs neither.
+
+Options: >lua
+
+    hover = {
+      callers = 5,      -- top callers listed on the card
+      max_width = 80,
+    },
 <
                                                          *epicenter-ripples*
 While a panel is open every impacted definition line is marked in the code

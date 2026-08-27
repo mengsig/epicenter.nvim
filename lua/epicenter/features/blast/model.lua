@@ -299,9 +299,12 @@ end
 --- Summary chips plus the query mode the keys drive.
 --- @param counts { symbols: integer, files: integer, tests: integer, max_depth: integer, changed?: integer }
 --- @param state { direction: string, tests: string, strict: boolean, follow: boolean }
-local function plural(count, noun)
+--- @return string e.g. "1 file", "3 files"
+function M.plural(count, noun)
   return ("%d %s"):format(count, count == 1 and noun or (noun .. "s"))
 end
+
+local plural = M.plural
 
 function M.chips_line(counts, state)
   local icons = require("epicenter.ui.icons")

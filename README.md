@@ -72,6 +72,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>es` | `:Epicenter search`  | Fuzzy symbol search across the project        |
 | `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits included  |
 | `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol under the cursor   |
+| `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it         |
 
 Inside the palette:
 
@@ -95,6 +96,7 @@ Inside the palette:
 | `search`   | Symbol search palette                                    |
 | `grep`     | Text search palette                                      |
 | `blast`    | Blast radius of the symbol under the cursor              |
+| `hover`    | What this symbol is, and who calls it                    |
 | `status`   | What the index knows about this project                  |
 | `install`  | Download or build the `navgraph` binary                  |
 | `restart`  | Restart the server for this project                      |
@@ -119,6 +121,11 @@ announce themselves as coming in a later release.
 | `j`/`k`/`gg`/`G` | Move                                                   |
 | `?`            | Toggle the key help                                      |
 | `q` / `<Esc>`  | Close                                                    |
+
+The hover card does not take focus; press `<leader>ek` again (or `K`) to step
+into it, then `j`/`k` through the callers and `<CR>` to jump. On a buffer where
+navgraph is the hover provider — under `lsp.fallback_only`, one no other
+language server covers — `K` opens the card too.
 
 ## Configuration
 
@@ -180,6 +187,7 @@ require("epicenter").setup({
     realtime_debounce_ms = 150,
   },
   ripples = true,             -- mark impacted lines in the code while a panel is open
+  hover = { callers = 5, max_width = 80 },
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```
