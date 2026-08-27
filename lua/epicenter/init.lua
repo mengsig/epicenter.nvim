@@ -31,6 +31,7 @@ end
 function M.setup(opts)
   local cfg = config.setup(opts)
   did_setup = true
+  require("epicenter.ui.theme").setup()
   install_keymaps(cfg)
   return cfg
 end
