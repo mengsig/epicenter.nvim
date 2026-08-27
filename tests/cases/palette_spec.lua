@@ -204,3 +204,47 @@ describe("palette resize across the preview threshold (F2)", function()
     p:close()
   end)
 end)
+
+describe("palette replaces the open one instead of stacking (F13)", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+  end)
+
+  local function open_test_palette()
+    return palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        cb(nil, {}, 0)
+      end,
+      render_item = function(item)
+        return { text = tostring(item) }
+      end,
+      empty_text = "  no matches",
+    })
+  end
+
+  it("closes the first palette on a second open instead of stacking floats", function()
+    local wins_before = #vim.api.nvim_list_wins()
+    local p1 = open_test_palette()
+    local wins_with_one = #vim.api.nvim_list_wins()
+    expect.truthy(wins_with_one > wins_before, "opening a palette must add floats")
+
+    -- Mimics a double keypress on the same keymap (F13): a real Palette
+    -- object still alive from the previous open.
+    local p2 = open_test_palette()
+
+    expect.falsy(p1.open, "the first palette must close, not stay stacked underneath")
+    expect.falsy(p1.prompt_win:valid())
+    expect.falsy(p1.results_win:valid())
+    expect.truthy(p2.open)
+
+    expect.eq(
+      #vim.api.nvim_list_wins(),
+      wins_with_one,
+      "a second open must replace the float count, not add to it"
+    )
+    p2:close()
+    expect.eq(#vim.api.nvim_list_wins(), wins_before, "no floats leak behind")
+  end)
+end)

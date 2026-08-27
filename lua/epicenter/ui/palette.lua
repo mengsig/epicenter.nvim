@@ -30,6 +30,11 @@ end
 local Palette = {}
 Palette.__index = Palette
 
+--- At most one palette may be open at a time (F13): opening a second one
+--- (e.g. a double keypress on the same keymap) replaces the first instead
+--- of stacking floats on top of it.
+local active = nil
+
 local ACTIONS = {
   ["<CR>"] = "edit",
   ["<C-t>"] = "tab",
@@ -219,6 +224,9 @@ function Palette:close(opts)
     return
   end
   self.open = false
+  if active == self then
+    active = nil
+  end
   pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
   if self.tween then
     self.tween.cancel()
@@ -306,6 +314,12 @@ end
 ---   see `Palette:_box`; production callers must leave these nil }
 --- @return epicenter.Palette
 function M.open(spec)
+  if active then
+    -- Instant, not the animated fade: this is a replace, not a user close,
+    -- and an animated close would still be on screen under the new panes.
+    active:close({ motion = false })
+  end
+
   local cfg = require("epicenter.config").get()
   local self = setmetatable({
     spec = spec,
@@ -413,6 +427,7 @@ function M.open(spec)
   })
   self.tween = running and handle or nil
 
+  active = self
   self.prompt:start_insert()
   self:query("")
   return self
