@@ -13,10 +13,6 @@ local KIND_CYCLE = {
   { label = "values", kinds = { "const", "var", "field" } },
 }
 
-local function short(path)
-  return vim.fn.fnamemodify(path, ":~:.")
-end
-
 local SEARCH_HELP = {
   "  keys",
   "",

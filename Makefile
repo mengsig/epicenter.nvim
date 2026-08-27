@@ -19,8 +19,11 @@ lint:
 	fi
 	@if command -v luacheck >/dev/null 2>&1; then \
 		luacheck $(LUA_FILES); \
+	elif [ "$(LINT_SKIP_LUACHECK)" = "1" ]; then \
+		echo "note: luacheck not installed - skipping lint (LINT_SKIP_LUACHECK=1)"; \
 	else \
-		echo "note: luacheck not installed - skipping lint"; \
+		echo "error: luacheck not installed - set LINT_SKIP_LUACHECK=1 to skip explicitly" >&2; \
+		exit 1; \
 	fi
 
 fmt:

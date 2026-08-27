@@ -2,7 +2,7 @@
 local M = {}
 
 local uv = vim.uv or vim.loop
-local unpack_args = table.unpack or unpack
+local unpack_args = rawget(table, "unpack") or unpack
 
 --- Coalesces rapid calls: `fn` runs once, `ms` after the last `call()`.
 --- @param ms integer
