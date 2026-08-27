@@ -93,7 +93,8 @@ Window.__index = Window
 
 --- @param spec { box: epicenter.Box, title?: string, footer?: string,
 ---   border?: string|table, enter?: boolean, focusable?: boolean, zindex?: integer,
----   winblend?: integer, buf?: integer, filetype?: string, on_close?: fun() }
+---   winblend?: integer, buf?: integer, filetype?: string, on_close?: fun(),
+---   reflow?: fun(): epicenter.Box }
 --- @return epicenter.Window
 function M.open(spec)
   local cfg = require("epicenter.config").get()
@@ -151,6 +152,18 @@ function M.open(spec)
       self:_cleanup()
     end,
   })
+  -- Public UI-kit contract (F4): a caller outside the palette (which owns
+  -- its own multi-pane VimResized handler, see Palette:reflow) opts a
+  -- standalone float into resize handling by supplying `reflow`.
+  if spec.reflow then
+    vim.api.nvim_create_autocmd("VimResized", {
+      group = self.augroup,
+      callback = function()
+        -- Reflow in place: a resize never animates.
+        self:set_geometry(spec.reflow())
+      end,
+    })
+  end
 
   return self
 end

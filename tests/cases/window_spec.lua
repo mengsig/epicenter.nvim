@@ -124,4 +124,34 @@ describe("window lifecycle", function()
     expect.eq({ config.width, config.height }, { 10, 4 })
     win:close({ motion = false })
   end)
+
+  it("does nothing on VimResized without spec.reflow", function()
+    local win =
+      window.open({ box = window.box({ width = 30, height = 8, columns = 80, lines = 24 }) })
+    local before = win:geometry()
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    expect.eq(win:geometry(), before)
+    win:close({ motion = false })
+  end)
+
+  it("reflows in place on VimResized via spec.reflow, a public UI-kit hook (F4)", function()
+    -- `spec.reflow` is the documented contract stacked feature waves build
+    -- panels on (README/vimdoc: "epicenter.ui.window is the public contract
+    -- for features"); a caller that supplies it must get resize handling.
+    local function compute_box()
+      return window.box({ width = 20, height = 10, lines = vim.o.lines })
+    end
+    local win = window.open({ box = compute_box(), reflow = compute_box })
+    local before = win:geometry()
+
+    vim.o.lines = 15
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    local shrunk = compute_box()
+    vim.o.lines = 40
+
+    local after = win:geometry()
+    expect.ne(after, before, "the window must move to the shrunken geometry")
+    expect.eq(after, shrunk, "reflow must be recomputed, not reused stale")
+    win:close({ motion = false })
+  end)
 end)

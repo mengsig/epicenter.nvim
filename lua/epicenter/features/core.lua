@@ -39,11 +39,16 @@ local function show_status(status, root)
     width = math.max(width, vim.fn.strdisplaywidth(line) + 2)
   end
 
+  local function box()
+    return window.box({ width = width, height = #lines })
+  end
+
   local win = window.open({
-    box = window.box({ width = width, height = #lines }),
+    box = box(),
     title = (" %s navgraph "):format(icons.ui("dot")),
     footer = " q close ",
     enter = true,
+    reflow = box,
   })
   win:set_lines(lines)
   win:reveal()
