@@ -179,7 +179,10 @@ check(
 narrow:close({ motion = false })
 vim.o.columns = 160
 
--- The graph panels, in the same real Neovim with animation still on.
+-- === ep-explore wave: explorer/path/outline/hot/status panels, animation on ===
+-- Each wave keeps its own smoke block delimited like this rather than
+-- interleaving at a shared anchor, so a sibling wave's own block is a pure
+-- addition here (F15).
 local function press(panel, lhs)
   for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
     if map.lhs == lhs and map.callback then
@@ -230,6 +233,7 @@ wait_for("dashboard reported the index", function()
     :match("3 files") ~= nil
 end)
 dashboard:close()
+-- === end ep-explore wave ===
 
 local messages = vim.api.nvim_exec2("messages", { output = true }).output
 local bad = {}

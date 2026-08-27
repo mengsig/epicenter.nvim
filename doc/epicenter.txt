@@ -15,17 +15,17 @@ CONTENTS                                                   *epicenter-contents*
   6. Highlights ............................... |epicenter-highlights|
   7. Health ................................... |epicenter-health|
   8. Events ................................... |epicenter-events|
-  9. Features
-     9.1 search ............................... |epicenter-search|
-     9.2 blast ................................ |epicenter-blast|
+  9. Features (unnumbered below - a new feature is a pure addition here)
+     - search ................................. |epicenter-search|
+     - blast ................................... |epicenter-blast|
          ripples .............................. |epicenter-ripples|
          badges ............................... |epicenter-badges|
-     9.3 explore ............................... |epicenter-explore|
-     9.4 path .................................. |epicenter-path|
-     9.5 outline ................................ |epicenter-outline|
-     9.6 hot .................................... |epicenter-hot|
-     9.7 core .................................. |epicenter-core|
-     9.8 planned ................................ |epicenter-planned|
+     - explore ................................ |epicenter-explore|
+     - path ................................... |epicenter-path|
+     - outline ................................ |epicenter-outline|
+     - hot .................................... |epicenter-hot|
+     - core .................................... |epicenter-core|
+     - planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
 
 ==============================================================================
@@ -195,12 +195,11 @@ Defaults: >lua
       ripples = true,
       hover = { callers = 5, max_width = 80 },
       badges = "cursor",
-      explore = { limit = 100 },
+      explore = { debounce_ms = 100 },
       path = { step_ms = 45 },
       outline = { width = 34, debounce_ms = 80 },
       hot = { limit = 30, bar_width = 12 },
       unused = { limit = 200 },
-      graph = { format = "svg" },
       log = { level = "warn", file = nil },
     }
 <
@@ -242,15 +241,14 @@ ripples              Mark the impacted lines in the code while a blast panel
 hover.*              Hover card; see |epicenter-blast|.
 badges               "cursor" (badge the definition the cursor is inside),
                      "all" (badge every definition in the buffer), or `false`.
-explore.limit        Most edges fetched per expansion in the callers/callees
-                     explorer.
+explore.debounce_ms  Quiet time after |EpicenterIndexed| before the explorer
+                     re-fetches its open rows.
 path.step_ms         Time each step of the path ladder takes to draw.
 outline.width        Sidebar width in cells.
 outline.debounce_ms  Quiet time before the outline follows the cursor.
 hot.limit            Most hot spots listed.
 hot.bar_width        Width in cells of the fan-in bar.
 unused.limit         Most unused symbols listed.
-graph.format         Format asked of `navgraph/graph`, e.g. "svg" or "dot".
 
 keymaps              `false`, or a table with `prefix`.
 log.level            "error", "warn", "info", "debug" or "trace".
@@ -311,7 +309,7 @@ The same events are available in-process: >lua
     local unsubscribe = events.on(events.INDEXED, function(payload) end)
 <
 ==============================================================================
-9.1 SEARCH                                                   *epicenter-search*
+SEARCH                                                        *epicenter-search*
 
                                                           *:Epicenter-search*
 :Epicenter search                                              *<leader>es*
@@ -349,7 +347,7 @@ Options: >lua
     grep   = { debounce_ms = 60, limit = 200 },
 <
 ==============================================================================
-9.2 BLAST                                                     *epicenter-blast*
+BLAST                                                         *epicenter-blast*
 
                                                            *:Epicenter-blast*
 :Epicenter blast [{symbol}]                            *epicenter-<leader>ee*
@@ -463,7 +461,7 @@ Both modes read one `navgraph/outline` per buffer, cached and refreshed on
 every reindex - so the counts follow your unsaved edits.
 
 ==============================================================================
-9.3 EXPLORE                                                 *epicenter-explore*
+EXPLORE                                                      *epicenter-explore*
 
                                                         *:Epicenter-callers*
 :Epicenter callers [symbol]                                    *<leader>ec*
@@ -478,8 +476,7 @@ every reindex - so the counts follow your unsaved edits.
 
 Rows carry the kind icon, the qualified name, `file:line`, and:
 
-    2x              the edge occurs more than once
-    ref             a mention rather than a call (see `r`)
+    2x              the edge has more than one call site
     ?               a heuristic edge - resolved by trailing name, not by an
                     exact qualified match
     recursive       the node is already open further up this branch, so the
@@ -499,17 +496,20 @@ Keys inside the panel:
     r               toggle reference edges
     s               toggle strict mode (drops the `?` edges)
     t               cycle the test scope (with -> without -> only)
+    /               filter by name
+    ?               toggle the key help (normal mode)
     q, <Esc>        close
 
-The open rows are re-fetched on |EpicenterIndexed| and the changed rows are
-replaced in place, so an edit updates the tree without collapsing it.
+The open rows are re-fetched on |EpicenterIndexed|, debounced and repainted
+once as a batch, so a burst of edits does not flicker or fan out one request
+per row.
 
 Options: >lua
 
-    explore = { limit = 100 },
+    explore = { debounce_ms = 100 },
 <
 ==============================================================================
-9.4 PATH                                                       *epicenter-path*
+PATH                                                           *epicenter-path*
 
                                                            *:Epicenter-path*
 :Epicenter path [from] [to]                                    *<leader>ep*
@@ -517,9 +517,7 @@ Options: >lua
     in one step at a time. With no arguments both ends are picked from the
     search palette, from first; with one argument that is the {from} end.
 
-    Each rung names the edge (`calls`, `references`) and marks a heuristic
-    resolution with `?`. When there is no chain the panel says so - it is an
-    answer, not an error.
+    When there is no chain the panel says so - it is an answer, not an error.
 
     <CR>            jump to the symbol on the cursor line
     y               yank `file:line`
@@ -530,7 +528,7 @@ Options: >lua
     path = { step_ms = 45 },
 <
 ==============================================================================
-9.5 OUTLINE                                                 *epicenter-outline*
+OUTLINE                                                      *epicenter-outline*
 
                                                         *:Epicenter-outline*
 :Epicenter outline                                             *<leader>eo*
@@ -541,13 +539,15 @@ Options: >lua
     The symbol the cursor sits in is highlighted as you move around the
     buffer, and the sidebar follows you when you switch buffers.
 
-    j, <Down>       next symbol
-    <Up>            previous symbol
+    j, k, gg, G     move (also <Down>, <Up>)
     <CR>            jump to it in the window you came from
+    <C-v>, <C-t>    open in a vertical split / a new tab
     o               peek at it without leaving the sidebar
-    k               cycle the kind filter
+    y               yank `file:line`
+    <C-k>           cycle the kind filter
                     (all -> functions -> types -> values)
     /               filter by name
+    ?               toggle the key help (normal mode)
     q, <Esc>        close
 
 Options: >lua
@@ -555,7 +555,7 @@ Options: >lua
     outline = { width = 34, debounce_ms = 80 },
 <
 ==============================================================================
-9.6 HOT SPOTS                                                   *epicenter-hot*
+HOT SPOTS                                                      *epicenter-hot*
 
                                                             *:Epicenter-hot*
 :Epicenter hot [path]                                          *<leader>eh*
@@ -570,9 +570,10 @@ Options: >lua
 
                                                           *:Epicenter-graph*
 :Epicenter graph [file]
-    Asks the server to write the call graph, then opens it with |vim.ui.open|.
-    {file} is where to write it; without it the server picks the path, and the
-    notice names it either way.
+    Asks the server to draw the call graph and opens it with |vim.ui.open|.
+    {file} narrows the drawing to that file - it is a filter, never an output
+    path; the server always chooses where the HTML is written (under
+    `.navgraph/`) and the notice names it.
 
     <CR>            jump to the symbol (hot, unused)
     <C-v>, <C-t>    open in a vertical split / a new tab
@@ -580,16 +581,17 @@ Options: >lua
     y               yank `file:line`
     b               hot: buffer / repo scope
     p               unused: hide the public symbols
+    /               filter by name
+    ?               toggle the key help (normal mode)
     q, <Esc>        close
 
 Options: >lua
 
     hot = { limit = 30, bar_width = 12 },
     unused = { limit = 200 },
-    graph = { format = "svg" },
 <
 ==============================================================================
-9.7 CORE                                                       *epicenter-core*
+CORE                                                           *epicenter-core*
 
                                                           *:Epicenter-status*
 :Epicenter status                                              *<leader>ex*
@@ -626,7 +628,7 @@ Options: >lua
     `stdpath("state")/epicenter.log`.
 
 ==============================================================================
-9.8 PLANNED                                                 *epicenter-planned*
+PLANNED                                                     *epicenter-planned*
 
 Nothing is currently planned; every subcommand ships today.
 
@@ -670,6 +672,8 @@ goes through `epicenter.client`, which has a helper for every `navgraph/*`
 method and returns a handle with `:cancel()`.
 
 Add a documentation section per feature with its own `*epicenter-<name>*` tag,
-so two features being written in parallel never edit the same region.
+so two features being written in parallel never edit the same region. Feature
+sections carry no number - only the CONTENTS list and this section are
+numbered - so a new one is a pure addition, never a renumbering of the rest.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

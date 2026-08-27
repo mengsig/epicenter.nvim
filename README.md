@@ -155,16 +155,22 @@ definition in the buffer, `false` for none.
 
 ### Inside the callers/callees tree
 
-| Key            | Does                                                    |
-| -------------- | ------------------------------------------------------- |
-| `l` / `h`      | Expand (fetching that level) / collapse                 |
-| `<CR>`         | Jump to the symbol                                      |
-| `o`            | Peek at the definition without leaving the panel        |
-| `y`            | Yank `file:line`                                        |
-| `r`            | Toggle reference edges                                  |
-| `s`            | Strict mode - drop the `?` (heuristic) edges            |
-| `t`            | Cycle the test scope: with / without / only             |
-| `q` / `<Esc>`  | Close                                                   |
+(and every other results panel - outline, hot, unused - which share the same
+`j`/`k`/`<CR>`/`o`/`y`/`/`/`?`/`q` keys)
+
+| Key                     | Does                                           |
+| ----------------------- | ----------------------------------------------- |
+| `l` / `h`               | Expand (fetching that level) / collapse        |
+| `<CR>`                  | Jump to the symbol                             |
+| `<C-v>` / `<C-t>`       | Open in a vertical split / a new tab           |
+| `o`                     | Peek at the definition without leaving the panel |
+| `y`                     | Yank `file:line`                               |
+| `r`                     | Toggle reference edges                         |
+| `s`                     | Strict mode - drop the `?` (heuristic) edges   |
+| `t`                     | Cycle the test scope: with / without / only    |
+| `/`                     | Filter by name                                 |
+| `?`                     | Toggle the key help (normal mode)              |
+| `q` / `<Esc>`           | Close                                          |
 
 ## Configuration
 
@@ -228,12 +234,11 @@ require("epicenter").setup({
   ripples = true,             -- mark impacted lines in the code while a panel is open
   hover = { callers = 5, max_width = 80 },
   badges = "cursor",          -- "cursor" | "all" | false
-  explore = { limit = 100 },   -- edges fetched per expansion in callers/callees
+  explore = { debounce_ms = 100 }, -- quiet time before a reindex refreshes the open rows
   path = { step_ms = 45 },     -- time each rung of the path ladder takes to draw
   outline = { width = 34, debounce_ms = 80 },
   hot = { limit = 30, bar_width = 12 },
   unused = { limit = 200 },
-  graph = { format = "svg" },  -- format asked of navgraph/graph
   log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```

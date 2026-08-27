@@ -4,6 +4,9 @@
 --- @type epicenter.FeatureSpec[]
 return {
   require("epicenter.features.search"),
+  -- `planned` stays right after `search`, its base-branch slot: blast/diff
+  -- keep the same neighbours regardless of which planned command a later
+  -- wave promotes, so promoting one never reshuffles this list (F15).
   require("epicenter.features.planned"),
   require("epicenter.features.blast"),
   require("epicenter.features.explore"),
