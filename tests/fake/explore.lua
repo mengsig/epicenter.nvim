@@ -3,6 +3,12 @@
 --- `navgraph/unused` and `navgraph/graph`, in the shapes `docs/lsp.md` v1
 --- specifies and no others.
 ---
+--- This area also answers the blast wave's `navgraph/callers` (the hover
+--- card) and `navgraph/outline` (badges) requests - both are on the same
+--- wire, and `root_symbol`'s Target resolution (a cursor mid-call, not just
+--- on a definition's own line) is a strict superset of what a definition-line
+--- cursor needs, so one owner serves both waves correctly.
+---
 --- Params are checked against the contract; an unknown key is a `-32602`: a
 --- client that drifts from the protocol must fail here, loudly, rather than
 --- against a shape the fake invented to be friendly. The call graph is

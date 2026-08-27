@@ -1,6 +1,8 @@
---- Blast-radius area of the fake navgraph server: `navgraph/blast`,
---- `navgraph/callers`, `navgraph/outline` and `navgraph/diff`, in the shapes
---- `docs/lsp.md` v1 specifies and no others.
+--- Blast-radius area of the fake navgraph server: `navgraph/blast` and
+--- `navgraph/diff`, in the shapes `docs/lsp.md` v1 specifies and no others.
+--- `navgraph/callers` and `navgraph/outline` are also on this wire, but the
+--- explore area owns both (its Target resolution handles a cursor mid-call,
+--- which this hover card also needs; see `tests/fake/explore.lua`).
 ---
 --- Params are checked against the contract and a key that is not in it is a
 --- `-32602`: a client that drifts from the protocol must fail here, loudly,
@@ -33,8 +35,6 @@ local function merged(...)
 end
 
 local BLAST_PARAMS = merged(TARGET, SCOPE, { depth = true, direction = true, limit = true })
-local CALLERS_PARAMS = merged(TARGET, SCOPE, { depth = true, refs = true })
-local OUTLINE_PARAMS = merged(SCOPE, { path = true, kinds = true, limit = true })
 local DIFF_PARAMS = merged(SCOPE, { ref = true, depth = true, direction = true, limit = true })
 
 local function walk_opts(params)
@@ -59,32 +59,6 @@ return {
   ["navgraph/blast"] = function(ctx, params)
     check_params("navgraph/blast", params, BLAST_PARAMS)
     return blast_for(ctx, params)
-  end,
-
-  ["navgraph/callers"] = function(ctx, params)
-    check_params("navgraph/callers", params, CALLERS_PARAMS)
-    local roots = graph.targets(ctx.index, params, ctx.to_relative, ctx.overlays)
-    if #roots == 0 then
-      fail(-32001, "navgraph/callers: symbol not found")
-    end
-    return {
-      root = graph.tree(ctx.index, roots[1], {
-        direction = "callers",
-        depth = params.depth or 1,
-        tests = params.tests,
-        strict = params.strict,
-      }),
-    }
-  end,
-
-  ["navgraph/outline"] = function(ctx, params)
-    check_params("navgraph/outline", params, OUTLINE_PARAMS)
-    return graph.outline(ctx.index, {
-      path = params.path,
-      kinds = params.kinds,
-      limit = params.limit,
-      tests = params.tests,
-    })
   end,
 
   --- Unlike a `{ ref }` blast, an empty change set is a routine answer here.
