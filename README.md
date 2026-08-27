@@ -80,7 +80,7 @@ Inside the palette:
 | `<C-t>`/`<C-v>`/`<C-x>` | Open in a tab / vertical split / split   |
 | `<C-n>`/`<C-p>`    | Next / previous result                        |
 | `<C-r>`            | Toggle reference mode (grep: regex)           |
-| `<C-k>`            | Cycle the kind filter                         |
+| `<C-k>`            | Cycle the kind filter (search only)           |
 | `<C-y>`            | Yank `file:line`                              |
 | `?`                | Toggle the key help (normal mode)             |
 | `<Esc>` / `q`      | Close                                         |

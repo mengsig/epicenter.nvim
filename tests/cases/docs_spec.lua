@@ -113,4 +113,19 @@ describe("documentation stays in sync", function()
     expect.falsy(readme:find("this release", 1, true), "README must not say 'this release'")
     expect.falsy(doc:find("this release", 1, true), "vimdoc must not say 'this release'")
   end)
+
+  it("qualifies <C-k> as search-only in the README key table, like vimdoc does (F11)", function()
+    -- <C-k> is search's own key (cycle the kind filter); grep has no
+    -- binding for it. Substring presence alone would have passed with the
+    -- old unqualified row - require the mode word right there in the row.
+    local row
+    for _, line in ipairs(vim.split(readme, "\n", { plain = true })) do
+      if line:find("<C-k>", 1, true) then
+        row = line
+        break
+      end
+    end
+    expect.truthy(row ~= nil, "README must document <C-k>")
+    expect.matches(row:lower(), "search", "the <C-k> row must say it only applies to search")
+  end)
 end)
