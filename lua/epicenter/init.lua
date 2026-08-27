@@ -79,7 +79,7 @@ function M.run(name, args, bufnr)
     return
   end
   if cmd.status == "planned" then
-    M.notify(("%s is coming in this release"):format(name), "info")
+    M.notify(("%s is coming in a later release"):format(name), "info")
     return
   end
   -- The command's return value is its panel handle, if it opened one.

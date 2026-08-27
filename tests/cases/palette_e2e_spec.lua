@@ -128,7 +128,10 @@ describe("search palette against the fake navgraph server", function()
     p2:toggle_help()
     local grep_help = table.concat(preview_lines(p2), "\n")
     expect.matches(grep_help, "toggle regex")
-    expect.falsy(grep_help:match("cycle the kind filter"), "grep has no <C-k>, its help must not claim one")
+    expect.falsy(
+      grep_help:match("cycle the kind filter"),
+      "grep has no <C-k>, its help must not claim one"
+    )
     p2:close()
   end)
 
@@ -166,7 +169,7 @@ describe("search palette against the fake navgraph server", function()
     epicenter.run("blast", {}, buf)
     toast.notify = original
     expect.eq(#notices, 1)
-    expect.matches(notices[1].msg, "coming in this release")
+    expect.matches(notices[1].msg, "coming in a later release")
     expect.eq(notices[1].opts.level, "info")
   end)
 end)

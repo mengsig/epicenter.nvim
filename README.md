@@ -100,7 +100,7 @@ Inside the palette:
 | `log`      | Open the epicenter log                                   |
 
 `blast`, `callers`, `callees`, `outline`, `hot`, `diff` and `path` complete
-today and announce themselves as coming in this release.
+today and announce themselves as coming in a later release.
 
 ## Configuration
 

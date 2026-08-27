@@ -102,4 +102,15 @@ describe("documentation stays in sync", function()
     expect.matches(readme, "Neovim 0%.11%+", "README must not undersell the floor")
     expect.matches(doc, "Neovim 0%.11%+", "vimdoc must not undersell the floor")
   end)
+
+  it("agrees with the code on when the planned commands ship", function()
+    -- planned.lua says "a later release"; the notice the user actually sees
+    -- said "this release", and README/vimdoc repeated that wrong wording.
+    local planned = read("lua/epicenter/features/planned.lua")
+    local init = read("lua/epicenter/init.lua")
+    expect.matches(planned, "a later release")
+    expect.matches(init, "a later release")
+    expect.falsy(readme:find("this release", 1, true), "README must not say 'this release'")
+    expect.falsy(doc:find("this release", 1, true), "vimdoc must not say 'this release'")
+  end)
 end)

@@ -88,7 +88,7 @@ The binary is looked up in this order:
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
     blast, callers, callees, outline, hot, diff, path
-             |epicenter-planned|  Announced, shipping in this release
+             |epicenter-planned|  Announced, shipping in a later release
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -310,7 +310,7 @@ Options: >lua
 9.3 PLANNED                                                 *epicenter-planned*
 
 These subcommands complete today and print a one-line notice; they ship in
-this release.
+a later release.
 
     blast     Blast radius of the symbol under the cursor
     callers   Who calls the symbol under the cursor
