@@ -24,6 +24,8 @@ jobs:
         run: nvim --version
       - name: test
         run: make test
+      - name: smoke
+        run: make smoke
 
   lint:
     name: lint

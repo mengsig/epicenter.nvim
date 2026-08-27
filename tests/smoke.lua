@@ -143,6 +143,36 @@ wait_for("palette closed after the jump", function()
 end, 3000)
 check("jumplist entry pushed", vim.fn.getpos("''")[2] > 0)
 
+-- F2: the open animation scales up from ~0.88 of the settled target, so a
+-- width right at the preview threshold could dip below it on an early
+-- frame even though the target itself has room - this is the exact width
+-- the review pinned as broken (a red "animation stopped" notice on every
+-- open, from the tween's own pcall). `tween == nil` alone does not catch
+-- it: the tween still "settles" by giving up after the error. Capture the
+-- notify instead. Safe to change columns here: no float is open yet.
+local notified_error = nil
+local original_notify = vim.notify
+vim.notify = function(msg, level, ...)
+  if level == vim.log.levels.ERROR then
+    notified_error = msg
+  end
+  return original_notify(msg, level, ...)
+end
+
+vim.o.columns = 100
+local narrow = require("epicenter").run("search", {}, buf)
+wait_for("narrow-width (100 cols) open animation settled", function()
+  return narrow.tween == nil
+end, 3000)
+vim.notify = original_notify
+check("narrow-width open raised no error notification", notified_error == nil, notified_error)
+check(
+  "narrow palette still has all three panes",
+  narrow.prompt_win:valid() and narrow.results_win:valid() and narrow.preview_win ~= nil and narrow.preview_win:valid()
+)
+narrow:close({ motion = false })
+vim.o.columns = 160
+
 local messages = vim.api.nvim_exec2("messages", { output = true }).output
 local bad = {}
 for _, line in ipairs(vim.split(messages, "\n", { plain = true })) do
