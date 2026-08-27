@@ -70,13 +70,20 @@ Panel.__index = Panel
 ---   enter?: boolean, zindex?: integer, reflow?: fun(): epicenter.Box,
 ---   render_row: fun(row, index): { text: string, spans?: table[] },
 ---   text_of?: fun(row): string, empty_text?: string,
----   tree?: { key_of: fun(node): string, children_of: fun(node): any[] },
----   target_of?: fun(row): epicenter.Target|nil,
----   keys?: table<string, fun(panel: epicenter.Panel)>, on_close?: fun() }
+---   tree?: { key_of: fun(node): string, children_of: fun(node): any[],
+---     identity_of?: fun(node): string },
+---   target_of?: fun(row): epicenter.Target|nil, hints?: table<string, string>,
+---   keys?: table<string, fun(panel: epicenter.Panel)>, on_close?: fun(),
+---   on_filter?: fun(query: string) }
 --- @return epicenter.Panel
 function M.open(spec)
   local box = spec.box or M.box()
-  local self = setmetatable({ spec = spec, open = true }, Panel)
+  local self = setmetatable({
+    spec = spec,
+    open = true,
+    help_open = false,
+    previous_win = vim.api.nvim_get_current_win(),
+  }, Panel)
 
   self.win = window.open({
     box = box,
@@ -99,6 +106,7 @@ function M.open(spec)
       buf = self.win.buf,
       height = box.height,
       key_of = spec.tree.key_of,
+      identity_of = spec.tree.identity_of,
       children_of = spec.tree.children_of,
       render_row = spec.render_row,
       text_of = spec.text_of,
@@ -123,6 +131,49 @@ end
 function Panel:target()
   local row = self.list:current()
   return row and self.spec.target_of and self.spec.target_of(row) or nil
+end
+
+--- Lines for the `?` overlay: every key this panel actually answers to, so
+--- the doc claim ("`?` in normal mode shows them inside the panel") is true
+--- everywhere a panel is used, not just the palette (F12/F13).
+function Panel:_help_lines()
+  local lines, seen = { "  keys", "" }, {}
+  local function add(lhs, desc)
+    if seen[lhs] then
+      return
+    end
+    seen[lhs] = true
+    table.insert(lines, ("  %-14s%s"):format(lhs, desc))
+  end
+  if self.spec.target_of then
+    add("<CR>", "jump to the target")
+    add("<C-v>", "open in a vertical split")
+    add("<C-t>", "open in a new tab")
+    add("o", "peek without leaving the panel")
+    add("y", "yank file:line")
+  end
+  add("j, k", "next / previous row")
+  if self.tree then
+    add("l, h", "expand / collapse")
+  end
+  add("gg, G", "top / bottom")
+  add("/", "filter by name")
+  for lhs, hint in pairs(self.spec.hints or {}) do
+    add(lhs, hint)
+  end
+  add("?", "toggle this help")
+  add("q, <Esc>", "close")
+  table.insert(lines, "")
+  return lines
+end
+
+function Panel:_toggle_help()
+  self.help_open = not self.help_open
+  if self.help_open then
+    self.win:set_lines(self:_help_lines())
+  else
+    self:draw()
+  end
 end
 
 function Panel:_install_keys()
@@ -157,6 +208,20 @@ function Panel:_install_keys()
       vim.fn.setreg(vim.v.register or '"', text)
       require("epicenter").notify("yanked " .. text)
     end
+  end
+
+  actions["?"] = function()
+    self:_toggle_help()
+  end
+  actions["/"] = function()
+    vim.ui.input({ prompt = "filter: " }, function(text)
+      if text ~= nil and self.open then
+        self:set_filter(text)
+        if self.spec.on_filter then
+          self.spec.on_filter(text)
+        end
+      end
+    end)
   end
 
   for _, lhs in ipairs({ "q", "<Esc>" }) do
@@ -225,11 +290,17 @@ function Panel:set_title(title)
   self.win:set_title(title)
 end
 
+--- Restores focus to the window the panel was opened from BEFORE the float's
+--- close fade completes, so a scheduled jump (F1) lands there and not in the
+--- fading float - the palette already does this, the same three lines.
 function Panel:close()
   if not self.open then
     return
   end
   self.win:close()
+  if self.previous_win and vim.api.nvim_win_is_valid(self.previous_win) then
+    vim.api.nvim_set_current_win(self.previous_win)
+  end
 end
 
 M.Panel = Panel
