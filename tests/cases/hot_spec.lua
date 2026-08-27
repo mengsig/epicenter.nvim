@@ -126,8 +126,13 @@ describe("hot spots against the fake navgraph server", function()
     expect.eq(names(), { "M.load_config" })
   end)
 
-  it("writes the graph where it is told and hands it to vim.ui.open", function()
-    local out = vim.fn.tempname() .. ".dot"
+  it("draws the requested subgraph without touching the file named as the filter (F6)", function()
+    -- {path} is a FILTER, not an output path: the server always chooses
+    -- where it writes, under .navgraph/ - the old behaviour destroyed
+    -- whatever file this argument named.
+    local source = vim.fs.joinpath(root, "app/server.lua")
+    local before = table.concat(vim.fn.readfile(source), "\n")
+
     local opened, notices = nil, {}
     local original_open, toast = vim.ui.open, require("epicenter.ui.toast")
     local original_notify = toast.notify
@@ -138,18 +143,21 @@ describe("hot spots against the fake navgraph server", function()
       table.insert(notices, msg)
     end
 
-    require("epicenter").run("graph", { out }, buf)
+    require("epicenter").run("graph", { "app/server.lua" }, buf)
     wait(function()
       return opened ~= nil
     end, 10000, "graph export")
     vim.ui.open, toast.notify = original_open, original_notify
 
-    expect.eq(opened, out)
-    expect.truthy((vim.uv or vim.loop).fs_stat(out), "the file is really there")
-    expect.matches(table.concat(vim.fn.readfile(out), "\n"), "digraph navgraph")
+    expect.truthy(opened, "vim.ui.open was called")
+    expect.matches(opened, "%.navgraph[/\\]graph%-%x+%.html$", "the server chose the path, not the argument")
+    expect.truthy((vim.uv or vim.loop).fs_stat(opened), "the file is really there")
+    expect.matches(table.concat(vim.fn.readfile(opened), "\n"), "digraph navgraph")
     expect.truthy(#vim.tbl_filter(function(msg)
       return tostring(msg):match("graph written to") ~= nil
     end, notices) > 0, "the notice names the path")
-    os.remove(out)
+
+    local after = table.concat(vim.fn.readfile(source), "\n")
+    expect.eq(after, before, "the source file handed as a filter is untouched")
   end)
 end)

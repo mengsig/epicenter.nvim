@@ -50,9 +50,11 @@ local function open_hot(ctx)
   local cfg = require("epicenter.config").get()
   local client = require("epicenter.client")
   local panel_mod = require("epicenter.ui.panel")
+  local root_mod = require("epicenter.root")
 
-  local file = ctx.args[1] or vim.api.nvim_buf_get_name(ctx.bufnr)
-  local view = { path = file ~= "" and file or nil, max = 0 }
+  local root = root_mod.find(ctx.bufnr)
+  local path = ctx.args[1] or root_mod.relative(ctx.bufnr, root)
+  local view = { path = path, max = 0 }
   view.scope = view.path and "buffer" or "repo"
 
   local function load()
@@ -68,7 +70,9 @@ local function open_hot(ctx)
         return
       end
       local items = result.items or {}
-      view.max = result.max or 0
+      -- The contract carries no max/total: the busiest item is items[1],
+      -- already fan-in sorted (F5).
+      view.max = items[1] and items[1].fanIn or 0
       view.panel:set_items(items, { stagger = true })
       view.panel:set_footer((" %d · %s "):format(#items, view.scope))
     end, { bufnr = ctx.bufnr, channel = "hot" })
@@ -88,6 +92,7 @@ local function open_hot(ctx)
     target_of = function(item)
       return target_of(item.symbol)
     end,
+    hints = { b = "toggle buffer/repo scope" },
     keys = {
       b = function()
         if not view.path then
@@ -132,11 +137,17 @@ local function open_unused(ctx)
     footer = " 0 ",
     filetype = "epicenter-unused",
     empty_text = "  everything here is reached",
-    render_row = M.render_unused,
-    text_of = function(symbol)
-      return symbol.qualified
+    -- Items are {symbol, testOnly} (F5): rendering and jumping key off .symbol.
+    render_row = function(item)
+      return M.render_unused(item.symbol)
     end,
-    target_of = target_of,
+    text_of = function(item)
+      return item.symbol.qualified
+    end,
+    target_of = function(item)
+      return target_of(item.symbol)
+    end,
+    hints = { p = "hide public symbols" },
     keys = {
       p = function()
         view.no_public = not view.no_public
@@ -153,20 +164,21 @@ local function open_unused(ctx)
 end
 
 local function export_graph(ctx)
-  local cfg = require("epicenter.config").get()
+  local root_mod = require("epicenter.root")
   local progress = require("epicenter.ui.toast").progress("exporting the graph")
-  require("epicenter.client").graph(
-    { path = ctx.args[1], format = cfg.graph.format },
-    function(err, result)
-      if err or not result or not result.path then
-        progress.finish(err and err.message or "navgraph returned no file", "error")
-        return
-      end
-      progress.finish("graph written to " .. vim.fn.fnamemodify(result.path, ":~"))
-      vim.ui.open(result.path)
-    end,
-    { bufnr = ctx.bufnr, channel = "graph" }
-  )
+  local root = root_mod.find(ctx.bufnr)
+  -- {path} is a FILTER over which subgraph to draw - the server always
+  -- chooses the output path (F6); never treat this as somewhere to write.
+  require("epicenter.client").graph({ path = ctx.args[1] }, function(err, result)
+    if err or not result or not result.path then
+      progress.finish(err and err.message or "navgraph returned no file", "error")
+      return
+    end
+    -- `path` comes back root-relative, per contract.
+    local absolute = vim.fs.joinpath(root, result.path)
+    progress.finish("graph written to " .. vim.fn.fnamemodify(absolute, ":~"))
+    vim.ui.open(absolute)
+  end, { bufnr = ctx.bufnr, channel = "graph" })
 end
 
 M.name = "hot"
@@ -175,7 +187,6 @@ M.summary = "Fan-in hot spots, unreached symbols, and the graph export"
 M.options = {
   hot = { limit = 30, bar_width = 12 },
   unused = { limit = 200 },
-  graph = { format = "svg" },
 }
 
 M.commands = {
