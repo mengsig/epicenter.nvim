@@ -27,6 +27,15 @@ function M.jump(target, action)
   vim.cmd("normal! zz")
 end
 
+--- Copies `file:line` to the register and notifies - the `y` every panel
+--- shares (F9).
+--- @param target epicenter.Target
+function M.yank(target)
+  local text = ("%s:%d"):format(vim.fn.fnamemodify(target.path, ":~:."), target.line)
+  vim.fn.setreg(vim.v.register or '"', text)
+  require("epicenter").notify("yanked " .. text)
+end
+
 --- Centered box for a panel, from `ui.width`/`ui.height`.
 --- @return epicenter.Box
 function M.box(scale)
@@ -201,12 +210,9 @@ function Panel:_install_keys()
     end
     actions["y"] = function()
       local target = self:target()
-      if not target then
-        return
+      if target then
+        M.yank(target)
       end
-      local text = ("%s:%d"):format(vim.fn.fnamemodify(target.path, ":~:."), target.line)
-      vim.fn.setreg(vim.v.register or '"', text)
-      require("epicenter").notify("yanked " .. text)
     end
   end
 

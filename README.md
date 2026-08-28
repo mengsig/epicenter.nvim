@@ -128,7 +128,8 @@ Every subcommand ships today; none are pending.
 
 | Key            | Does                                                     |
 | -------------- | -------------------------------------------------------- |
-| `<CR>`         | Jump to the symbol                                       |
+| `<CR>`         | Jump to the symbol (panel stays open - it's a live query)|
+| `<C-v>` / `<C-t>` | Open in a vertical split / a new tab                  |
 | `o`            | Toggle a peek at it without leaving the panel             |
 | `y`            | Yank `file:line`                                         |
 | `+` / `-`      | Deeper / shallower (re-queries)                          |
@@ -137,6 +138,7 @@ Every subcommand ships today; none are pending.
 | `s`            | Toggle strict resolution (drops heuristic edges)         |
 | `f`            | Follow the cursor                                        |
 | `j`/`k`/`gg`/`G` | Move                                                   |
+| `/`            | Filter by name                                            |
 | `?`            | Toggle the key help                                      |
 | `q` / `<Esc>`  | Close                                                    |
 

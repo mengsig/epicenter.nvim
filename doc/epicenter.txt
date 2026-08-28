@@ -365,9 +365,12 @@ BLAST                                                         *epicenter-blast*
     rows dim and then leave, and the chips count across. The panel is never
     rebuilt underneath you.
 
-Keys inside the panel:
+Keys inside the panel: the same as every other results panel, except `<CR>`
+stays open and `o` is a toggle rather than a one-shot peek - a stated choice,
+since this one is a persistent, live-updating query rather than a picker.
 
-    <CR>            jump to the symbol
+    <CR>            jump to the symbol (panel stays open)
+    <C-v>, <C-t>    open in a vertical split / a new tab
     o               toggle a peek at it without leaving the panel
     y               yank `file:line`
     +, -            deeper / shallower - re-queries
@@ -378,6 +381,7 @@ Keys inside the panel:
                     (debounced, `blast.follow_debounce_ms`) and hands focus
                     back to the code
     j, k, gg, G     move
+    /               filter by name
     ?               toggle the key help
     q, <Esc>        close
 

@@ -35,10 +35,16 @@ local SPLIT_WINHIGHLIGHT = table.concat({
   "CursorLine:EpicenterSelection",
 }, ",")
 
+--- `<CR>` stays open rather than closing-then-jumping (the kit panel's
+--- default): this is a persistent, live-updating widget you keep querying
+--- from, the same reasoning the outline sidebar's own override documents
+--- (F9). `o` is a toggle rather than a one-shot float for the same reason.
 M.HELP = {
   "  keys",
   "",
   "  <CR>       jump to the symbol",
+  "  <C-V>      open in a vertical split",
+  "  <C-T>      open in a new tab",
   "  o          toggle a peek at it without leaving the panel",
   "  y          yank file:line",
   "  +/-        deeper / shallower (re-queries)",
@@ -47,6 +53,7 @@ M.HELP = {
   "  s          toggle strict resolution",
   "  f          follow the cursor",
   "  j/k/gg/G   move",
+  "  /          filter by name",
   "  ?          toggle this help",
   "  q, <Esc>   close",
 }
@@ -675,6 +682,29 @@ function Panel:current_target()
   return model.target(self.rows[self.selected])
 end
 
+--- Selects the first row whose name contains the typed text (F9): this
+--- panel paints its own selection and ignores real cursor movement inside
+--- its own buffer (see `on_cursor_moved`), so leaving `/` unbound let Vim's
+--- own search move the cursor without moving the selection it acts on.
+function Panel:_filter()
+  vim.ui.input({ prompt = "filter: " }, function(text)
+    if not text or text == "" or not self:valid() then
+      return
+    end
+    local query = text:lower()
+    for index, row in ipairs(self.rows) do
+      local symbol = row.kind == "node" and row.node.symbol
+      local name = symbol and (symbol.qualified or symbol.name)
+      if name and name:lower():find(query, 1, true) then
+        self.selected = index
+        self:_paint()
+        return
+      end
+    end
+    require("epicenter").notify("no match for " .. text, "warn")
+  end)
+end
+
 --- Window to jump into: the one the panel was opened from, else any window
 --- that is not the panel itself.
 function Panel:_jump_win()
@@ -689,7 +719,11 @@ function Panel:_jump_win()
   return nil
 end
 
-function Panel:jump()
+--- @param action? "edit"|"tab"|"vsplit"|"split" - see `ui.panel.jump` (F9):
+---   the mechanics (jumplist mark, open command, cursor, zz) are shared with
+---   every other panel; only finding the window to jump into is blast's own,
+---   since this panel stays open rather than closing into `previous_win`.
+function Panel:jump(action)
   local target = self:current_target()
   if not target then
     return
@@ -699,12 +733,10 @@ function Panel:jump()
     return require("epicenter").notify("no window to jump into", "warn")
   end
   vim.api.nvim_set_current_win(win)
-  vim.cmd("normal! m'")
-  vim.cmd("edit " .. vim.fn.fnameescape(target.path))
-  local last = vim.api.nvim_buf_line_count(0)
-  vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(target.line, last)), 0 })
-  vim.cmd("normal! zz")
-  self.origin_win = win
+  require("epicenter.ui.panel").jump(target, action)
+  -- A split/tab action leaves a NEW window current, not `win` - track
+  -- wherever the jump actually landed.
+  self.origin_win = vim.api.nvim_get_current_win()
   self.origin_buf = vim.api.nvim_get_current_buf()
 end
 
@@ -742,12 +774,9 @@ end
 
 function Panel:yank()
   local target = self:current_target()
-  if not target then
-    return
+  if target then
+    require("epicenter.ui.panel").yank(target)
   end
-  local text = ("%s:%d"):format(vim.fn.fnamemodify(target.path, ":~:."), target.line)
-  vim.fn.setreg(vim.v.register or '"', text)
-  require("epicenter").notify("yanked " .. text)
 end
 
 function Panel:set_depth(delta)
@@ -820,11 +849,20 @@ function Panel:_install_keys()
   map("<CR>", function()
     self:jump()
   end)
+  map("<C-v>", function()
+    self:jump("vsplit")
+  end)
+  map("<C-t>", function()
+    self:jump("tab")
+  end)
   map("o", function()
     self:peek()
   end)
   map("y", function()
     self:yank()
+  end)
+  map("/", function()
+    self:_filter()
   end)
   map("+", function()
     self:set_depth(1)

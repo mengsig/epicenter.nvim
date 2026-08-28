@@ -176,6 +176,36 @@ describe("blast panel against the fake navgraph server", function()
     expect.eq(vim.api.nvim_win_get_cursor(0)[1], 9)
   end)
 
+  it("opens the jump target in a split or a tab (merge-gate F9)", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    local before_wins = #vim.api.nvim_list_wins()
+    panel:jump("vsplit")
+    expect.truthy(#vim.api.nvim_list_wins() > before_wins, "the vsplit opened")
+    expect.matches(vim.fs.normalize(vim.api.nvim_buf_get_name(0)), "server%.lua$")
+
+    local before_tabs = #vim.api.nvim_list_tabpages()
+    panel:jump("tab")
+    expect.truthy(#vim.api.nvim_list_tabpages() > before_tabs, "the tab opened")
+    expect.matches(vim.fs.normalize(vim.api.nvim_buf_get_name(0)), "server%.lua$")
+  end)
+
+  it("/ selects the first row matching the typed text (merge-gate F9)", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    expect.truthy(vim.tbl_contains(names(panel), "M.start"))
+
+    local original_input = vim.ui.input
+    vim.ui.input = function(_, cb)
+      cb("start")
+    end
+    panel:_filter()
+    vim.ui.input = original_input
+
+    expect.eq(panel.rows[panel.selected].node.symbol.qualified, "M.start")
+  end)
+
   it("skips headings when moving and toggles the key help", function()
     panel = epicenter.run("blast", {}, buf)
     settled(panel)
