@@ -132,22 +132,32 @@ describe("real navgraph: navigation panels", function()
 
   it("F1: resolves a pick whose candidates all share one qualified name", function()
     -- Only routes/items.py's `get_item` reaches ItemService.get (a real
-    -- call); db.py's calls dict.get, an external stdlib method, so its honest
-    -- answer is "no call path" - pick candidate 1 by POSITION, never a target
-    -- pinned to a specific definition the resolver's tie-break can reorder,
-    -- and assert whichever one that turns out to be, correctly.
-    local handle = epicenter.run("path", { "get_item", "ItemService.get" }, buf)
-    local picker, picked = pick_index(handle, 1)
-    expect.eq(#picker.list:items(), 2, "both same-qualified definitions were offered")
+    -- call); db.py's calls dict.get, an external stdlib method. Exercise
+    -- BOTH candidates by POSITION (F2: candidate 1 is deterministically
+    -- db.py, so branching on `picked.file` left the ItemService.get
+    -- anchoring assertion dead) rather than a target pinned to a specific
+    -- definition the resolver's tie-break can reorder.
+    -- F4: this pin is a 1.0->1.1 resolver accuracy fix, not a new method.
+    support.require_navgraph_version(root, "1.1.0", "get_item -> ItemService.get pin")
+    for index = 1, 2 do
+      local handle = epicenter.run("path", { "get_item", "ItemService.get" }, buf)
+      local picker, picked = pick_index(handle, index)
+      expect.eq(#picker.list:items(), 2, "both same-qualified definitions were offered")
 
-    local text = answer_text()
-    if picked.file == "py_fastapi/app/routes/items.py" then
-      local loc = (picked.file .. ":" .. picked.line):gsub("%p", "%%%0")
-      expect.matches(text, loc, "the ladder starts at the PICKED get_item")
-      expect.matches(text, "ItemService%.get")
-    else
-      expect.eq(picked.file, "py_fastapi/app/db.py")
-      expect.matches(text, "no call path", "db.py's get_item calls dict.get, not ItemService.get")
+      local text = answer_text()
+      if picked.file == "py_fastapi/app/routes/items.py" then
+        local loc = (picked.file .. ":" .. picked.line):gsub("%p", "%%%0")
+        expect.matches(text, loc, "the ladder starts at the PICKED get_item")
+        expect.matches(text, "ItemService%.get")
+      else
+        expect.eq(picked.file, "py_fastapi/app/db.py")
+        -- F3: full sentence, matching the convention at line ~169 below.
+        expect.matches(
+          text,
+          "no call path from get_item to ItemService%.get",
+          "db.py's get_item calls dict.get, not ItemService.get"
+        )
+      end
     end
   end)
 

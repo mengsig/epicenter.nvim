@@ -48,6 +48,9 @@ describe("real navgraph: the explorer", function()
   end)
 
   it("fetches a deeper level only when the row is expanded", function()
+    -- F4: the ItemService.get anchoring below is a 1.0->1.1 resolver
+    -- accuracy fix, not a new method - nothing for require_method to gate on.
+    support.require_navgraph_version(root, "1.1.0", "ItemService.get anchoring")
     panel = epicenter.run("callees", {}, buf)
     loaded(panel)
     local before = panel.list:count()
