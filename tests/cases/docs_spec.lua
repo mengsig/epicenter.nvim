@@ -157,8 +157,10 @@ describe("documentation stays in sync", function()
     local init = read("lua/epicenter/init.lua")
     expect.matches(planned, "a later release")
     expect.matches(init, "a later release")
-    expect.falsy(readme:find("this release", 1, true), "README must not say 'this release'")
-    expect.falsy(doc:find("this release", 1, true), "vimdoc must not say 'this release'")
+    -- Case-insensitive (merge-gate F5): a plain find(..., 1, true) let
+    -- README's capitalized sentence-opener "This release ships..." through.
+    expect.falsy(readme:lower():find("this release", 1, true), "README must not say 'this release'")
+    expect.falsy(doc:lower():find("this release", 1, true), "vimdoc must not say 'this release'")
   end)
 
   it("qualifies <C-k> as search-only in the README key table, like vimdoc does (F11)", function()

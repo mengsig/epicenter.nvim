@@ -8,7 +8,7 @@ who calls it, and what breaks if you change it, and get the answer while you
 type. No daemon to babysit, no index to rebuild by hand, no language servers
 required for the graph itself.
 
-This release ships the **search palette** (fuzzy symbol search and repo-wide
+epicenter.nvim ships the **search palette** (fuzzy symbol search and repo-wide
 grep) and **blast radius** (a live impact panel with ripples in the code, a
 hover card of callers, fan-in/fan-out badges, and diff impact against a git
 ref) — all live on every keystroke, all including your unsaved edits. On top

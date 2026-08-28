@@ -73,7 +73,7 @@ require("epicenter").install({opts})
 
     Fully asynchronous by default - a `build =`/`run =` hook must pass
     `{ wait = true }` (or a custom millisecond timeout), since a plugin
-    manager treats the hook function *returning* as the step being done.
+    manager treats the hook function `returning` as the step being done.
     With `wait`, returns `ok, err_or_path` once installation actually
     finishes instead of while it is still downloading or building.
 
