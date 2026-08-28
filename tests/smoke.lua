@@ -235,6 +235,115 @@ end)
 dashboard:close()
 -- === end ep-explore wave ===
 
+-- === compat wave: winborder, winblend, laststatus=3, splitkeep, motion on ===
+-- Each of these is a user setting the plugin has to be immune to. Neovim
+-- applies `winborder` and `winblend` to any float that does not name its own,
+-- so the assertion is that every float still names both.
+local source_win = vim.api.nvim_get_current_win()
+local has_winborder = vim.fn.exists("&winborder") == 1
+if has_winborder then
+  vim.o.winborder = "double"
+end
+vim.o.winblend = 40
+
+local peeked = require("epicenter.ui.panel").peek({
+  path = vim.fs.joinpath(root, "app/server.lua"),
+  line = 9,
+})
+local peek_border = vim.api.nvim_win_get_config(peeked.win).border
+check(
+  "a float keeps its own border under &winborder=double",
+  peek_border == "rounded" or (type(peek_border) == "table" and peek_border[1] == "\226\149\173"),
+  has_winborder and vim.inspect(peek_border) or "&winborder absent on this Neovim"
+)
+check(
+  "a float keeps its own winblend under &winblend=40",
+  vim.wo[peeked.win].winblend == 0,
+  tostring(vim.wo[peeked.win].winblend)
+)
+peeked:close({ motion = false })
+wait_for("peek closed", function()
+  return not peeked:valid()
+end, 3000)
+vim.o.winblend = 0
+if has_winborder then
+  vim.o.winborder = ""
+end
+vim.api.nvim_set_current_win(source_win)
+
+-- laststatus=3 puts one statusline at the bottom of the whole editor. The
+-- palette's grid already reserves that row; what it must never do is paint
+-- over it.
+vim.o.laststatus = 3
+local global_bar = require("epicenter").run("search", {}, buf)
+wait_for("laststatus=3 open animation settled", function()
+  return global_bar.tween == nil
+end, 3000)
+local global_box = global_bar:_box()
+check(
+  "laststatus=3 lays the palette out on the same grid",
+  vim.deep_equal(
+    global_bar.results_win:geometry(),
+    require("epicenter.ui.palette").layout(global_box, true).results
+  )
+)
+local usable_rows = vim.o.lines - vim.o.cmdheight - 1
+check(
+  "the palette never reaches the global statusline",
+  global_box.row + global_box.height + 1 <= usable_rows,
+  ("bottom row %d of %d"):format(global_box.row + global_box.height + 1, usable_rows)
+)
+global_bar:close({ motion = false })
+wait_for("laststatus=3 palette closed", function()
+  return not global_bar.results_win:valid()
+end, 3000)
+vim.o.laststatus = 2
+
+-- splitkeep governs what happens to a window's view when a horizontal split
+-- changes its height. Every epicenter surface is a float or a vertical split,
+-- so whatever the user set, the source window's view must not move. The
+-- screen is shrunk here so the fixture is actually longer than the window.
+local saved_lines = vim.o.lines
+vim.o.lines = 12
+vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+local split_buf = vim.api.nvim_get_current_buf()
+local split_win = vim.api.nvim_get_current_win()
+
+for _, keep in ipairs({ "cursor", "screen", "topline" }) do
+  vim.o.splitkeep = keep
+  for _, blast_layout in ipairs({ "float", "vsplit" }) do
+    require("epicenter").setup({ ui = { icons = "ascii" }, blast = { layout = blast_layout } })
+    vim.api.nvim_set_current_win(split_win)
+    vim.api.nvim_win_set_cursor(split_win, { 18, 0 })
+    vim.cmd("normal! zz")
+    local before_top = vim.fn.line("w0", split_win)
+    local label = ("splitkeep=%s, %s layout"):format(keep, blast_layout)
+    check(label .. ": the source window starts scrolled", before_top > 1, "w0 " .. before_top)
+
+    local blast = require("epicenter").run("blast", { "M.handle_request" }, split_buf)
+    wait_for(label .. ": blast answered", function()
+      return blast.answered > 0
+    end, 10000)
+    local after_top = vim.fn.line("w0", split_win)
+    check(
+      label .. ": source view unmoved",
+      after_top == before_top and vim.deep_equal(vim.api.nvim_win_get_cursor(split_win), { 18, 0 }),
+      ("first line %d -> %d"):format(before_top, after_top)
+    )
+
+    blast:close()
+    -- `valid()` goes false the moment the close starts; the float's fade-out
+    -- still owns a real window (and the focus) for another frame.
+    wait_for(label .. ": panel window gone", function()
+      return #vim.api.nvim_list_wins() == 1
+    end, 5000)
+  end
+end
+vim.o.splitkeep = "cursor"
+vim.o.lines = saved_lines
+require("epicenter").setup({ ui = { icons = "ascii" } })
+-- === end compat wave ===
+
 local messages = vim.api.nvim_exec2("messages", { output = true }).output
 local bad = {}
 for _, line in ipairs(vim.split(messages, "\n", { plain = true })) do
