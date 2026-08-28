@@ -77,6 +77,10 @@ end
 -- Terminal/window preference, not project data: one geometry per panel TYPE
 -- (`spec.filetype`), independent of which project it was resized in - so
 -- `store`'s per-root keying is deliberately not used here.
+-- N1: deliberately not a real path - `store.path` runs it through
+-- `root.normalize` (`uv.fs_realpath`), which fails for a nonexistent name
+-- and keys this file the same everywhere. A real `panel-layout` directory
+-- in the cwd would make the slug (and this remembered geometry) cwd-dependent.
 local LAYOUT_ROOT = "panel-layout"
 local MIN_WIDTH, MIN_HEIGHT = 20, 3
 local RESIZE_STEP, MOVE_STEP = 4, 1

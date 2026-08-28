@@ -13,9 +13,9 @@ local M = {}
 ---
 --- Quickfix `col` is a 1-indexed BYTE column, and `target.character` is a
 --- protocol position offset. The handshake asks for `utf-8` first
---- (`client.capabilities`), which makes the two the same thing; a server that
---- negotiates otherwise is reported by `client.record_capabilities` rather
---- than silently drawing columns in the wrong place.
+--- (`client.capabilities`), which makes the two the same thing; a server
+--- that negotiates otherwise is logged by `client.record_capabilities`
+--- (N2: to the log only - columns still draw wrong, this just explains why).
 --- @param rows epicenter.qf.Row[]
 --- @return table[]
 function M.entries(rows)

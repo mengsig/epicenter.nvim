@@ -210,6 +210,37 @@ describe("sending rows to a list, against the fake navgraph server", function()
     expect.matches(vim.fn.getqflist({ title = 1 }).title, "search")
   end)
 
+  it("sends only a real <Tab> selection on a palette's <C-q> (L3)", function()
+    local palette = epicenter.run("search", {}, buf)
+    palette:query("request")
+    wait(function()
+      return palette.list:count() > 1
+    end, 10000, "search results")
+    local total = palette.list:count()
+
+    press("<Tab>")
+    press("<C-q>")
+    wait(function()
+      return #vim.fn.getqflist() > 0
+    end, 5000, "the quickfix list to fill")
+    expect.eq(#vim.fn.getqflist(), 1, ("one marked row of %d"):format(total))
+  end)
+
+  it("sends a palette's matches to the location list on a real <C-l> (L3)", function()
+    local palette = epicenter.run("search", {}, buf)
+    palette:query("handle_request")
+    wait(function()
+      local item = palette.list:current()
+      return item ~= nil and #(item.matches or {}) > 0
+    end, 10000, "search results")
+
+    press("<C-l>")
+    wait(function()
+      return #vim.fn.getloclist(0) > 0
+    end, 5000, "the location list to fill")
+    expect.eq(#vim.fn.getqflist(), 0, "the quickfix list is left alone")
+  end)
+
   it("--qf on the command line sends the rows the panel would have shown", function()
     epicenter.run("callers", { "--qf" }, buf)
     wait(function()
