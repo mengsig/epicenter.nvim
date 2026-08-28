@@ -111,7 +111,7 @@ The binary is looked up in this order:
     peek       |epicenter-peek|       Read the definition under the cursor
     crumbs     |epicenter-crumbs|     Toggle the breadcrumb winbar here
     hierarchy  |epicenter-hierarchy|  Call hierarchy at the cursor
-    types      |epicenter-hierarchy|  Supertypes, subtypes and implementors
+    types      |epicenter-hierarchy|  Type hierarchy, and who uses this type
     context    |epicenter-context|    Yank a symbol's context bundle
     where      |epicenter-context|    What encloses this line
     tests      |epicenter-tests|      Tests that reach this symbol
@@ -164,7 +164,7 @@ change `keymaps.prefix`.
     <leader>eC  :Epicenter callees    What the symbol under the cursor calls
     <leader>eP  :Epicenter peek       Read the definition under the cursor
     <leader>eH  :Epicenter hierarchy  Call hierarchy at the cursor
-    <leader>eT  :Epicenter types      Supertypes, subtypes and implementors
+    <leader>eT  :Epicenter types      Type hierarchy, and who uses this type
     <leader>ey  :Epicenter context    Yank a symbol's context bundle
     <leader>et  :Epicenter tests      Tests that reach this symbol
     <leader>ei  :Epicenter impact     Blast radius of the working change
@@ -690,9 +690,14 @@ that does not announce them the panel says so and sends nothing.
 
                                                          *:Epicenter-types*
 :Epicenter types                                               *<leader>eT*
-    The supertypes, subtypes and implementors of the type under the cursor, in
-    three groups. A supertype expands upward and a subtype downward; an
-    implementor is a location, so it is a leaf.
+    The supertypes, subtypes, implementors and users of the type under the
+    cursor, in four groups. A supertype expands upward and a subtype
+    downward; implementors and users are locations, so they are leaves - a
+    user row also carries how it uses the type (`as param`, `as field`, ...).
+    Users comes from the custom `navgraph/types`, not the standard LSP
+    methods the other three groups use - it is only asked for once the
+    server announces that method; an older server still shows the other
+    three.
 
 Rows carry the kind icon, the qualified name, `file:line`, and:
 

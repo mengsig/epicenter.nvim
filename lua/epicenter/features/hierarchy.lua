@@ -566,7 +566,7 @@ M.commands = {
   },
   {
     name = "types",
-    desc = "Supertypes, subtypes and implementors",
+    desc = "Type hierarchy, and who uses this type",
     run = open_type_hierarchy,
     rows = true,
   },

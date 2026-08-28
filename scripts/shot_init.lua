@@ -92,11 +92,10 @@ SHOTS.explorer = function()
   settle(function()
     return panel.list:count() > 1
   end, "the first level of callers")
-  -- Two levels: expand UserService.replace (list position 3), not
-  -- UserService.create (position 2) - the latter's own callers include
-  -- create_item, a name-collision heuristic match (exact = false) navgraph
-  -- honestly flags but that reads as a wrong edge in a headline image (F8).
-  -- replace_user is the one and only, unambiguous caller of .replace.
+  -- Two levels: list position 3's own callers are a clean, unambiguous
+  -- single edge - no heuristic (exact=false) noise in the headline image.
+  -- If the server's ordering ever puts a heuristic-flagged caller here
+  -- instead, re-pick a row whose own callers are exact.
   panel.list:select(3)
   press(panel.win.buf, "l")
   settle(function()
@@ -118,6 +117,57 @@ SHOTS["outline-status"] = function()
   end, "the dashboard")
 end
 
+-- v1.1: needs a server that announces navgraph/tests, navgraph/types and
+-- navgraph/impact - point NAVGRAPH_BIN at the 1.1 server for these three.
+
+SHOTS.hierarchy = function()
+  -- `User` (models.py:10) has no supertypes of its own, but is USED as the
+  -- return type all over user_service.py - the type panel's fourth group,
+  -- and the whole reason for this shot. Column 6 is "User" itself, not the
+  -- `class` keyword - prepareTypeHierarchy resolves an identifier, nothing
+  -- off one.
+  local buf = open_file("py_fastapi/app/models.py", 10)
+  vim.api.nvim_win_set_cursor(0, { 10, 6 })
+  local panel = require("epicenter").run("types", {}, buf)
+  settle(function()
+    local text = table.concat(vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false), "\n")
+    return text:match("users") ~= nil
+  end, "the type hierarchy groups")
+end
+
+SHOTS.tests = function()
+  -- UserService.create (user_service.py:22) is reached by test_users.py's
+  -- test_get_user.
+  local buf = open_file("py_fastapi/app/services/user_service.py", 22)
+  local panel = require("epicenter").run("tests", {}, buf)
+  settle(function()
+    return panel.list:count() > 0
+  end, "the tests reaching this symbol")
+end
+
+SHOTS.review = function()
+  local buf = open_file("py_fastapi/app/services/user_service.py", 22)
+  -- A small overlay edit: a working change for `navgraph/impact` to answer
+  -- about. Emitting EpicenterIndexed is the same signal a real reindex
+  -- sends - `impact_spec.lua` drives it the same way for a deterministic wait.
+  vim.api.nvim_buf_set_lines(
+    buf,
+    21,
+    22,
+    false,
+    { "    def create(self, name: str, email: str, role: str = " .. '"member"' .. ") -> User:" }
+  )
+  require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+  settle(function()
+    local current = require("epicenter.features.impact").current()
+    return current ~= nil and #(current.groups or {}) > 0
+  end, "the working change's impact")
+  local panel = require("epicenter").run("review", {}, buf)
+  settle(function()
+    return panel.list:count() > 0
+  end, "the review rows")
+end
+
 local name = assert(vim.env.EPICENTER_SHOT, "EPICENTER_SHOT must name a surface")
 local shot = assert(SHOTS[name], "unknown surface " .. name)
 
@@ -131,6 +181,8 @@ vim.api.nvim_create_autocmd("VimEnter", {
       -- The source window stays visible beside the panel, so the ripple marks
       -- it paints into the code are in the frame.
       blast = { layout = "vsplit" },
+      -- The first-run toast would otherwise land mid-frame in every shot.
+      tour = { offer = false },
     })
     local client = require("epicenter.client")
     local id = assert(client.start({ root = root, cmd = { binary, "lsp", "--root", root } }))

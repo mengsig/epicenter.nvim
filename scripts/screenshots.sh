@@ -5,6 +5,10 @@
 #   make screenshots                       # navgraph from $PATH
 #   NAVGRAPH_BIN=/path/to/navgraph make screenshots
 #
+# hierarchy/tests/review need a server that announces the v1.1 addendum
+# (navgraph/types, navgraph/tests, navgraph/impact) - point NAVGRAPH_BIN at
+# one, or those three time out waiting for a panel a v1.0 server never fills.
+#
 # The fixture tree is copied under a throwaway HOME first, so a committed asset
 # shows `~/demo` rather than the path it happened to be built from.
 set -euo pipefail
@@ -13,7 +17,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 nvim="${NVIM:-nvim}"
 navgraph="${NAVGRAPH_BIN:-navgraph}"
 scheme="${EPICENTER_SHOT_COLORS:-habamax}"
-shots=(search blast explorer outline-status)
+shots=(search blast explorer outline-status hierarchy tests review)
 
 for tool in tmux "$nvim"; do
   command -v "$tool" >/dev/null || { echo "screenshots: $tool is not installed" >&2; exit 1; }
