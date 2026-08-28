@@ -222,6 +222,53 @@ describe("outline sidebar against the fake navgraph server", function()
     end, 10000, "outline for the new buffer")
   end)
 
+  --- F11: wiping the source buffer used to leave `state.source_buf` dangling
+  --- whenever `BufEnter` lands somewhere that is not a source buffer (a
+  --- scratch buffer, here) - the next reindex then crashed inside
+  --- `root.lua`'s `relative()`. The trigger needs no user action: the
+  --- server's own watch poll fires `navgraph/indexed` on an ordinary
+  --- reindex, reproduced here via `navgraph/rescan`.
+  it("survives wiping the source buffer with nowhere to retarget, on the next reindex", function()
+    open("app/handlers.py")
+    local wiped = buf
+    local source_win = outline.current().source_win
+
+    local scratch = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(source_win, scratch)
+    vim.api.nvim_buf_delete(wiped, { force = true })
+
+    local logged = {}
+    local original = require("epicenter.log").error
+    require("epicenter.log").error = function(fmt, ...)
+      table.insert(logged, fmt:format(...))
+    end
+
+    -- The watch-poll case: a reindex with no user action in between.
+    support.request(root, "navgraph/rescan", {})
+    wait(function()
+      return panel:valid() and panel.list:count() == 0
+    end, 10000, "the sidebar clears rather than crashing")
+
+    require("epicenter.log").error = original
+    expect.eq(logged, {}, "no error logged from the reindex after the wipe")
+    expect.truthy(panel:valid(), "the sidebar itself survives")
+    expect.eq(outline.current().source_buf, nil, "the dangling buffer id was cleared")
+  end)
+
+  it("retargets to another visible source buffer when the current one is wiped", function()
+    open("app/handlers.py")
+    local wiped = buf
+    vim.cmd.vsplit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/config.lua")))
+    local other_win = vim.api.nvim_get_current_win()
+
+    vim.api.nvim_buf_delete(wiped, { force = true })
+
+    wait(function()
+      return vim.deep_equal(names(), { "route", "load_config" })
+    end, 10000, "the sidebar retargeted to the other open source buffer")
+    expect.eq(outline.current().source_win, other_win)
+  end)
+
   it("opens focused, focuses when it is not, and closes when it is", function()
     open("app/handlers.py")
     expect.eq(vim.api.nvim_get_current_win(), panel.win.win, "the sidebar takes focus on open")

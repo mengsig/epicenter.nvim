@@ -91,6 +91,14 @@ local function apply(rows)
 end
 
 local function request()
+  -- The sidebar outlives any one source buffer (F11): a wipe can leave
+  -- state.source_buf dangling until the BufWipeout/BufDelete autocmd below
+  -- retargets it, and the server's own watch poll (2s, on by default) can
+  -- fire navgraph/indexed - and thus this - in that window with no user
+  -- action at all.
+  if not state or not state.source_buf or not vim.api.nvim_buf_is_valid(state.source_buf) then
+    return
+  end
   local client = require("epicenter.client")
   local root_mod = require("epicenter.root")
   local uri = state.uri
@@ -177,6 +185,27 @@ local function sidebar_box()
   return { row = 0, col = 0, width = width, height = height }
 end
 
+--- The source buffer is gone (F11): retarget to another visible source
+--- buffer if one exists, else show an honest empty state - never leave
+--- state.source_buf pointing at a buffer id nothing can look up any more.
+local function retarget_or_clear()
+  if not state then
+    return
+  end
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if is_source(buf) then
+      retarget(buf, win)
+      return
+    end
+  end
+  state.source_buf = nil
+  state.source_win = nil
+  state.panel:set_title(" outline ")
+  state.panel:set_items({})
+  state.panel:notice("  no source buffer open")
+end
+
 local function install_autocmds()
   local group = vim.api.nvim_create_augroup("EpicenterOutline", { clear = true })
   vim.api.nvim_create_autocmd("CursorMoved", {
@@ -192,6 +221,14 @@ local function install_autocmds()
     callback = function(event)
       if state and event.buf ~= state.source_buf and is_source(event.buf) then
         retarget(event.buf, vim.api.nvim_get_current_win())
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+    group = group,
+    callback = function(event)
+      if state and event.buf == state.source_buf then
+        retarget_or_clear()
       end
     end,
   })
