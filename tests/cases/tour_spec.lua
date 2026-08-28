@@ -44,6 +44,10 @@ describe("the tour", function()
     end
   end)
 
+  it("demonstrates search early, the tour's primary entry point", function()
+    expect.eq(tour.STEPS[2].command, "search", "search is the first panel step")
+  end)
+
   it("runs for about a minute", function()
     local total = 0
     for _, step in ipairs(tour.STEPS) do

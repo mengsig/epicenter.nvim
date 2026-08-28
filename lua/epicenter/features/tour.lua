@@ -10,6 +10,7 @@ local M = {}
 --- buffer the tour started from and closes it when the step ends.
 M.STEPS = {
   { text = "epicenter · your code graph, live in the editor", ms = 4000 },
+  { text = "search — jump to any symbol, or grep across files", command = "search", ms = 9000 },
   { text = "blast radius — what breaks if this changes", command = "blast", ms = 9000 },
   {
     text = "who calls it, as a tree · l fetches the next level",
