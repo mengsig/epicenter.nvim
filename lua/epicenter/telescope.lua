@@ -101,6 +101,10 @@ function M.live_picker(opts, spec)
   local action_state = require("telescope.actions.state")
   local sorters = require("telescope.sorters")
   local debounce = require("epicenter.ui.prompt").debounce
+  -- Telescope loads its extensions eagerly, so this picker may be the FIRST
+  -- thing to touch epicenter: without this no server is ever started and
+  -- every keystroke comes back "navgraph is not running".
+  require("epicenter").ensure_setup()
 
   opts = opts or {}
   local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
@@ -126,13 +130,22 @@ function M.live_picker(opts, spec)
         map({ "i", "n" }, "<C-v>", accept("vsplit"))
         map({ "i", "n" }, "<C-x>", accept("split"))
 
+        -- One notice per distinct failure: a live picker asks again on every
+        -- keystroke, and the same message each time buries everything else.
+        local reported = nil
         local debounced = debounce(spec.debounce_ms or 150, function(text)
           if not vim.api.nvim_buf_is_valid(prompt_bufnr) then
             return
           end
-          spec.request(text, bufnr, function(items)
+          spec.request(text, bufnr, function(items, failure)
             if not vim.api.nvim_buf_is_valid(prompt_bufnr) then
               return
+            end
+            if failure ~= reported then
+              reported = failure
+              if failure then
+                warn(failure)
+              end
             end
             local picker = action_state.get_current_picker(prompt_bufnr)
             if not picker then
@@ -175,8 +188,7 @@ function M.symbols(opts)
         { query = query, limit = cfg.search.limit },
         function(err, result)
           if err then
-            warn(err.message)
-            return cb({})
+            return cb({}, err.message or "navgraph did not answer")
           end
           cb(result.items or {})
         end,
@@ -200,8 +212,7 @@ function M.grep(opts)
         { pattern = query, limit = cfg.grep.limit },
         function(err, result)
           if err then
-            warn(err.message)
-            return cb({})
+            return cb({}, err.message or "navgraph did not answer")
           end
           cb(result.items or {})
         end,
@@ -229,6 +240,7 @@ function M.blast(opts)
   local blast = require("epicenter.features.blast")
   local model = require("epicenter.features.blast.model")
   local client = require("epicenter.client")
+  require("epicenter").ensure_setup()
   local cfg = require("epicenter.config").get()
 
   local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
@@ -239,11 +251,13 @@ function M.blast(opts)
     strict = cfg.blast.strict,
   }
 
+  local prompt_buf = nil
   local picker = pickers.new(opts, {
     prompt_title = "Epicenter Blast",
     finder = finders.new_table({ results = {} }),
     sorter = conf.generic_sorter(opts),
-    attach_mappings = function(prompt_bufnr, map)
+    attach_mappings = function(prompt_bufnr, _map)
+      prompt_buf = prompt_bufnr
       actions.select_default:replace(function()
         local entry = action_state.get_selected_entry()
         if not entry then
@@ -261,6 +275,14 @@ function M.blast(opts)
     client.blast(model.params(state, target), function(err, result)
       if err then
         return warn(err.message)
+      end
+      -- Closed while the fetch was in flight: the same guard the live picker
+      -- already has, for the same reason.
+      if not (prompt_buf and vim.api.nvim_buf_is_valid(prompt_buf)) then
+        return
+      end
+      if not action_state.get_current_picker(prompt_buf) then
+        return
       end
       picker:refresh(
         finders.new_table({ results = model.nodes(result), entry_maker = M.blast_entry }),

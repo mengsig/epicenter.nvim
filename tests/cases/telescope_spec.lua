@@ -209,6 +209,64 @@ describe("telescope extension, wired against the fake navgraph server", function
     expect.eq(stub.extensions.epicenter.blast, epicenter_telescope.blast)
   end)
 
+  it("says a failure once, not once per keystroke", function()
+    -- Earlier pickers in this file may still have a debounced request in
+    -- flight; let those land before anything below is stubbed.
+    vim.wait(1000)
+
+    local telescope = require("epicenter.telescope")
+    local client = require("epicenter.client")
+    local FAILURE = "the spec's own server is away"
+    local original_search = client.search
+    client.search = function(_params, cb)
+      vim.schedule(function()
+        cb({ code = -32002, message = FAILURE }, nil)
+      end)
+      return { cancel = function() end }
+    end
+    local notices = 0
+    local original_notify = vim.notify
+    vim.notify = function(msg, _level)
+      if type(msg) == "string" and msg:find(FAILURE, 1, true) then
+        notices = notices + 1
+      end
+    end
+
+    telescope.symbols({ bufnr = buf })
+    local picker = select(2, next(state.pickers))
+    wait(function()
+      return notices > 0
+    end, 5000, "the first notice")
+    local after_open = notices
+    for _, query in ipairs({ "h", "ha", "han", "hand" }) do
+      type_query(state, picker.prompt_bufnr, query)
+      vim.wait(250)
+    end
+
+    vim.notify = original_notify
+    client.search = original_search
+    expect.eq(notices, after_open, "four more keystrokes, not one more notice")
+  end)
+
+  it("starts the server itself rather than erroring once per keystroke", function()
+    -- The extension is loaded eagerly, so a picker may be the first thing to
+    -- touch epicenter in the session.
+    local epicenter = require("epicenter")
+    local setups = 0
+    local original = epicenter.setup
+    epicenter.setup = function(...)
+      setups = setups + 1
+      return original(...)
+    end
+    epicenter.reset()
+
+    local telescope = require("epicenter.telescope")
+    telescope.symbols({ bufnr = buf })
+    epicenter.setup = original
+
+    expect.eq(setups, 1, "the picker set epicenter up before asking anything")
+  end)
+
   it("lists real symbols on open and re-queries live as the prompt changes", function()
     local telescope = require("epicenter.telescope")
     telescope.symbols({ bufnr = buf })
@@ -292,6 +350,29 @@ describe("telescope extension, wired against the fake navgraph server", function
       )
     end
   )
+
+  it("does not refresh a blast picker the user already closed", function()
+    local telescope = require("epicenter.telescope")
+    local client = require("epicenter.client")
+    local held = nil
+    local original_blast = client.blast
+    client.blast = function(_params, cb)
+      held = cb
+      return { cancel = function() end }
+    end
+
+    telescope.blast({ bufnr = buf, symbol = "log_request" })
+    local picker = select(2, next(state.pickers))
+    -- The user pressed <Esc>: Telescope wipes the prompt buffer.
+    local prompt = picker.prompt_bufnr
+    state.pickers[prompt] = nil
+    vim.api.nvim_buf_delete(prompt, { force = true })
+
+    expect.truthy(held ~= nil, "the blast request went out")
+    held(nil, { nodes = {}, edges = {} })
+    client.blast = original_blast
+    expect.eq(#picker.refreshes, 0, "nothing is refreshed onto a closed picker")
+  end)
 
   it("fetches blast for an explicit symbol argument without touching the cursor", function()
     local telescope = require("epicenter.telescope")
