@@ -721,6 +721,17 @@ describe("the protocol 1.1 gate on impact/review", function()
     expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
   end)
 
+  --- LOW-3: `answered` is documented as the panel's "a query was answered"
+  --- signal - a gate notice must not bump it, since nothing was ever asked.
+  it("a gate notice does not count as an answer", function()
+    register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    expect.eq(panel.answered, 0, "nothing was asked, so nothing was answered")
+  end)
+
   --- HIGH-1: the gate used to be a one-shot argument to the FIRST query
   --- only. A reindex re-queries on a debounce - this proves it still finds
   --- the gate in place and never puts `navgraph/impact` on the wire.

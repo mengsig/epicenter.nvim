@@ -503,16 +503,19 @@ function Panel:_on_result(err, result, opts)
   self:_populated()
 end
 
+--- A query was actually asked and answered, even if the answer is an error -
+--- unlike `notice`, this bumps `answered` (the "settled" signal specs wait on).
 function Panel:_show_message(message)
+  self.answered = self.answered + 1
   self:notice("  " .. message)
 end
 
 --- Public notice channel: replaces the rows with a calm one-line message, the
 --- same one a failed query shows - used directly by a caller presenting the
---- protocol gate before any query has run.
+--- protocol gate before any query has run. Does NOT count as an answer:
+--- nothing was ever asked, so `answered` stays put.
 --- @param text string already carries the convention's two-space indent
 function Panel:notice(text)
-  self.answered = self.answered + 1
   self.message = text
   -- The header names `self.meta.root`. Leaving the PREVIOUS answer's root
   -- there renders a title naming a symbol, a chip line of zeros, and a body
