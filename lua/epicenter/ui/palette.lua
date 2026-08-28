@@ -53,6 +53,9 @@ local HELP = {
   "  <C-v>       open in a vertical split",
   "  <C-x>       open in a split",
   "  <C-n>/<C-p> next / previous result",
+  "  <Tab>       add / remove this row from the selection",
+  "  <C-q>       send the rows to the quickfix list",
+  "  <C-l>       send the rows to the location list",
   "  <C-y>       yank file:line",
   "  ?           toggle this help (normal mode)",
   "  <Esc>       close",
@@ -175,6 +178,7 @@ function Palette:_on_results(err, items, total)
     self.total = 0
     self.list:draw()
     self:_set_footer()
+    self:_populated()
     return
   end
   self.list.empty_text = self.spec.empty_text or "  no matches"
@@ -183,6 +187,45 @@ function Palette:_on_results(err, items, total)
   self.list:draw({ stagger = true })
   self:_set_footer()
   self:_update_preview()
+  self:_populated()
+end
+
+--- Registers a callback for each result set, for the `--qf`/`--loc` command
+--- flags: the rows only exist once the server has answered.
+--- @param fn fun(palette: epicenter.Palette)
+function Palette:on_populate(fn)
+  self.populate_hooks = self.populate_hooks or {}
+  table.insert(self.populate_hooks, fn)
+end
+
+function Palette:_populated()
+  for _, fn in ipairs(self.populate_hooks or {}) do
+    fn(self)
+  end
+end
+
+--- The rows an export sends: the `<Tab>` multi-selection, or every row the
+--- current query matched.
+--- @return epicenter.qf.Row[]
+function Palette:export_rows()
+  local out = {}
+  for index, item in ipairs(self.list:marked_or_all()) do
+    local target = self.spec.preview_of and self.spec.preview_of(item) or nil
+    if target then
+      table.insert(out, { target = target, text = self.spec.render_item(item, index).text })
+    end
+  end
+  return out
+end
+
+--- @param list "quickfix"|"loclist"
+function Palette:export(list)
+  local rows = self:export_rows()
+  local title = vim.trim(self.spec.title or "epicenter")
+  self:close({ motion = false })
+  vim.schedule(function()
+    require("epicenter.ui.qf").send_and_notify({ rows = rows, list = list, title = title })
+  end)
 end
 
 function Palette:query(text)
@@ -302,6 +345,16 @@ function Palette:_install_keys()
   map("n", "k", function()
     self:move(-1)
   end)
+  map({ "i", "n" }, "<Tab>", function()
+    self.list:toggle_mark()
+    self:move(1)
+  end)
+  map({ "i", "n" }, "<C-q>", function()
+    self:export("quickfix")
+  end)
+  map({ "i", "n" }, "<C-l>", function()
+    self:export("loclist")
+  end)
   map({ "i", "n" }, "<C-y>", function()
     local item = self.list:current()
     local target = item and self.spec.preview_of and self.spec.preview_of(item)
@@ -381,7 +434,7 @@ function M.open(spec)
   end
   self.prompt_win = window.open({
     box = boxes.prompt,
-    footer = " ↵ jump · ^t/^v/^x open · ^n/^p move · ? help ",
+    footer = " ↵ jump · ^q quickfix · ^n/^p move · ? help ",
     enter = true,
     zindex = 110,
     on_close = function()

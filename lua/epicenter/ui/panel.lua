@@ -4,7 +4,6 @@
 local M = {}
 
 local list_mod = require("epicenter.ui.list")
-local preview_mod = require("epicenter.ui.preview")
 local tree_mod = require("epicenter.ui.tree")
 local window = require("epicenter.ui.window")
 
@@ -63,26 +62,13 @@ local function box_for_count(count)
   })
 end
 
---- A throwaway float showing the target's source. Any of q/<Esc>/<CR> closes it.
+--- The source of `target`, without leaving the panel. One component with the
+--- `gp` peek (`ui.peek`); focused here, because the panel holds the cursor
+--- and `q` has to reach the float.
 --- @param target epicenter.Target
---- @return epicenter.Window
+--- @return epicenter.Peek
 function M.peek(target)
-  local box = M.box(0.7)
-  local win = window.open({
-    box = box,
-    title = (" %s:%d "):format(vim.fn.fnamemodify(target.path, ":~:."), target.line),
-    footer = " q close ",
-    enter = true,
-    zindex = 150,
-  })
-  preview_mod.new({ buf = win.buf, win = win.win, height = box.height }):show(target)
-  win:reveal()
-  for _, lhs in ipairs({ "q", "<Esc>", "<CR>" }) do
-    vim.keymap.set("n", lhs, function()
-      win:close()
-    end, { buffer = win.buf, nowait = true, silent = true })
-  end
-  return win
+  return require("epicenter.ui.peek").open(target, { focus = true })
 end
 
 --- @class epicenter.Panel
@@ -179,6 +165,57 @@ function Panel:target()
   return row and self.spec.target_of and self.spec.target_of(row) or nil
 end
 
+--- The rows an export sends: the `<Tab>` multi-selection, or everything on
+--- screen. Each carries the target it jumps to and the text it shows, so the
+--- quickfix list reads exactly like the panel did.
+--- @return epicenter.qf.Row[]
+function Panel:export_rows()
+  if not self.spec.target_of then
+    return {}
+  end
+  local out = {}
+  for index, row in ipairs(self.list:marked_or_all()) do
+    local target = self.spec.target_of(row)
+    if target then
+      table.insert(out, { target = target, text = self.spec.render_row(row, index).text })
+    end
+  end
+  return out
+end
+
+--- Sends the rows to the quickfix or location list and closes: the panel has
+--- done its job once the result set is somewhere `:cnext` can walk it.
+--- @param list "quickfix"|"loclist"
+function Panel:export(list)
+  local rows = self:export_rows()
+  local title = vim.trim(self.spec.title or "epicenter")
+  self:close()
+  vim.schedule(function()
+    require("epicenter.ui.qf").send_and_notify({ rows = rows, list = list, title = title })
+  end)
+end
+
+--- Registers a callback for each result set the panel receives. Used by the
+--- `--qf`/`--loc` command flags, which have to act on rows that only arrive
+--- once the server answers.
+--- @param fn fun(panel: epicenter.Panel)
+function Panel:on_populate(fn)
+  self.populate_hooks = self.populate_hooks or {}
+  table.insert(self.populate_hooks, fn)
+end
+
+--- Fires the hooks once the panel is actually SETTLED - it has rows, or it
+--- has said there are none. A bare `set_items({})` is a reload clearing the
+--- old answer, not an answer, and must not look like one.
+function Panel:_populated()
+  if self.list:count() == 0 and not self.noticed then
+    return
+  end
+  for _, fn in ipairs(self.populate_hooks or {}) do
+    fn(self)
+  end
+end
+
 --- Lines for the `?` overlay: every key this panel actually answers to, so
 --- the doc claim ("`?` in normal mode shows them inside the panel") is true
 --- everywhere a panel is used, not just the palette (F12/F13).
@@ -197,6 +234,9 @@ function Panel:_help_lines()
     add("<C-t>", "open in a new tab")
     add("o", "peek without leaving the panel")
     add("y", "yank file:line")
+    add("<Tab>", "add / remove this row from the selection")
+    add("<C-q>", "send the rows to the quickfix list")
+    add("<C-l>", "send the rows to the location list")
   end
   add("j, k", "next / previous row")
   if self.tree then
@@ -250,6 +290,17 @@ function Panel:_install_keys()
       if target then
         M.yank(target)
       end
+    end
+    actions["<Tab>"] = function()
+      self.list:toggle_mark()
+      self.list:move(1)
+      self:draw()
+    end
+    actions["<C-q>"] = function()
+      self:export("quickfix")
+    end
+    actions["<C-l>"] = function()
+      self:export("loclist")
     end
   end
 
@@ -311,14 +362,19 @@ function Panel:draw(opts)
 end
 
 function Panel:set_items(items, opts)
+  if items and #items > 0 then
+    self.noticed = false
+  end
   self.list:set_items(items)
   self:draw(opts)
+  self:_populated()
 end
 
 function Panel:set_roots(roots, opts)
   assert(self.tree, "panel was not opened as a tree")
   self.tree:set_roots(roots, opts)
   self:draw()
+  self:_populated()
 end
 
 --- Re-renders the tree after its nodes changed, keeping the selected row.
@@ -338,6 +394,7 @@ end
 --- Replaces the rows with a calm one-line message (a failure is not a crash).
 function Panel:notice(text)
   self.list.empty_text = text
+  self.noticed = true
   self:set_items({})
 end
 

@@ -30,17 +30,18 @@ end
 --- @field empty_text? string
 --- @field width? integer display columns available - nil where the caller
 ---   never set one, so a `render_item` ignoring its third argument still works
+--- @field marked? table<any, boolean> items the user has `<Tab>`-selected
 
 --- Renders the visible slice. Pure.
 --- @param state epicenter.ListState
---- @return { lines: string[], spans: table[], selected_row: integer|nil }
+--- @return { lines: string[], spans: table[], selected_row: integer|nil, marked_rows: integer[] }
 function M.render(state)
   local total = #state.items
   if total == 0 then
-    return { lines = { state.empty_text or "" }, spans = {}, selected_row = nil }
+    return { lines = { state.empty_text or "" }, spans = {}, selected_row = nil, marked_rows = {} }
   end
 
-  local lines, spans = {}, {}
+  local lines, spans, marked_rows = {}, {}, {}
   local last = math.min(total, state.top + state.height - 1)
   for i = state.top, last do
     local row = i - state.top
@@ -49,13 +50,16 @@ function M.render(state)
     for _, span in ipairs(rendered.spans or {}) do
       table.insert(spans, { row = row, hl = span.hl, from = span.from, to = span.to })
     end
+    if state.marked and state.marked[state.items[i]] then
+      table.insert(marked_rows, row)
+    end
   end
 
   local selected_row = nil
   if state.selected and state.selected >= state.top and state.selected <= last then
     selected_row = state.selected - state.top
   end
-  return { lines = lines, spans = spans, selected_row = selected_row }
+  return { lines = lines, spans = spans, selected_row = selected_row, marked_rows = marked_rows }
 end
 
 --- @class epicenter.List
@@ -82,6 +86,9 @@ function M.new(opts)
     top = 1,
     reveal = nil,
     revealed = false,
+    --- `<Tab>`-toggled rows, keyed by the item itself: an index would drift
+    --- the moment a filter reorders the view.
+    marked = {},
   }, List)
 end
 
@@ -98,6 +105,9 @@ end
 
 function List:set_items(items)
   self.all = items or {}
+  -- A fresh result set is fresh item tables: a mark kept here would point at
+  -- rows that are no longer on screen.
+  self.marked = {}
   apply_filter(self)
   self.selected = math.min(math.max(1, self.selected), math.max(1, #self.view))
   self.top = M.scroll(#self.view, self.height, self.selected, 1)
@@ -146,6 +156,36 @@ function List:select(index)
   end
 end
 
+--- Toggles the current row's `<Tab>` mark.
+--- @return boolean marked the row's new state, false when there is no row
+function List:toggle_mark()
+  local item = self:current()
+  if item == nil then
+    return false
+  end
+  local marked = not self.marked[item]
+  self.marked[item] = marked or nil
+  return marked
+end
+
+function List:clear_marks()
+  self.marked = {}
+end
+
+--- The `<Tab>` multi-selection in view order, or - when nothing is marked -
+--- every row currently shown. What "these rows" means for an export, with no
+--- mode for the user to remember.
+--- @return any[]
+function List:marked_or_all()
+  local out = {}
+  for _, item in ipairs(self.view) do
+    if self.marked[item] then
+      table.insert(out, item)
+    end
+  end
+  return #out > 0 and out or self.view
+end
+
 --- Moves by `delta`, wrapping at both ends (a palette should never dead-end).
 function List:move(delta)
   local total = #self.view
@@ -165,6 +205,7 @@ function List:state()
     selected = self.selected,
     render_item = self.render_item,
     empty_text = self.empty_text,
+    marked = self.marked,
   }
 end
 
@@ -191,6 +232,18 @@ local function paint(self, rendered, rows)
     vim.api.nvim_buf_set_extmark(self.buf, self.ns, rendered.selected_row, 0, {
       line_hl_group = "EpicenterSelection",
     })
+  end
+  -- A mark overlays the row's first cell rather than inserting one: every
+  -- row's own spans are byte offsets into text that must not shift.
+  local glyph = require("epicenter.ui.icons").ui("marked")
+  for _, row in ipairs(rendered.marked_rows or {}) do
+    if row < #lines then
+      pcall(vim.api.nvim_buf_set_extmark, self.buf, self.ns, row, 0, {
+        virt_text = { { glyph, "EpicenterAccent" } },
+        virt_text_pos = "overlay",
+        strict = false,
+      })
+    end
   end
 end
 

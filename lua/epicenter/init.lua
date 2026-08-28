@@ -115,6 +115,50 @@ function M.ensure_setup()
   end
 end
 
+--- Flags every row-producing subcommand accepts: hand the result set to a Vim
+--- list instead of leaving it in a panel. Applied here, once, so no feature
+--- reimplements them.
+local EXPORT_FLAGS = { ["--qf"] = "quickfix", ["--loc"] = "loclist" }
+
+M.EXPORT_FLAGS = EXPORT_FLAGS
+
+--- Splits an argument list into the command's own arguments and the export
+--- flag, if any. Pure.
+--- @param args string[]
+--- @return string[] rest, string|nil list
+function M.split_export_flag(args)
+  local rest, list = {}, nil
+  for _, arg in ipairs(args or {}) do
+    local mapped = EXPORT_FLAGS[arg]
+    if mapped then
+      list = mapped
+    else
+      table.insert(rest, arg)
+    end
+  end
+  return rest, list
+end
+
+--- Sends `handle`'s first answered result set to a Vim list, once. Registered
+--- rather than read now: the rows do not exist until the server answers.
+local function export_when_answered(handle, list, name)
+  if type(handle) ~= "table" or type(handle.on_populate) ~= "function" then
+    M.notify(("%s has no rows to send to a list"):format(name), "warn")
+    return
+  end
+  local done = false
+  handle:on_populate(function(populated)
+    if done then
+      return
+    end
+    done = true
+    -- Out of the paint that is still running: the export closes the panel.
+    vim.schedule(function()
+      populated:export(list)
+    end)
+  end)
+end
+
 --- Runs a `:Epicenter` subcommand.
 --- @param name string
 --- @param args? string[]
@@ -130,8 +174,13 @@ function M.run(name, args, bufnr)
     M.notify(("%s is coming in a later release"):format(name), "info")
     return
   end
+  local rest, list = M.split_export_flag(args)
   -- The command's return value is its panel handle, if it opened one.
-  return cmd.run({ args = args or {}, bufnr = bufnr or vim.api.nvim_get_current_buf() })
+  local handle = cmd.run({ args = rest, bufnr = bufnr or vim.api.nvim_get_current_buf() })
+  if list then
+    export_when_answered(handle, list, name)
+  end
+  return handle
 end
 
 --- Single user-facing notice path, so every message looks the same.
@@ -151,10 +200,16 @@ function M.complete(lead, line, _)
     end, registry.command_names())
   end
   local cmd = registry.command(words[1])
-  if cmd and cmd.complete then
-    return cmd.complete(lead)
+  local out = (cmd and cmd.complete) and cmd.complete(lead) or {}
+  if cmd and cmd.rows then
+    for flag in pairs(EXPORT_FLAGS) do
+      if vim.startswith(flag, lead) then
+        table.insert(out, flag)
+      end
+    end
+    table.sort(out)
   end
-  return {}
+  return out
 end
 
 --- Plugin-manager `build =` hook: `build = function() require("epicenter").install({ wait = true }) end`

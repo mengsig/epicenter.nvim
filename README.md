@@ -173,6 +173,22 @@ and asks the server only for that level, `h` collapses it.
 ╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Peek — `:Epicenter peek`, `<leader>eP`
+
+The definition under the cursor in a float that does **not** take focus. `<CR>`
+goes there, `q` dismisses it, and so does moving the cursor. Both keys are
+borrowed from the buffer underneath and handed straight back.
+
+```
+╭─ py_fastapi/app/models.py:28 ──────────────────────────────────────────────╮
+│ def normalize_email(raw: str) -> str:                                      │
+│     return raw.strip().lower()                                             │
+╰──────────────────────── <CR> go · q dismiss ───────────────────────────────╯
+```
+
+The same component answers `o` inside every panel — there it takes focus,
+because the panel already holds the cursor.
+
 ### Call path — `:Epicenter path`, `<leader>ep`
 
 The chain between two symbols, drawn one rung at a time.
@@ -323,6 +339,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref      |
 | `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor      |
 | `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls     |
+| `<leader>eP` | `:Epicenter peek`    | Read the definition under the cursor       |
 | `<leader>ep` | `:Epicenter path`    | Call chain between two symbols             |
 | `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer  |
 | `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, ranked by fan-in |
@@ -357,6 +374,7 @@ Inside the palette:
 | `diff`     | Impact of the changes since a git ref      |
 | `callers`  | Who calls the symbol under the cursor      |
 | `callees`  | What the symbol under the cursor calls     |
+| `peek`     | Read the definition under the cursor       |
 | `path`     | Call chain between two symbols             |
 | `outline`  | Live symbol outline of the current buffer  |
 | `hot`      | Most depended-on symbols, ranked by fan-in |
@@ -371,6 +389,22 @@ Inside the palette:
 
 Every subcommand ships today; none are pending.
 
+### To the quickfix list
+
+Every subcommand that produces rows takes `--qf` or `--loc`, sending the result
+set to the quickfix list (or this window's location list) instead of leaving it
+in a panel — the list opens ready for `:cnext`.
+
+```vim
+:Epicenter blast --qf
+:Epicenter callers M.handle --loc
+```
+
+Inside any panel or palette, `<C-q>` and `<C-l>` do the same thing. `<Tab>`
+toggles a row into a multi-selection first: with a selection `<C-q>` sends only
+those rows, with none it sends every row on screen. Each entry carries `file`,
+`line`, `col` and the row's own text.
+
 ### Inside the blast panel
 
 | Key            | Does                                                     |
@@ -379,6 +413,8 @@ Every subcommand ships today; none are pending.
 | `<C-v>` / `<C-t>` | Open in a vertical split / a new tab                  |
 | `o`            | Toggle a peek at it without leaving the panel             |
 | `y`            | Yank `file:line`                                         |
+| `<Tab>`        | Add / remove the row from the selection                  |
+| `<C-q>` / `<C-l>` | Send the rows to the quickfix / location list         |
 | `+` / `-`      | Deeper / shallower (re-queries; the chip names the depth asked for when the graph fell short) |
 | `d`            | Flip callers ↔ callees                                   |
 | `t`            | Cycle the tests scope (with → without → only)            |
@@ -396,7 +432,7 @@ hover card too.
 ### Inside the callers/callees tree
 
 (and every other results panel - outline, hot, unused - which share the same
-`j`/`k`/`gg`/`G`/`<CR>`/`o`/`y`/`/`/`?`/`q` keys)
+`j`/`k`/`gg`/`G`/`<CR>`/`o`/`y`/`<Tab>`/`<C-q>`/`/`/`?`/`q` keys)
 
 | Key                     | Does                                           |
 | ----------------------- | ----------------------------------------------- |
@@ -406,6 +442,8 @@ hover card too.
 | `<C-v>` / `<C-t>`       | Open in a vertical split / a new tab           |
 | `o`                     | Peek at the definition without leaving the panel |
 | `y`                     | Yank `file:line`                               |
+| `<Tab>`                 | Add / remove the row from the selection        |
+| `<C-q>` / `<C-l>`       | Send the rows to the quickfix / location list  |
 | `r`                     | Toggle reference edges                         |
 | `s`                     | Strict mode - drop the `?` (heuristic) edges   |
 | `t`                     | Cycle the test scope: with / without / only    |

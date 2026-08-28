@@ -154,6 +154,7 @@ local DRIVEN = {
   { "diff", { "origin/main" } },
   { "callers", {} },
   { "callees", {} },
+  { "peek", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },

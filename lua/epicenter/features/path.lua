@@ -325,16 +325,64 @@ local function show(result, from, to, previous_win, bufnr)
   return win
 end
 
+--- The chain as quickfix rows. Pure.
+--- @param steps table[] a flat Symbol[]
+--- @return epicenter.qf.Row[]
+function M.export_rows(steps)
+  local out = {}
+  for _, symbol in ipairs(steps or {}) do
+    table.insert(out, {
+      target = {
+        path = vim.uri_to_fname(symbol.uri),
+        line = symbol.line,
+        end_line = symbol.endLine,
+      },
+      text = ("%s  %s:%d"):format(symbol.qualified, symbol.file, symbol.line),
+    })
+  end
+  return out
+end
+
 function find(bufnr, from, to)
   local client = require("epicenter.client")
   local previous_win = vim.api.nvim_get_current_win()
-  local handle = { win = nil }
+  local handle = { win = nil, steps = {}, populate_hooks = {} }
+
+  --- The `--qf`/`--loc` seam every panel offers. A path is settled only once
+  --- the walk actually ran: an ambiguous endpoint reopens the picker instead,
+  --- and firing here would report "nothing to send" over an open question.
+  function handle:on_populate(fn)
+    table.insert(self.populate_hooks, fn)
+  end
+
+  function handle:export(list)
+    if self.win then
+      self.win:close()
+    end
+    local rows = M.export_rows(self.steps)
+    vim.schedule(function()
+      require("epicenter.ui.qf").send_and_notify({
+        rows = rows,
+        list = list,
+        title = ("epicenter path: %s -> %s"):format(label(from), label(to)),
+      })
+    end)
+  end
+
   client.path({ from = from, to = to }, function(err, result)
     if err then
       require("epicenter").notify(err.message or "navgraph did not answer", "error")
       return
     end
-    handle.win = show(result or {}, from, to, previous_win, bufnr)
+    result = result or {}
+    handle.win = show(result, from, to, previous_win, bufnr)
+    handle.steps = result.path or {}
+    local ambiguous = #(result.ambiguousFrom or {}) > 0 or #(result.ambiguousTo or {}) > 0
+    if not ambiguous then
+      for _, fn in ipairs(handle.populate_hooks) do
+        fn(handle)
+      end
+    end
   end, { bufnr = bufnr, channel = "path" })
   return handle
 end
@@ -363,21 +411,59 @@ local function pick(bufnr, title, on_pick)
   })
 end
 
+--- Stands in for the path handle while its endpoints are still being picked,
+--- so an export flag lands on the PATH's rows rather than the picker's.
+local function relay(picker)
+  local stand_in = { picker = picker, target = nil, populate_hooks = {} }
+
+  function stand_in.on_populate(_, fn)
+    table.insert(stand_in.populate_hooks, fn)
+  end
+
+  function stand_in.export(_, list)
+    if stand_in.target then
+      stand_in.target:export(list)
+    end
+  end
+
+  function stand_in.close()
+    if picker and picker.close then
+      picker:close()
+    end
+  end
+
+  --- Adopts the real handle once the walk finally runs.
+  function stand_in.adopt(_, handle)
+    stand_in.target = handle
+    for _, fn in ipairs(stand_in.populate_hooks) do
+      handle:on_populate(function()
+        fn(stand_in)
+      end)
+    end
+  end
+
+  return stand_in
+end
+
 local function run(ctx)
   local from, to = ctx.args[1], ctx.args[2]
   if from and to then
     return find(ctx.bufnr, from, to)
   end
+
+  local deferred
   if from then
-    return pick(ctx.bufnr, " path to ", function(picked)
-      find(ctx.bufnr, from, picked)
-    end)
+    deferred = relay(pick(ctx.bufnr, " path to ", function(picked)
+      deferred:adopt(find(ctx.bufnr, from, picked))
+    end))
+    return deferred
   end
-  return pick(ctx.bufnr, " path from ", function(start)
+  deferred = relay(pick(ctx.bufnr, " path from ", function(start)
     pick(ctx.bufnr, " path to ", function(finish)
-      find(ctx.bufnr, start, finish)
+      deferred:adopt(find(ctx.bufnr, start, finish))
     end)
-  end)
+  end))
+  return deferred
 end
 
 M.name = "path"
@@ -392,7 +478,7 @@ M.option_docs = {
 }
 
 M.commands = {
-  { name = "path", desc = "Call chain between two symbols", run = run },
+  { name = "path", desc = "Call chain between two symbols", run = run, rows = true },
 }
 
 M.keymaps = {

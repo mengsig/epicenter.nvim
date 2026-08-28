@@ -372,7 +372,12 @@ M.option_rules = {
 }
 
 M.commands = {
-  { name = "outline", desc = "Live symbol outline of the current buffer", run = run },
+  {
+    name = "outline",
+    desc = "Live symbol outline of the current buffer",
+    run = run,
+    rows = true,
+  },
 }
 
 M.keymaps = {

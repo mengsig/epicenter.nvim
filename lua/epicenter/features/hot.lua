@@ -255,8 +255,18 @@ M.options = {
 }
 
 M.commands = {
-  { name = "hot", desc = "Most depended-on symbols, ranked by fan-in", run = open_hot },
-  { name = "unused", desc = "Symbols nothing in the index reaches", run = open_unused },
+  {
+    name = "hot",
+    desc = "Most depended-on symbols, ranked by fan-in",
+    run = open_hot,
+    rows = true,
+  },
+  {
+    name = "unused",
+    desc = "Symbols nothing in the index reaches",
+    run = open_unused,
+    rows = true,
+  },
   { name = "graph", desc = "Write the call graph to a file and open it", run = export_graph },
 }
 

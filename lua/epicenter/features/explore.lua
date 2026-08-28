@@ -522,6 +522,7 @@ M.commands = {
   {
     name = "callers",
     desc = "Who calls the symbol under the cursor",
+    rows = true,
     run = function(ctx)
       return open("callers", ctx)
     end,
@@ -529,6 +530,7 @@ M.commands = {
   {
     name = "callees",
     desc = "What the symbol under the cursor calls",
+    rows = true,
     run = function(ctx)
       return open("callees", ctx)
     end,

@@ -10,6 +10,7 @@ CONTENTS                                                   *epicenter-contents*
   1. Introduction ............................. |epicenter-introduction|
   2. Installation ............................. |epicenter-installation|
   3. Commands ................................. |epicenter-commands|
+     - quickfix export ........................ |epicenter-quickfix|
   4. Mappings ................................. |epicenter-mappings|
   5. Configuration ............................ |epicenter-configuration|
   6. Highlights ............................... |epicenter-highlights|
@@ -21,6 +22,7 @@ CONTENTS                                                   *epicenter-contents*
          ripples .............................. |epicenter-ripples|
          badges ............................... |epicenter-badges|
      - explore ................................ |epicenter-explore|
+     - peek ................................... |epicenter-peek|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -99,6 +101,7 @@ The binary is looked up in this order:
     diff     |epicenter-blast|    Impact of the changes since a git ref
     callers  |epicenter-explore|  Who calls the symbol under the cursor
     callees  |epicenter-explore|  What the symbol under the cursor calls
+    peek     |epicenter-peek|     Read the definition under the cursor
     path     |epicenter-path|     Call chain between two symbols
     outline  |epicenter-outline|  Live symbol outline of the current buffer
     hot      |epicenter-hot|      Most depended-on symbols, ranked by fan-in
@@ -110,6 +113,23 @@ The binary is looked up in this order:
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
 <
+                                                         *epicenter-quickfix*
+QUICKFIX AND LOCATION LIST
+
+Every subcommand that produces rows takes `--qf` or `--loc`: the result set
+goes to the quickfix list (or this window's location list) instead of staying
+in a panel, and the list opens ready for `:cnext`. >
+
+    :Epicenter blast --qf
+    :Epicenter callers M.handle --loc
+<
+Inside any panel or palette the same two lists are one key away: `<C-q>` sends
+the rows to the quickfix list, `<C-l>` to the location list. `<Tab>` toggles a
+row into a multi-selection first - with a selection, `<C-q>` sends only those
+rows; with none, it sends every row on screen.
+
+Each entry carries `file`, `line`, `col` and the row's own text, so the list
+reads the way the panel did.
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -126,6 +146,7 @@ change `keymaps.prefix`.
     <leader>ed  :Epicenter diff     Impact of the changes since a git ref
     <leader>ec  :Epicenter callers  Who calls the symbol under the cursor
     <leader>eC  :Epicenter callees  What the symbol under the cursor calls
+    <leader>eP  :Epicenter peek     Read the definition under the cursor
     <leader>ep  :Epicenter path     Call chain between two symbols
     <leader>eo  :Epicenter outline  Live symbol outline of the current buffer
     <leader>eh  :Epicenter hot      Most depended-on symbols, ranked by fan-in
@@ -517,6 +538,8 @@ Keys inside the panel:
     <C-v>, <C-t>    open in a vertical split / a new tab
     o               peek at the definition without leaving the panel
     y               yank `file:line`
+    <Tab>           add / remove the row from the selection
+    <C-q>, <C-l>    send the rows to the quickfix / location list
     r               toggle reference edges
     s               toggle strict mode (drops the `?` edges)
     t               cycle the test scope (with -> without -> only)
@@ -532,6 +555,25 @@ Options: >lua
 
     explore = { debounce_ms = 100 },
 <
+==============================================================================
+PEEK                                                           *epicenter-peek*
+
+                                                           *:Epicenter-peek*
+:Epicenter peek                                                *<leader>eP*
+    The definition under the cursor, in a float that does NOT take focus:
+    read it and keep typing. Off a name it falls back to the definition whose
+    body the cursor sits in.
+
+    <CR>            go to what the peek is showing
+    q               dismiss it
+
+    Both keys are borrowed from the buffer underneath while the float is up
+    and handed back when it goes. Moving the cursor, entering insert mode or
+    leaving the buffer dismisses it too.
+
+    The same component answers `o` inside every panel - there it takes focus,
+    because the panel already holds the cursor.
+
 ==============================================================================
 PATH                                                           *epicenter-path*
 
