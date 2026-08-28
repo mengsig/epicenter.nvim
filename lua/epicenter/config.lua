@@ -73,6 +73,32 @@ local BASE = {
   },
 }
 
+--- Options whose default is nil, and so are absent from BASE. Named here so
+--- the generated config reference can still list them.
+M.OPTIONAL_PATHS = { "log.file", "navgraph.install_ref", "navgraph.path" }
+
+--- One line per core option path, for the generated config reference. Feature
+--- options carry their own `option_docs`; `epicenter.registry` merges them.
+--- The long-form reference is `doc/epicenter.txt`; these are the margin notes.
+local DOCS = {
+  ["animate"] = "master switch; vim.g.epicenter_reduce_motion wins",
+  ["animation.frame_budget_ms"] = "a frame costing more than this drops the next one",
+  ["highlights"] = 'e.g. { EpicenterAccent = { fg = "#7aa2f7" } }',
+  ["keymaps"] = "or false, to install none",
+  ["log"] = 'file defaults to stdpath("state")/epicenter.log',
+  ["lsp.fallback_only"] = "yield definition/references/hover to another server",
+  ["lsp.init_options"] = "passed verbatim as LSP initializationOptions",
+  ["lsp.root_markers"] = "checked in order at each level, walking upward",
+  ["lsp.init_options.tests"] = '"with" | "without" | "only"',
+  ["navgraph.args"] = "extra arguments appended to `navgraph lsp`",
+  ["navgraph.install_ref"] = "git ref to build from, on the source route",
+  ["navgraph.path"] = "explicit path; else $PATH, then the managed install",
+  ["navgraph.repo"] = "source for :Epicenter install",
+  ["ui.height"] = "fraction of the editor when <= 1, else cells",
+  ["ui.icons"] = '"auto" | "nerd" | "ascii"',
+  ["ui.width"] = "fraction of the editor when <= 1, else cells",
+}
+
 --- Paths whose default is nil or which accept more than one type.
 local VARIANTS = {
   ["navgraph.path"] = { "string" },
@@ -245,6 +271,13 @@ local function merge(defaults, opts, prefix, rule, allow_unknown)
     end
   end
   return out
+end
+
+--- One-line documentation per option path: the core ones above plus every
+--- feature's own. Drives the generated config reference.
+--- @return table<string, string>
+function M.option_docs()
+  return vim.tbl_extend("force", DOCS, registry.option_docs())
 end
 
 --- Full default table, including every feature's own options.

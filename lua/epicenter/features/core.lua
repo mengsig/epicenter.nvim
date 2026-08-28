@@ -282,7 +282,7 @@ M.summary = "Server status and lifecycle"
 M.commands = {
   {
     name = "status",
-    desc = "What the index knows about this project",
+    desc = "Dashboard: index, server, languages, log",
     run = show_status,
   },
   {
@@ -294,7 +294,7 @@ M.commands = {
   },
   {
     name = "restart",
-    desc = "Restart the navgraph server for this project",
+    desc = "Restart the server for this project",
     run = restart,
   },
   {

@@ -90,23 +90,26 @@ The binary is looked up in this order:
     Runs a subcommand. Completion lists every subcommand, and each may complete
     its own arguments. With no subcommand, runs `status`.
 
-    search   |epicenter-search|   Symbol search palette
-    grep     |epicenter-search|   Text search palette
-    blast    |epicenter-blast|    Blast radius of the symbol under the cursor
+                                                    *epicenter-commands-table*
+>
+    search   |epicenter-search|   Fuzzy symbol search across the project
+    grep     |epicenter-search|   Repo-wide text search, unsaved edits too
+    blast    |epicenter-blast|    Blast radius of the symbol at the cursor
     hover    |epicenter-blast|    What this symbol is, and who calls it
     diff     |epicenter-blast|    Impact of the changes since a git ref
     callers  |epicenter-explore|  Who calls the symbol under the cursor
     callees  |epicenter-explore|  What the symbol under the cursor calls
-    path     |epicenter-path|     Call path between two symbols
+    path     |epicenter-path|     Call chain between two symbols
     outline  |epicenter-outline|  Live symbol outline of the current buffer
-    hot      |epicenter-hot|      Hot spots ranked by fan-in
+    hot      |epicenter-hot|      Most depended-on symbols, ranked by fan-in
     unused   |epicenter-hot|      Symbols nothing in the index reaches
     graph    |epicenter-hot|      Write the call graph to a file and open it
-    status   |epicenter-core|     What the index knows about this project
+    status   |epicenter-core|     Dashboard: index, server, languages, log
     install  |epicenter-core|     Download or build the navgraph binary
     restart  |epicenter-core|     Restart the server for this project
     rescan   |epicenter-core|     Re-stat every file and rebuild the index
     log      |epicenter-core|     Open the epicenter log
+<
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -114,17 +117,20 @@ The binary is looked up in this order:
 One prefix, `<leader>e` by default. Set `keymaps = false` to install none, or
 change `keymaps.prefix`.
 
-    <leader>es      :Epicenter search
-    <leader>eg      :Epicenter grep
-    <leader>ee      :Epicenter blast
-    <leader>ek      :Epicenter hover
-    <leader>ed      :Epicenter diff
-    <leader>ec      :Epicenter callers
-    <leader>eC      :Epicenter callees
-    <leader>ep      :Epicenter path
-    <leader>eo      :Epicenter outline
-    <leader>eh      :Epicenter hot
-    <leader>ex      :Epicenter status
+                                                    *epicenter-mappings-table*
+>
+    <leader>es  :Epicenter search   Fuzzy symbol search across the project
+    <leader>eg  :Epicenter grep     Repo-wide text search, unsaved edits too
+    <leader>ee  :Epicenter blast    Blast radius of the symbol at the cursor
+    <leader>ek  :Epicenter hover    What this symbol is, and who calls it
+    <leader>ed  :Epicenter diff     Impact of the changes since a git ref
+    <leader>ec  :Epicenter callers  Who calls the symbol under the cursor
+    <leader>eC  :Epicenter callees  What the symbol under the cursor calls
+    <leader>ep  :Epicenter path     Call chain between two symbols
+    <leader>eo  :Epicenter outline  Live symbol outline of the current buffer
+    <leader>eh  :Epicenter hot      Most depended-on symbols, ranked by fan-in
+    <leader>ex  :Epicenter status   Dashboard: index, server, languages, log
+<
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
 them inside the panel.
@@ -137,70 +143,70 @@ require("epicenter").setup({opts})
     Merges {opts} over the defaults. An unknown key or a wrong type is an
     error naming the exact option - a typo never silently does nothing.
 
+                                                      *epicenter-config-table*
 Defaults: >lua
-
     {
-      navgraph = {
-        path = nil,
-        args = {},
-        repo = "mengsig/NavGraph",
-        install_ref = nil,
-      },
-      lsp = {
-        auto_start = true,
-        root_markers = { ".navgraph", ".git" },
-        fallback_only = true,
-        init_options = {
-          tests = "with",
-          strict = false,
-          debounceMs = 120,
-          watch = true,
-          watchIntervalMs = 2000,
-          depth = 3,
-        },
-        restart = { max = 3, backoff_ms = { 500, 2000, 5000 } },
-      },
-      ui = {
-        border = "rounded",
-        width = 0.8,
-        height = 0.8,
-        max_width = 120,
-        max_height = 30,
-        winblend = 0,
-        icons = "auto",
-        preview = true,
-      },
       animate = true,
       animation = {
-        open_ms = 120,
         close_ms = 90,
-        stagger_ms = 8,
         fps = 60,
         frame_budget_ms = 8,
+        open_ms = 120,
+        stagger_ms = 8,
       },
-      highlights = {},
-      keymaps = { prefix = "<leader>e" },
-      search = { debounce_ms = 40, limit = 50 },
-      grep = { debounce_ms = 60, limit = 200 },
+      badges = "cursor",
       blast = {
         depth = 2,
-        max_depth = 6,
         direction = "callers",
-        tests = "with",
-        strict = false,
-        layout = "float",
         follow_debounce_ms = 80,
+        layout = "float",
+        max_depth = 6,
         realtime_debounce_ms = 150,
+        strict = false,
+        tests = "with",
       },
-      ripples = true,
-      hover = { callers = 5, max_width = 80 },
-      badges = "cursor",
       explore = { debounce_ms = 100 },
+      grep = { debounce_ms = 60, limit = 200 },
+      highlights = {},
+      hot = { bar_width = 12, limit = 30 },
+      hover = { callers = 5, max_width = 80 },
+      keymaps = { prefix = "<leader>e" },
+      log = { file = nil, level = "warn" },
+      lsp = {
+        auto_start = true,
+        fallback_only = true,
+        init_options = {
+          debounceMs = 120,
+          depth = 3,
+          strict = false,
+          tests = "with",
+          watch = true,
+          watchIntervalMs = 2000,
+        },
+        restart = { backoff_ms = { 500, 2000, 5000 }, max = 3 },
+        root_markers = { ".navgraph", ".git" },
+      },
+      navgraph = {
+        args = {},
+        install_ref = nil,
+        path = nil,
+        repo = "mengsig/NavGraph",
+      },
+      outline = { debounce_ms = 80, width = 34 },
       path = { step_ms = 45 },
-      outline = { width = 34, debounce_ms = 80 },
-      hot = { limit = 30, bar_width = 12 },
+      ripples = true,
+      search = { debounce_ms = 40, limit = 50 },
+      ui = {
+        border = "rounded",
+        height = 0.8,
+        icons = "auto",
+        max_height = 30,
+        max_width = 120,
+        preview = true,
+        width = 0.8,
+        winblend = 0,
+      },
       unused = { limit = 200 },
-      log = { level = "warn", file = nil },
     }
 <
 navgraph.path        Explicit binary path. When set but not executable this is

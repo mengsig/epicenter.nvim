@@ -480,6 +480,10 @@ M.options = {
   explore = { debounce_ms = 100 },
 }
 
+M.option_docs = {
+  ["explore"] = "quiet time after a reindex before rows refetch",
+}
+
 M.commands = {
   {
     name = "callers",

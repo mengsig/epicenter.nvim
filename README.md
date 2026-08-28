@@ -71,19 +71,21 @@ change them.
 
 One prefix, `<leader>e` by default (`keymaps = false` installs none).
 
-| Key          | Command              | Does                                          |
-| ------------ | -------------------- | --------------------------------------------- |
-| `<leader>es` | `:Epicenter search`  | Fuzzy symbol search across the project        |
-| `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits included  |
-| `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol under the cursor   |
-| `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it         |
-| `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref         |
-| `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor         |
-| `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls        |
-| `<leader>ep` | `:Epicenter path`    | Call chain between two symbols                |
-| `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer     |
-| `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, with fan-in bars    |
-| `<leader>ex` | `:Epicenter status`  | Dashboard: index, server, languages, log      |
+<!-- registry:keymaps -->
+| Key          | Command              | Does                                       |
+| ------------ | -------------------- | ------------------------------------------ |
+| `<leader>es` | `:Epicenter search`  | Fuzzy symbol search across the project     |
+| `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits too   |
+| `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol at the cursor   |
+| `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it      |
+| `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref      |
+| `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor      |
+| `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls     |
+| `<leader>ep` | `:Epicenter path`    | Call chain between two symbols             |
+| `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer  |
+| `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, ranked by fan-in |
+| `<leader>ex` | `:Epicenter status`  | Dashboard: index, server, languages, log   |
+<!-- /registry:keymaps -->
 
 Inside the palette:
 
@@ -102,25 +104,27 @@ Inside the palette:
 
 `:Epicenter <subcommand>`, with completion.
 
-| Subcommand | Does                                                     |
-| ---------- | -------------------------------------------------------- |
-| `search`   | Symbol search palette                                    |
-| `grep`     | Text search palette                                      |
-| `blast`    | Blast radius of the symbol under the cursor              |
-| `hover`    | What this symbol is, and who calls it                    |
-| `diff`     | Impact of the changes since a git ref                    |
-| `callers`  | Tree of who calls the symbol under the cursor            |
-| `callees`  | Tree of what the symbol under the cursor calls           |
-| `path`     | Call chain between two symbols                           |
-| `outline`  | Live symbol outline sidebar for the current buffer       |
-| `hot`      | Most depended-on symbols, ranked by fan-in               |
-| `unused`   | Symbols nothing in the index reaches                     |
-| `graph`    | Write the call graph to a file and open it               |
-| `status`   | Dashboard: index, server state, languages, log, actions  |
-| `install`  | Download or build the `navgraph` binary                  |
-| `restart`  | Restart the server for this project                      |
-| `rescan`   | Re-stat every file and rebuild the index (`rescan full`) |
-| `log`      | Open the epicenter log                                   |
+<!-- registry:commands -->
+| Subcommand | Does                                       |
+| ---------- | ------------------------------------------ |
+| `search`   | Fuzzy symbol search across the project     |
+| `grep`     | Repo-wide text search, unsaved edits too   |
+| `blast`    | Blast radius of the symbol at the cursor   |
+| `hover`    | What this symbol is, and who calls it      |
+| `diff`     | Impact of the changes since a git ref      |
+| `callers`  | Who calls the symbol under the cursor      |
+| `callees`  | What the symbol under the cursor calls     |
+| `path`     | Call chain between two symbols             |
+| `outline`  | Live symbol outline of the current buffer  |
+| `hot`      | Most depended-on symbols, ranked by fan-in |
+| `unused`   | Symbols nothing in the index reaches       |
+| `graph`    | Write the call graph to a file and open it |
+| `status`   | Dashboard: index, server, languages, log   |
+| `install`  | Download or build the navgraph binary      |
+| `restart`  | Restart the server for this project        |
+| `rescan`   | Re-stat every file and rebuild the index   |
+| `log`      | Open the epicenter log                     |
+<!-- /registry:commands -->
 
 Every subcommand ships today; none are pending.
 
@@ -182,72 +186,73 @@ definition in the buffer, `false` for none.
 
 Defaults in full:
 
+<!-- registry:config -->
 ```lua
 require("epicenter").setup({
-  navgraph = {
-    path = nil,               -- explicit binary path; otherwise $PATH, then the managed install
-    args = {},                -- extra arguments appended to `navgraph lsp`
-    repo = "mengsig/NavGraph", -- source for :Epicenter install
-    install_ref = nil,        -- git ref to build from, when building from source
+  animate = true,                           -- master switch; vim.g.epicenter_reduce_motion wins
+  animation = {
+    close_ms = 90,
+    fps = 60,
+    frame_budget_ms = 8,                    -- a frame costing more than this drops the next one
+    open_ms = 120,
+    stagger_ms = 8,
   },
+  badges = "cursor",                        -- "cursor" | "all" | false
+  blast = {
+    depth = 2,                              -- rings requested
+    direction = "callers",                  -- "callers" | "callees"
+    follow_debounce_ms = 80,
+    layout = "float",                       -- "float" | "vsplit"
+    max_depth = 6,                          -- upper bound for `+` in the panel
+    realtime_debounce_ms = 150,
+    strict = false,                         -- drop name-resolved (heuristic) edges
+    tests = "with",                         -- "with" | "without" | "only"
+  },
+  explore = { debounce_ms = 100 },          -- quiet time after a reindex before rows refetch
+  grep = { debounce_ms = 60, limit = 200 },
+  highlights = {},                          -- e.g. { EpicenterAccent = { fg = "#7aa2f7" } }
+  hot = { bar_width = 12, limit = 30 },
+  hover = { callers = 5, max_width = 80 },
+  keymaps = { prefix = "<leader>e" },       -- or false, to install none
+  log = { file = nil, level = "warn" },     -- file defaults to stdpath("state")/epicenter.log
   lsp = {
     auto_start = true,
-    root_markers = { ".navgraph", ".git" },
-    fallback_only = true,     -- hide navgraph's definition/references/hover/documentSymbol
-                              -- on buffers that already have another language server
-    init_options = {
-      tests = "with",         -- "with" | "without" | "only"
-      strict = false,
+    fallback_only = true,                   -- yield definition/references/hover to another server
+    init_options = {                        -- passed verbatim as LSP initializationOptions
       debounceMs = 120,
+      depth = 3,
+      strict = false,
+      tests = "with",                       -- "with" | "without" | "only"
       watch = true,
       watchIntervalMs = 2000,
-      depth = 3,
     },
-    restart = { max = 3, backoff_ms = { 500, 2000, 5000 } },
+    restart = { backoff_ms = { 500, 2000, 5000 }, max = 3 },
+    root_markers = { ".navgraph", ".git" }, -- checked in order at each level, walking upward
   },
+  navgraph = {
+    args = {},                              -- extra arguments appended to `navgraph lsp`
+    install_ref = nil,                      -- git ref to build from, on the source route
+    path = nil,                             -- explicit path; else $PATH, then the managed install
+    repo = "mengsig/NavGraph",              -- source for :Epicenter install
+  },
+  outline = { debounce_ms = 80, width = 34 },
+  path = { step_ms = 45 },                  -- time each rung of the path ladder takes to draw
+  ripples = true,                           -- mark the impacted lines while a panel is open
+  search = { debounce_ms = 40, limit = 50 },
   ui = {
     border = "rounded",
-    width = 0.8,              -- fraction of the editor when <= 1, absolute cells when > 1
-    height = 0.8,
-    max_width = 120,
+    height = 0.8,                           -- fraction of the editor when <= 1, else cells
+    icons = "auto",                         -- "auto" | "nerd" | "ascii"
     max_height = 30,
-    winblend = 0,
-    icons = "auto",           -- "auto" | "nerd" | "ascii"
+    max_width = 120,
     preview = true,
+    width = 0.8,                            -- fraction of the editor when <= 1, else cells
+    winblend = 0,
   },
-  animate = true,             -- vim.g.epicenter_reduce_motion = true also disables motion
-  animation = {
-    open_ms = 120,
-    close_ms = 90,
-    stagger_ms = 8,
-    fps = 60,
-    frame_budget_ms = 8,      -- a frame costing more than this drops the next one
-  },
-  highlights = {},            -- e.g. { EpicenterAccent = { fg = "#7aa2f7" } }
-  keymaps = { prefix = "<leader>e" }, -- or false
-  search = { debounce_ms = 40, limit = 50 },
-  grep = { debounce_ms = 60, limit = 200 },
-  blast = {
-    depth = 2,                -- rings requested
-    max_depth = 6,            -- upper bound for `+` in the panel
-    direction = "callers",    -- "callers" | "callees"
-    tests = "with",           -- "with" | "without" | "only"
-    strict = false,           -- drop name-resolved (heuristic) edges
-    layout = "float",         -- "float" | "vsplit"
-    follow_debounce_ms = 80,
-    realtime_debounce_ms = 150,
-  },
-  ripples = true,             -- mark impacted lines in the code while a panel is open
-  hover = { callers = 5, max_width = 80 },
-  badges = "cursor",          -- "cursor" | "all" | false
-  explore = { debounce_ms = 100 }, -- quiet time before a reindex refreshes the open rows
-  path = { step_ms = 45 },     -- time each rung of the path ladder takes to draw
-  outline = { width = 34, debounce_ms = 80 },
-  hot = { limit = 30, bar_width = 12 },
   unused = { limit = 200 },
-  log = { level = "warn", file = nil }, -- nil -> stdpath("state")/epicenter.log
 })
 ```
+<!-- /registry:config -->
 
 Unknown keys and wrong types are errors at `setup()` time, naming the exact
 option — a typo never silently does nothing.
@@ -350,16 +355,32 @@ every `navgraph/*` method.
 ## Development
 
 ```sh
-make test    # headless suite
-make smoke   # drives the real palette in a real Neovim and asserts the result
-make lint    # stylua --check + luacheck
-make fmt     # stylua
+make test        # headless suite, against the fake server
+make test-real   # the same features against a real `navgraph lsp` binary
+make smoke       # drives the real palette in a real Neovim and asserts the result
+make lint        # stylua --check + luacheck
+make fmt         # stylua
+make docs-check  # README/vimdoc still match the registry
+make docs-fix    # regenerate them
 ```
 
 Tests run against `tests/fake_navgraph.lua`, a fake server that speaks the same
-protocol over stdio against `tests/fixtures/` — so the suite needs no `zig` and
-no network. Its handlers are registered per area under `tests/fake/`; a new
+protocol over stdio against `tests/fixtures/proj` — so the suite needs no `zig`
+and no network. Its handlers are registered per area under `tests/fake/`; a new
 area is one new file there.
+
+`make test-real` runs `tests/real/` against the real binary over
+`tests/fixtures/real`, a small multi-language tree. Set `NAVGRAPH_BIN` when the
+`navgraph` on `$PATH` is not the one you mean to test. Both lanes enforce
+`tests/contract/schema.lua`, the editor protocol as data: a request carrying a
+param the contract does not name is refused, and a response missing a promised
+field fails.
+
+The keymap table, the command table and the config reference above are
+**generated** from `lua/epicenter/registry.lua` — the regions between the
+`<!-- registry:… -->` markers here and the `*epicenter-…-table*` tags in
+`doc/epicenter.txt` are written by `make docs-fix`, and CI fails if they drift.
+Edit the feature spec, not the table.
 
 ## Licence
 

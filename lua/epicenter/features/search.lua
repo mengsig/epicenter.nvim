@@ -244,7 +244,7 @@ M.commands = {
   { name = "search", desc = "Fuzzy symbol search across the project", run = open_symbol_palette },
   {
     name = "grep",
-    desc = "Repo-wide text search, unsaved edits included",
+    desc = "Repo-wide text search, unsaved edits too",
     run = open_grep_palette,
   },
 }

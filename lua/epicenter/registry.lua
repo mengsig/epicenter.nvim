@@ -27,6 +27,7 @@
 --- @field keymaps? epicenter.Keymap[]
 --- @field options? table merged into the config defaults under its own keys
 --- @field option_rules? epicenter.OptionRules validation for the feature's own options
+--- @field option_docs? table<string, string> config path -> its one-line reference entry
 --- @field setup? fun(cfg: table) called by `epicenter.setup()`; must be idempotent
 --- @field health? fun(add: fun(level: "ok"|"warn"|"error", msg: string))
 ---
@@ -56,6 +57,21 @@ local function validate_spec(spec, source)
 end
 
 local RULE_KINDS = { "variants", "enums", "positive" }
+
+--- Same ownership rule as the option rules: a feature may only document a
+--- path rooted at an option key it owns.
+local function collect_docs(spec, owned, into)
+  for path, text in pairs(spec.option_docs or {}) do
+    local key = tostring(path):match("^[^.]+")
+    if not owned[key] then
+      fail("feature %q documents option %q, which it does not own", spec.name, tostring(path))
+    end
+    if type(text) ~= "string" then
+      fail("feature %q documents option %q with a %s", spec.name, tostring(path), type(text))
+    end
+    into[path] = text
+  end
+end
 
 --- A feature may only relax or constrain option paths rooted at a key it owns,
 --- so no feature can loosen another's option - or a core one.
@@ -102,6 +118,7 @@ local function build()
     keymaps = {},
     options = {},
     rules = { variants = {}, enums = {}, positive = {} },
+    docs = {},
   }
   local feature_names, option_owner = {}, {}
 
@@ -146,6 +163,7 @@ local function build()
       built.options[key] = vim.deepcopy(value)
     end
     collect_rules(spec, owned, built.rules)
+    collect_docs(spec, owned, built.docs)
   end
 
   return built
@@ -194,6 +212,13 @@ end
 --- @return { variants: table, enums: table, positive: table }
 function M.option_rules()
   return vim.deepcopy(get().rules)
+end
+
+--- One-line reference entries features declared for their own options, keyed
+--- by config path. `epicenter.config` merges these with its own.
+--- @return table<string, string>
+function M.option_docs()
+  return vim.deepcopy(get().docs)
 end
 
 --- Test seam: forces a rebuild on next access.

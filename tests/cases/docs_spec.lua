@@ -189,3 +189,92 @@ describe("documentation stays in sync", function()
     expect.matches(row:lower(), "search", "the <C-k> row must say it only applies to search")
   end)
 end)
+
+--- The keymap table, the command table and the config reference are rendered
+--- from the registry (`make docs-check` diffs them against README/vimdoc).
+--- These are the rules that rendering has to keep, wherever it is written out.
+describe("the generated doc tables", function()
+  local docs = require("epicenter.docs")
+
+  before_each(function()
+    require("epicenter.config").reset()
+  end)
+
+  it("gives every installed keymap a row, with its command's description", function()
+    local rows = docs.keymap_rows()
+    expect.eq(#rows, #registry.keymaps())
+    local prefix = require("epicenter.config").defaults().keymaps.prefix
+    for index, map in ipairs(registry.keymaps()) do
+      expect.eq(rows[index].lhs, prefix .. map.suffix)
+      expect.eq(rows[index].desc, registry.command(map.command).desc)
+    end
+  end)
+
+  it("gives every subcommand a row, in registration order", function()
+    expect.eq(
+      vim.tbl_map(function(row)
+        return row.name
+      end, docs.command_rows()),
+      registry.command_names()
+    )
+  end)
+
+  it("lists the options whose default is nil, which the defaults table cannot hold", function()
+    local block = table.concat(docs.defaults_lines(), "\n")
+    for _, path in ipairs(require("epicenter.config").OPTIONAL_PATHS) do
+      local leaf = path:match("[^.]+$")
+      expect.matches(block, leaf .. " = nil,", path .. " is missing from the config reference")
+    end
+  end)
+
+  it("renders every top-level option exactly once", function()
+    local block = docs.defaults_lines()
+    for key in pairs(require("epicenter.config").defaults()) do
+      local seen = 0
+      for _, line in ipairs(block) do
+        if line:match("^  " .. vim.pesc(key) .. " = ") then
+          seen = seen + 1
+        end
+      end
+      expect.eq(seen, 1, key .. " should appear once at the top level")
+    end
+  end)
+
+  it("only comments a path some option actually owns", function()
+    local config = require("epicenter.config")
+    --- `and/or` would collapse a `false` default (blast.strict) to nil here.
+    local function exists(defaults, path)
+      local at = defaults
+      for _, part in ipairs(vim.split(path, ".", { plain = true })) do
+        if type(at) ~= "table" then
+          return false
+        end
+        at = at[part]
+        if at == nil then
+          return false
+        end
+      end
+      return true
+    end
+
+    local defaults = config.defaults()
+    for path in pairs(config.option_docs()) do
+      expect.truthy(
+        exists(defaults, path) or vim.tbl_contains(config.OPTIONAL_PATHS, path),
+        path .. " is documented but is not an option"
+      )
+    end
+  end)
+
+  it("refuses a feature that documents an option it does not own", function()
+    local specs = require("epicenter.features")
+    local original = vim.deepcopy(specs[1].option_docs or {})
+    specs[1].option_docs = { ["ui.width"] = "not mine" }
+    registry.reset()
+    expect.errors(function()
+      registry.option_docs()
+    end, "does not own")
+    specs[1].option_docs = next(original) and original or nil
+    registry.reset()
+  end)
+end)

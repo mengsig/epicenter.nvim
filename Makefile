@@ -3,7 +3,7 @@ LUA_FILES := $(shell find lua plugin tests -name '*.lua' -not -path 'tests/fixtu
 
 NAVGRAPH_BIN ?= navgraph
 
-.PHONY: test test-real smoke lint fmt doc all
+.PHONY: test test-real smoke lint fmt doc docs-check docs-fix all
 
 all: lint test
 
@@ -35,6 +35,15 @@ lint:
 
 fmt:
 	stylua $(LUA_FILES)
+
+# The keymap table, the command table and the config reference are generated
+# from the registry; docs-check fails when README/vimdoc drifted, docs-fix
+# rewrites them in place.
+docs-check:
+	$(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/docs_check.lua
+
+docs-fix:
+	$(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/docs_check.lua --write
 
 doc:
 	$(NVIM) --headless --clean -c 'helptags doc' -c 'quit'

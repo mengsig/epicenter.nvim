@@ -106,3 +106,5 @@ jobs:
           version: stable
       - name: helptags build
         run: nvim --headless --clean -c 'helptags doc' -c 'quit'
+      - name: docs in sync with the registry
+        run: make docs-check

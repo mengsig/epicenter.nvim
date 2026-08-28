@@ -261,8 +261,12 @@ M.options = {
   path = { step_ms = 45 },
 }
 
+M.option_docs = {
+  ["path"] = "time each rung of the path ladder takes to draw",
+}
+
 M.commands = {
-  { name = "path", desc = "Call path between two symbols", run = run },
+  { name = "path", desc = "Call chain between two symbols", run = run },
 }
 
 M.keymaps = {

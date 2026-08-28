@@ -29,6 +29,17 @@ M.options = {
   badges = "cursor",
 }
 
+M.option_docs = {
+  ["badges"] = '"cursor" | "all" | false',
+  ["blast.depth"] = "rings requested",
+  ["blast.direction"] = '"callers" | "callees"',
+  ["blast.layout"] = '"float" | "vsplit"',
+  ["blast.max_depth"] = "upper bound for `+` in the panel",
+  ["blast.strict"] = "drop name-resolved (heuristic) edges",
+  ["blast.tests"] = '"with" | "without" | "only"',
+  ["ripples"] = "mark the impacted lines while a panel is open",
+}
+
 M.option_rules = {
   variants = {
     ["badges"] = { "string", "boolean" },
@@ -106,7 +117,7 @@ end
 M.commands = {
   {
     name = "blast",
-    desc = "Blast radius of the symbol under the cursor",
+    desc = "Blast radius of the symbol at the cursor",
     run = function(ctx)
       local name = ctx.args[1]
       return require("epicenter.features.blast.panel").open({

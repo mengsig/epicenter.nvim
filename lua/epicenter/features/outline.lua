@@ -310,7 +310,7 @@ M.options = {
 }
 
 M.commands = {
-  { name = "outline", desc = "Symbol outline of the current file", run = run },
+  { name = "outline", desc = "Live symbol outline of the current buffer", run = run },
 }
 
 M.keymaps = {
