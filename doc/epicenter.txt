@@ -192,7 +192,7 @@ Defaults: >lua
         path = nil,
         repo = "mengsig/NavGraph",
       },
-      outline = { debounce_ms = 80, width = 34 },
+      outline = { debounce_ms = 80, layout = "vsplit", width = 34 },
       path = { step_ms = 45 },
       ripples = true,
       search = { debounce_ms = 40, limit = 50 },

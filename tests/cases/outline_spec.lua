@@ -283,3 +283,136 @@ describe("outline sidebar against the fake navgraph server", function()
     expect.eq(outline.current(), nil)
   end)
 end)
+
+--- merge-gate F8: the sidebar was an editor-relative FLOAT pinned at
+--- `{row=0,col=0}`, so it painted over the leftmost `outline.width` columns of
+--- the file it outlines. Survivable while you read it; not afterwards, because
+--- this panel's `<CR>` deliberately stays open - the definition you jumped to
+--- came back missing its first 34 columns.
+describe("outline geometry", function()
+  local root, buf, panel
+
+  local function open(relative)
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, relative)))
+    buf = vim.api.nvim_get_current_buf()
+    panel = require("epicenter").run("outline", {}, buf)
+    wait(function()
+      return panel.list:count() > 0
+    end, 10000, "outline for " .. relative)
+    return panel
+  end
+
+  --- Windows showing a real file, with where they start and how wide they are.
+  local function source_windows()
+    local out = {}
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local candidate = vim.api.nvim_win_get_buf(win)
+      if vim.bo[candidate].buftype == "" and vim.api.nvim_buf_get_name(candidate) ~= "" then
+        table.insert(out, {
+          win = win,
+          col = vim.api.nvim_win_get_position(win)[2],
+          width = vim.api.nvim_win_get_width(win),
+        })
+      end
+    end
+    return out
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+    vim.cmd("silent! only")
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    vim.cmd("silent! only")
+    require("epicenter.events").clear()
+  end)
+
+  it("takes its own columns instead of covering the source", function()
+    local full_width = vim.api.nvim_win_get_width(vim.api.nvim_get_current_win())
+    open("app/server.lua")
+
+    local config = vim.api.nvim_win_get_config(panel.win.win)
+    expect.eq(config.relative, "", "the sidebar must be a real window, not a float over one")
+
+    local width = require("epicenter.config").get().outline.width
+    expect.eq(vim.api.nvim_win_get_width(panel.win.win), width)
+
+    local sources = source_windows()
+    expect.eq(#sources, 1, "one source window: " .. vim.inspect(sources))
+    expect.truthy(
+      sources[1].col > width,
+      ("the source starts at column %d, right of the %d-wide sidebar"):format(sources[1].col, width)
+    )
+    expect.truthy(
+      sources[1].width < full_width,
+      "the source window gave up the columns rather than being painted over"
+    )
+    -- Nothing of the file is hidden: sidebar + separator + source == the grid.
+    expect.eq(width + 1 + sources[1].width, full_width)
+  end)
+
+  it("carries its title and its footer without a border to hang them on", function()
+    open("app/server.lua")
+    local winbar = vim.wo[panel.win.win].winbar
+    expect.matches(winbar, "outline: server%.lua")
+    panel:set_footer(" 4 · functions ")
+    expect.matches(vim.wo[panel.win.win].winbar, "4 · functions")
+  end)
+
+  it("<CR> hands the cursor to the source and leaves the sidebar a sidebar", function()
+    open("app/server.lua")
+    local source = require("epicenter.features.outline").current().source_win
+    panel.list:select(3)
+    local target = panel:current().symbol
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+      if map.lhs == "<CR>" and map.callback then
+        map.callback()
+        break
+      end
+    end
+
+    expect.truthy(panel:valid(), "the sidebar stays open")
+    expect.eq(vim.api.nvim_get_current_win(), source, "and the cursor is in the code")
+    expect.eq(vim.api.nvim_win_get_cursor(source)[1], target.line)
+    expect.eq(vim.api.nvim_win_get_config(panel.win.win).relative, "")
+  end)
+
+  it("the float layout closes on the jump rather than sitting on it", function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = false,
+      outline = { layout = "float" },
+    })
+    open("app/server.lua")
+    expect.eq(vim.api.nvim_win_get_config(panel.win.win).relative, "editor")
+
+    panel.list:select(3)
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+      if map.lhs == "<CR>" and map.callback then
+        map.callback()
+        break
+      end
+    end
+    wait(function()
+      return not panel:valid()
+    end, 5000, "the float to close on the jump")
+  end)
+
+  it("resizing the split re-flows the rows it shows", function()
+    open("app/server.lua")
+    local before = panel.list.height
+    vim.api.nvim_win_set_height(panel.win.win, math.max(3, before - 4))
+    panel:draw()
+    expect.eq(panel.list.height, vim.api.nvim_win_get_height(panel.win.win))
+    expect.truthy(panel.list.height ~= before, "the list followed the window")
+  end)
+end)

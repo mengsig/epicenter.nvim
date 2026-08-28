@@ -209,12 +209,13 @@ end)
 check("the level replaced the placeholder", explorer.list:count() == 3)
 explorer:close()
 
-local outline = require("epicenter").run("outline", {}, source)
-wait_for("outline listed the buffer's symbols", function()
-  return outline.list:count() >= 3
-end)
-check("the sidebar is anchored on the left", outline.win:geometry().col == 0)
-outline:close()
+-- The outline sidebar is a real vertical split (F8), and it is checked at the
+-- very end of this file: `--headless` has no UI attached, so `vim.o.columns`,
+-- `vim.o.lines` and `laststatus` are bookkeeping rather than a real grid, and
+-- changing any of them once a real split has been drawn trips an assertion
+-- inside Neovim 0.12.4's own grid code. Reproducible with no plugin loaded,
+-- and headless only - a real terminal is fine. So every screen-size and
+-- laststatus case runs first, and the split runs last.
 
 local hot = require("epicenter").run("hot", {}, source)
 wait_for("hot spots ranked the file", function()
@@ -343,6 +344,37 @@ vim.o.splitkeep = "cursor"
 vim.o.lines = saved_lines
 require("epicenter").setup({ ui = { icons = "ascii" } })
 -- === end compat wave ===
+
+-- === outline sidebar: a real split, so it goes last (see the note above) ===
+local outline = require("epicenter").run("outline", {}, source)
+wait_for("outline listed the buffer's symbols", function()
+  return outline.list:count() >= 3
+end)
+-- F8: a real window on the left, not a float painted over the source. The
+-- source keeps every column it still owns.
+local outline_win = outline.win.win
+local source_win_before = vim.fn.bufwinid(source)
+check("the sidebar is a real window", vim.api.nvim_win_get_config(outline_win).relative == "")
+check(
+  "the winbar carries its title",
+  vim.wo[outline_win].winbar:match("outline: server%.lua") ~= nil,
+  vim.wo[outline_win].winbar
+)
+check("the sidebar is anchored on the left", vim.api.nvim_win_get_position(outline_win)[2] == 0)
+check(
+  "the source starts right of it",
+  vim.api.nvim_win_get_position(source_win_before)[2] > vim.api.nvim_win_get_width(outline_win)
+)
+check(
+  "nothing of the file is hidden",
+  vim.api.nvim_win_get_width(outline_win) + 1 + vim.api.nvim_win_get_width(source_win_before)
+    == vim.o.columns
+)
+outline:close()
+check(
+  "closing it gives the columns back",
+  vim.api.nvim_win_get_position(vim.fn.bufwinid(source))[2] == 0
+)
 
 local messages = vim.api.nvim_exec2("messages", { output = true }).output
 local bad = {}

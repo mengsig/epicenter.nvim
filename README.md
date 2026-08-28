@@ -195,22 +195,26 @@ When there is no path it says so, rather than showing an empty panel.
 
 ### Outline — `:Epicenter outline`, `<leader>eo`
 
-A sidebar down the left edge, live: it follows the cursor and re-renders when
-the buffer is reindexed. `<C-k>` cycles the outline's kind filter.
+A real vertical split down the left edge, live: it follows the cursor and
+re-renders when the buffer is reindexed. `<C-k>` cycles the outline's kind
+filter. `<CR>` jumps and hands the cursor back to the code, leaving the sidebar
+open — a sidebar you keep browsing from must never sit on top of the definition
+it just took you to, so this one takes its own columns instead of covering
+them. `outline.layout = "float"` gets a transient overlay instead, which closes
+on the jump for the same reason.
 
 ```
-╭─ outline ───────────────╮
-│  va _USERS            5 │
-│  cl UserService       8 │
-│    me fetch          11 │
-│    me _query         18 │
-│    me create         22 │
-│    me remove         29 │
-│    me list_all       36 │
-│    me replace        40 │
-│    me update_email   48 │
-│  fn _seed_demo_data  57 │
-╰─────────────────────────╯
+ outline: user_service.py                              10 · functions
+  va _USERS            5 │ class UserService:
+  cl UserService       8 │     def fetch(self, user_id: int):
+    me fetch          11 │         return self._query(user_id)
+    me _query         18 │
+    me create         22 │     def _query(self, user_id: int):
+    me remove         29 │         return _USERS.get(user_id)
+    me list_all       36 │
+    me replace        40 │     def create(self, name: str, email: str):
+    me update_email   48 │         user_id = len(_USERS) + 1
+  fn _seed_demo_data  57 │         _USERS[user_id] = {"name": name}
 ```
 
 ### Hot spots — `:Epicenter hot`, `<leader>eh`
@@ -463,7 +467,7 @@ require("epicenter").setup({
     path = nil,                             -- explicit path; else $PATH, then the managed install
     repo = "mengsig/NavGraph",              -- source for :Epicenter install
   },
-  outline = { debounce_ms = 80, width = 34 },
+  outline = { debounce_ms = 80, layout = "vsplit", width = 34 },
   path = { step_ms = 45 },                  -- time each rung of the path ladder takes to draw
   ripples = true,                           -- mark the impacted lines while a panel is open
   search = { debounce_ms = 40, limit = 50 },

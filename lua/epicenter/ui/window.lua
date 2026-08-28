@@ -1,4 +1,5 @@
---- Floating windows with one creation path and one teardown path.
+--- Windows with one creation path and one teardown path: a float, or a
+--- vertical split for a surface that must not cover what it is about.
 ---
 --- Geometry is a plain `{ row, col, width, height }` box computed by pure
 --- functions, so layout and the scale-in animation are testable without a UI.
@@ -6,6 +7,14 @@ local M = {}
 
 local animate = require("epicenter.ui.animate")
 local easing = require("epicenter.ui.easing")
+
+local SPLIT_WINHIGHLIGHT = table.concat({
+  "Normal:EpicenterNormal",
+  "CursorLine:EpicenterSelection",
+  "WinBar:EpicenterNormal",
+  "WinBarNC:EpicenterNormal",
+  "Search:EpicenterMatch",
+}, ",")
 
 local WINHIGHLIGHT = table.concat({
   "Normal:EpicenterNormal",
@@ -143,6 +152,10 @@ function M.open(spec)
     closed = false,
     tween = nil,
     reveal_target = nil,
+    -- The rows a caller may render into. NOT `box.height` read live: the
+    -- reveal tween scales `box` frame by frame, and content that reflowed to
+    -- a mid-tween height would settle wrong.
+    content = box.height,
   }, Window)
 
   self.augroup = vim.api.nvim_create_augroup("EpicenterWin" .. win, { clear = true })
@@ -173,6 +186,11 @@ function Window:valid()
   return not self.closed and vim.api.nvim_win_is_valid(self.win)
 end
 
+--- Rows a caller may render into.
+function Window:content_height()
+  return self.content
+end
+
 --- @return epicenter.Box
 function Window:geometry()
   return vim.deepcopy(self.box)
@@ -195,6 +213,7 @@ function Window:set_geometry(box)
   if not self:valid() then
     return
   end
+  self.content = box.height
   if self.tween and self.reveal_target then
     -- A reveal tween owns the geometry until it settles (F1): retarget the
     -- running tween instead of jumping the window now, which the tween's
@@ -327,6 +346,137 @@ function Window:_cleanup()
   end
 end
 
+--- @class epicenter.Split
+--- A window that TAKES space rather than covering it: Vim narrows the source
+--- window itself, so nothing is painted over the code (F8). Same surface as
+--- `Window` - the panel kit drives either without knowing which it has.
+local Split = {}
+Split.__index = Split
+
+--- A split has no border to hang a title and a footer on; the winbar carries
+--- both, title left and footer right.
+local function winbar_of(title, footer)
+  local function chunk(text, group)
+    if not text or text == "" then
+      return ""
+    end
+    return ("%%#%s#%s%%*"):format(group, (text:gsub("%%", "%%%%")))
+  end
+  return chunk(title, "EpicenterTitle") .. "%=" .. chunk(footer, "EpicenterHint")
+end
+
+--- @param spec { width: integer, title?: string, footer?: string, filetype?: string,
+---   enter?: boolean, on_close?: fun() }
+--- @return epicenter.Split
+function M.open_split(spec)
+  local previous = vim.api.nvim_get_current_win()
+  vim.cmd("noautocmd topleft vsplit")
+  local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(win, buf)
+  vim.api.nvim_win_set_width(win, math.max(12, math.min(spec.width, vim.o.columns - 8)))
+
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].filetype = spec.filetype or "epicenter"
+  for option, value in pairs({
+    number = false,
+    relativenumber = false,
+    wrap = false,
+    cursorline = false,
+    -- Vim keeps the sidebar's width when another window opens or closes.
+    winfixwidth = true,
+  }) do
+    vim.wo[win][option] = value
+  end
+  vim.wo[win].signcolumn = "no"
+  vim.wo[win].foldcolumn = "0"
+  vim.wo[win].winhighlight = SPLIT_WINHIGHLIGHT
+
+  local self = setmetatable({
+    buf = buf,
+    win = win,
+    spec = spec,
+    title = spec.title,
+    footer = spec.footer,
+    closed = false,
+  }, Split)
+  vim.wo[win].winbar = winbar_of(self.title, self.footer)
+
+  self.augroup = vim.api.nvim_create_augroup("EpicenterSplit" .. win, { clear = true })
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = self.augroup,
+    pattern = tostring(win),
+    callback = function()
+      self:_cleanup()
+    end,
+  })
+
+  if spec.enter == false and vim.api.nvim_win_is_valid(previous) then
+    vim.api.nvim_set_current_win(previous)
+  end
+  return self
+end
+
+function Split:valid()
+  return not self.closed and vim.api.nvim_win_is_valid(self.win)
+end
+
+function Split:content_height()
+  if not self:valid() then
+    return 1
+  end
+  return math.max(1, vim.api.nvim_win_get_height(self.win))
+end
+
+Split.set_lines = Window.set_lines
+Split.focus = Window.focus
+
+function Split:_paint_winbar()
+  if self:valid() then
+    vim.wo[self.win].winbar = winbar_of(self.title, self.footer)
+  end
+end
+
+function Split:set_title(title)
+  self.title = title
+  self:_paint_winbar()
+end
+
+function Split:set_footer(footer)
+  self.footer = footer
+  self:_paint_winbar()
+end
+
+--- A split is already where it belongs the moment it exists; there is nothing
+--- to scale in, and animating a real window's width shoves the source text
+--- sideways for the whole tween.
+function Split:reveal() end
+
+function Split:close()
+  if self.closed or not vim.api.nvim_win_is_valid(self.win) then
+    return self:_cleanup()
+  end
+  pcall(vim.api.nvim_win_close, self.win, true)
+  self:_cleanup()
+end
+
+--- The single teardown path: reached by `close()` and by `WinClosed`.
+function Split:_cleanup()
+  if self.closed then
+    return
+  end
+  self.closed = true
+  pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
+  if vim.api.nvim_buf_is_valid(self.buf) then
+    pcall(vim.api.nvim_buf_delete, self.buf, { force = true })
+  end
+  if self.spec.on_close then
+    self.spec.on_close()
+  end
+end
+
 M.Window = Window
+M.Split = Split
 
 return M

@@ -167,22 +167,34 @@ local function target_of(row)
   }
 end
 
---- Jumps in the source window and leaves the sidebar open - unlike every
---- other panel's `<CR>`, this one is a persistent widget you keep browsing
---- from, so it overrides `ui.panel`'s default close-then-jump action.
+--- Jumps in the source window and hands it the cursor. The split stays open -
+--- unlike every other panel's `<CR>`, this one is a persistent widget you keep
+--- browsing from, so it overrides `ui.panel`'s default close-then-jump action.
+--- A float layout closes instead: an overlay you have finished with must not
+--- be left sitting on the definition you just jumped to (F8).
 local function jump_from_sidebar(row)
   local panel_mod = require("epicenter.ui.panel")
+  local target = target_of(row)
+  if require("epicenter.config").get().outline.layout ~= "vsplit" then
+    state.panel:close()
+    return vim.schedule(function()
+      panel_mod.jump(target, "edit")
+    end)
+  end
   if state.source_win and vim.api.nvim_win_is_valid(state.source_win) then
     vim.api.nvim_set_current_win(state.source_win)
   end
-  panel_mod.jump(target_of(row), "edit")
+  panel_mod.jump(target, "edit")
 end
 
-local function sidebar_box()
-  local cfg = require("epicenter.config").get()
-  local height = math.max(3, vim.o.lines - vim.o.cmdheight - 3)
-  local width = math.max(16, math.min(cfg.outline.width, vim.o.columns - 4))
-  return { row = 0, col = 0, width = width, height = height }
+--- Geometry for the float layout. A sidebar-shaped float pinned over the
+--- left edge would hide the first `outline.width` columns of every line of
+--- the file - including after its own `<CR>` - so the float is an ordinary
+--- centred panel that closes on the jump, and the sidebar is a real split
+--- (F8).
+local function float_box()
+  local panel_mod = require("epicenter.ui.panel")
+  return panel_mod.box()
 end
 
 --- The source buffer is gone (F11): retarget to another visible source
@@ -248,13 +260,16 @@ local function open(ctx)
     kind_index = 1,
   }
 
+  local split = cfg.outline.layout == "vsplit"
   state.panel = panel_mod.open({
     title = (" outline: %s "):format(
       vim.fn.fnamemodify(vim.api.nvim_buf_get_name(ctx.bufnr), ":t")
     ),
     footer = " 0 ",
-    box = sidebar_box(),
-    reflow = sidebar_box,
+    layout = cfg.outline.layout,
+    width = cfg.outline.width,
+    box = not split and float_box() or nil,
+    reflow = not split and float_box or nil,
     filetype = "epicenter-outline",
     empty_text = "  loading...",
     render_row = M.render_row,
@@ -343,7 +358,17 @@ M.name = "outline"
 M.summary = "Live symbol outline of the current buffer, in a sidebar"
 
 M.options = {
-  outline = { width = 34, debounce_ms = 80 },
+  outline = { width = 34, debounce_ms = 80, layout = "vsplit" },
+}
+
+M.option_docs = {
+  ["outline.layout"] = '"vsplit" (a sidebar that takes its own space) | "float"',
+  ["outline.width"] = "columns of the vsplit sidebar",
+}
+
+M.option_rules = {
+  enums = { ["outline.layout"] = { "vsplit", "float" } },
+  positive = { ["outline.width"] = true, ["outline.debounce_ms"] = true },
 }
 
 M.commands = {

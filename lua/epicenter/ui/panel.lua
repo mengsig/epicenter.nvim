@@ -76,6 +76,7 @@ local Panel = {}
 Panel.__index = Panel
 
 --- @param spec { title: string, footer?: string, box?: epicenter.Box, filetype?: string,
+---   layout?: "float"|"vsplit", width?: integer,
 ---   enter?: boolean, zindex?: integer, reflow?: fun(): epicenter.Box,
 ---   render_row: fun(row, index): { text: string, spans?: table[] },
 ---   text_of?: fun(row): string, empty_text?: string,
@@ -94,26 +95,42 @@ function M.open(spec)
     previous_win = vim.api.nvim_get_current_win(),
   }, Panel)
 
-  self.win = window.open({
-    box = box,
-    title = spec.title,
-    footer = spec.footer,
-    filetype = spec.filetype or "epicenter-panel",
-    enter = spec.enter ~= false,
-    zindex = spec.zindex,
-    reflow = spec.reflow,
-    on_close = function()
-      self.open = false
-      if spec.on_close then
-        spec.on_close()
-      end
-    end,
-  })
+  local function on_close()
+    self.open = false
+    if spec.on_close then
+      spec.on_close()
+    end
+  end
 
+  if spec.layout == "vsplit" then
+    -- A persistent surface takes its own space instead of covering the source
+    -- (F8); a transient one floats, since it is gone the moment you act.
+    self.win = window.open_split({
+      width = spec.width or box.width,
+      title = spec.title,
+      footer = spec.footer,
+      filetype = spec.filetype or "epicenter-panel",
+      enter = spec.enter ~= false,
+      on_close = on_close,
+    })
+  else
+    self.win = window.open({
+      box = box,
+      title = spec.title,
+      footer = spec.footer,
+      filetype = spec.filetype or "epicenter-panel",
+      enter = spec.enter ~= false,
+      zindex = spec.zindex,
+      reflow = spec.reflow,
+      on_close = on_close,
+    })
+  end
+
+  local height = self.win:content_height()
   if spec.tree then
     self.tree = tree_mod.new({
       buf = self.win.buf,
-      height = box.height,
+      height = height,
       key_of = spec.tree.key_of,
       identity_of = spec.tree.identity_of,
       children_of = spec.tree.children_of,
@@ -125,7 +142,7 @@ function M.open(spec)
   else
     self.list = list_mod.new({
       buf = self.win.buf,
-      height = box.height,
+      height = height,
       render_item = spec.render_row,
       text_of = spec.text_of,
       empty_text = spec.empty_text,
@@ -254,6 +271,12 @@ end
 
 --- @param opts? { stagger?: boolean }
 function Panel:draw(opts)
+  -- A split is whatever height the user has left it at, so it is read here
+  -- rather than fixed at open. A float's is its own box, unchanged.
+  local height = self.win:content_height()
+  if height ~= self.list.height then
+    self.list:set_height(height)
+  end
   self.list:draw(opts)
 end
 

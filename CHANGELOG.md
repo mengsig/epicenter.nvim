@@ -26,7 +26,9 @@ saved.
   rung at a time; it says so plainly when there is no path, and when a name is
   ambiguous it offers a candidate picker rather than reporting no path.
 - **Outline** (`:Epicenter outline`) — a live sidebar that follows the cursor
-  and re-renders on reindex.
+  and re-renders on reindex. It is a real vertical split, so it takes its own
+  columns rather than covering the code it navigates, and `<CR>` hands the
+  cursor back to the source with the sidebar still open.
 - **Hot spots**, **unused**, **graph export**, and a **status dashboard** that
   carries the index, the server, the languages and the log, with `r` rescan,
   `R` restart and `l` log.
