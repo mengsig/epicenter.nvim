@@ -17,27 +17,10 @@ local function check_neovim()
   end
 end
 
---- `navgraph --version` answers with a capabilities document, not a version
---- string, and pasting it whole turns the health report into 30KB of JSON.
---- Anything that is not that document still reports its first line, capped.
---- @return string
-local function version_from(output)
-  local text = vim.trim(output or "")
-  if text == "" then
-    return "no output"
-  end
-  local ok, decoded = pcall(vim.json.decode, text)
-  local build = ok and type(decoded) == "table" and decoded.build or nil
-  if type(build) == "table" then
-    local version = build.buildVersion or build.version
-    if type(version) == "string" then
-      return version
-    end
-  end
-  local first = vim.split(text, "\n", { plain = true })[1]
-  return #first > 120 and (first:sub(1, 117) .. "...") or first
-end
-
+--- Two green ticks on a binary that cannot serve is worse than no check at
+--- all (F7): `--version` succeeding says nothing about whether this build has
+--- the `lsp` command every server start needs, and the stale build that does
+--- not is exactly the one a user is likely to have.
 local function check_binary()
   local install = require("epicenter.install")
   local path, err = install.resolve()
@@ -47,12 +30,20 @@ local function check_binary()
   end
   vim.health.ok("navgraph binary: " .. path)
 
-  local result = vim.system({ path, "--version" }, { text = true }):wait(3000)
-  if result.code ~= 0 then
-    vim.health.warn(("`%s --version` exited %d"):format(path, result.code))
+  local caps, probe_err = install.capabilities(path)
+  if not caps then
+    vim.health.warn(probe_err)
     return
   end
-  vim.health.ok("navgraph version: " .. version_from(result.stdout))
+  vim.health.ok("navgraph version: " .. caps.version)
+  if not caps.documented then
+    vim.health.info("this binary reports no capabilities, so `lsp` support is unverified")
+  elseif not install.serves_lsp(caps) then
+    vim.health.error(
+      "this navgraph has no `lsp` command, so no server can start here",
+      { "Run `:Epicenter install`: the editor server shipped after this build." }
+    )
+  end
 end
 
 local function check_servers()
@@ -64,7 +55,13 @@ local function check_servers()
   end
   for _, root in ipairs(roots) do
     local info = client.info(root)
-    if info.protocol_version == PROTOCOL_VERSION then
+    if info.failed then
+      -- The record survives the failure now, so this is reachable at all.
+      vim.health.error(("%s: %s (%s)"):format(root, info.failed.reason, info.failed.at), {
+        "See " .. require("epicenter.log").path(),
+        "Then `:Epicenter install` if the binary is the problem, else `:Epicenter restart`.",
+      })
+    elseif info.protocol_version == PROTOCOL_VERSION then
       vim.health.ok(("%s: protocol %d"):format(root, info.protocol_version))
     elseif info.protocol_version == nil then
       vim.health.warn(("%s: server did not report a protocol version"):format(root))

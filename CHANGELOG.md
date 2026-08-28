@@ -70,11 +70,14 @@ state.
 
 `:Epicenter install` downloads a release through `gh` when it is authenticated
 (so a private NavGraph works with no extra setup), and otherwise clones and
-builds with `zig`. A session that finds no binary says so once and points at the
-command. Every error names the log file, which `:Epicenter log` opens, and
-`:checkhealth epicenter` reports the plugin version, the Neovim version, the
-binary and its version, the protocol version of every running server, the icon
-mode, the state of the keymaps, and the log path.
+builds with `zig`. A session that cannot start a server says so once and points
+at the command — including the likelier case of a navgraph installed before the
+editor server shipped, which is refused on its own `--version` rather than
+started four times. Every error names the log file, which `:Epicenter log`
+opens, and `:checkhealth epicenter` reports the plugin version, the Neovim
+version, the binary, its version and whether it can serve at all, the protocol
+version of every running server (or why one failed to start, and where the log
+is), the icon mode, the state of the keymaps, and the log path.
 
 ### Testing
 

@@ -61,31 +61,147 @@ function M.resolve(opts)
     )
 end
 
---- Said at most once per session. Without it a first run with no binary is a
---- plugin that silently does nothing: every panel reports "not running" only
---- once you open one, and nothing points at the fix.
-local announced_missing = false
+--- The subcommand this plugin drives. A navgraph built before the editor
+--- server shipped answers `--version` perfectly well and then exits 2 on
+--- every `lsp` start (F7).
+local SERVE_COMMAND = "lsp"
 
---- Called when a buffer that navgraph indexes could not start a server. Speaks
---- only when the reason is that there is no binary to run.
-function M.first_run_notice()
-  if announced_missing then
+--- Cached per binary path: `--version` is a process spawn, and `attach` runs
+--- on every buffer.
+local capability_cache = {}
+
+--- Reads the capabilities document navgraph answers `--version` with.
+--- @return { version: string, commands: table<string, true>, documented: boolean }|nil
+local function parse_capabilities(output)
+  local text = vim.trim(output or "")
+  if text == "" then
+    return nil
+  end
+  local ok, decoded = pcall(vim.json.decode, text)
+  if not ok or type(decoded) ~= "table" or type(decoded.commands) ~= "table" then
+    -- Not the document: report the first line as the version, capped, rather
+    -- than pasting 30KB of JSON (or of anything else) into `:checkhealth`.
+    local first = vim.split(text, "\n", { plain = true })[1]
+    return {
+      version = #first > 120 and (first:sub(1, 117) .. "...") or first,
+      commands = {},
+      documented = false,
+    }
+  end
+  local commands = {}
+  for _, command in ipairs(decoded.commands) do
+    if type(command) == "table" and type(command.name) == "string" then
+      commands[command.name] = true
+    end
+  end
+  local build = type(decoded.build) == "table" and decoded.build or {}
+  return {
+    version = build.buildVersion or build.version or "no version reported",
+    commands = commands,
+    documented = true,
+  }
+end
+
+--- What `<path> --version` says the binary is and can do. navgraph answers
+--- with a `navgraph.capabilities.v1` document rather than a version string,
+--- and that document's `commands` is the only thing that can tell a build
+--- carrying the editor server from one without, short of spawning one and
+--- watching it die. `documented` is false when the output was not that
+--- document - then `commands` is empty because it is UNKNOWN, not because
+--- the binary has none.
+--- @param opts? { run?: fun(cmd: string[]): { code: integer, stdout?: string } }
+--- @return { version: string, commands: table<string, true>, documented: boolean }|nil,
+---   string|nil err
+function M.capabilities(path, opts)
+  opts = opts or {}
+  if opts.run == nil and capability_cache[path] then
+    local cached = capability_cache[path]
+    return cached.caps, cached.err
+  end
+  local run = opts.run or function(cmd)
+    return vim.system(cmd, { text = true }):wait(3000)
+  end
+
+  local caps, err = nil, nil
+  local result = run({ path, "--version" })
+  if (result.code or 1) ~= 0 then
+    err = ("`%s --version` exited %d"):format(path, result.code or -1)
+  else
+    caps = parse_capabilities(result.stdout)
+    if not caps then
+      err = ("`%s --version` printed nothing"):format(path)
+    end
+  end
+
+  if opts.run == nil then
+    capability_cache[path] = { caps = caps, err = err }
+  end
+  return caps, err
+end
+
+--- Whether this binary is KNOWN to have the `lsp` command every server start
+--- needs. False for a binary whose capabilities could not be read - that is
+--- an unknown, and callers treat the two differently.
+--- @param caps table|nil the `M.capabilities` result
+function M.serves_lsp(caps)
+  return caps ~= nil and caps.documented and caps.commands[SERVE_COMMAND] == true
+end
+
+--- Why this binary cannot serve, as a line a user can act on - and only on
+--- definite evidence: a binary whose `--version` this cannot read is left to
+--- start and fail on its own terms rather than refused on a guess.
+--- @return string|nil
+function M.unservable_reason(path)
+  local caps = M.capabilities(path)
+  if not caps or not caps.documented or M.serves_lsp(caps) then
+    return nil
+  end
+  return ("epicenter: %s is navgraph %s, which has no `%s` command"):format(
+    path,
+    caps.version,
+    SERVE_COMMAND
+  )
+end
+
+--- Startup failures already said out loud, so a project with fifty indexed
+--- files says each one once. Without this a first run that cannot start a
+--- server is a plugin that silently does nothing: every panel reports "not
+--- running" only once you open one, and nothing points at the fix.
+local announced = {}
+
+--- One calm line for a startup failure, at most once per distinct reason.
+--- @param reason string
+function M.announce(reason)
+  if type(reason) ~= "string" or announced[reason] then
     return
   end
-  local path, err = M.resolve()
-  if path then
-    return
-  end
-  announced_missing = true
+  announced[reason] = true
   require("epicenter.ui.toast").notify(
-    err .. "\n`:Epicenter install` fetches a release, or builds one from source.",
+    reason .. "\n`:Epicenter install` fetches a release, or builds one from source.",
     { level = "warn", timeout = 10000 }
   )
 end
 
---- Test seam: forgets that the notice was shown.
+--- Called when a buffer that navgraph indexes could not start a server. Speaks
+--- only when the reason is that there is no binary to run.
+function M.first_run_notice()
+  local path, err = M.resolve()
+  if path then
+    return
+  end
+  M.announce(err)
+end
+
+--- Test seam: forgets what has been announced.
 function M.forget_first_run_notice()
-  announced_missing = false
+  announced = {}
+end
+
+--- Forgets every cached `--version`. Called after an install and on an
+--- explicit restart: the binary at a path can change under a running session,
+--- and the whole point of `:Epicenter install` is that it just did.
+function M.forget_capabilities()
+  capability_cache = {}
 end
 
 --- How to install, given what is available. Pure.
@@ -277,6 +393,10 @@ function M.install(opts)
   local function done(err, path)
     finished = true
     final_err, final_path = err, path
+    -- A new binary at the same path: what the old one could do is stale, and
+    -- so is any "cannot serve" line already said about it.
+    M.forget_capabilities()
+    M.forget_first_run_notice()
     if err then
       require("epicenter.log").error("install failed: %s", err)
       progress.finish(err, "error")

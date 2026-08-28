@@ -15,6 +15,9 @@ describe("checkhealth epicenter", function()
   -- itself - is_executable() is a filesystem check, never a host shell-out.
   before_each(function()
     require("epicenter.config").reset()
+    -- `--version` is cached per binary path, so every case must start from a
+    -- clean probe or it reads the previous case's stubbed answer.
+    install.forget_capabilities()
     original_resolve, original_system = install.resolve, vim.system
     system_calls = {}
     install.resolve = function()
@@ -85,6 +88,7 @@ describe("checkhealth epicenter", function()
               schema = "navgraph.capabilities.v1",
               build = { version = "0.1.0", buildVersion = "0.1.0+src.9794ccad" },
               languages = { { name = "zig" }, { name = "python" } },
+              commands = { { name = "search" }, { name = "lsp" } },
             }),
             stderr = "",
           }

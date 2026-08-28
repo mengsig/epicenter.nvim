@@ -231,14 +231,26 @@ local function install_fallback_guard(client)
   end
 end
 
+--- Marks `root`'s server as given up on, and says so once. Deleting the
+--- record instead (as this used to) erased the only thing `:checkhealth`
+--- could have read: `client.roots()` came back empty, health reported "no
+--- navgraph server running yet", and eight seconds after the toast nothing
+--- in the session knew the server had ever run (F7).
+local function give_up(root, state, reason)
+  state.failed = { reason = reason, at = os.date("!%Y-%m-%dT%H:%M:%SZ") }
+  state.session = nil
+  state.starting = false
+  log.error("navgraph for %s: %s - see :checkhealth epicenter", root, reason)
+  require("epicenter.ui.toast").notify(
+    ("%s\n`:Epicenter install`, then `:checkhealth epicenter` - log: %s"):format(reason, log.path()),
+    { level = "error", timeout = 10000 }
+  )
+end
+
 local function schedule_restart(root, state)
   local cfg = config.get().lsp.restart
   if state.restarts >= cfg.max then
-    require("epicenter.ui.toast").notify(
-      ("navgraph stopped after %d restarts"):format(state.restarts),
-      { level = "error", timeout = 8000 }
-    )
-    servers[root] = nil
+    give_up(root, state, ("navgraph stopped after %d restarts"):format(state.restarts))
     return
   end
   local delay = cfg.backoff_ms[math.min(state.restarts + 1, #cfg.backoff_ms)]
@@ -273,6 +285,12 @@ end
 function M.start(opts)
   local root = vim.fs.normalize(opts.root)
   local existing = servers[root]
+  -- A root this session already gave up on: an automatic attach must not
+  -- walk back into the same crash loop, one raw exit notice per try. An
+  -- explicit `:Epicenter restart` clears the record first, via `M.stop`.
+  if existing and existing.failed and not opts.cmd then
+    return nil, existing.failed.reason
+  end
   if existing and vim.lsp.get_client_by_id(existing.client_id) then
     if opts.cmd and not vim.deep_equal(opts.cmd, existing.cmd) then
       -- The caller asked for a specific binary; reusing whatever already
@@ -289,9 +307,28 @@ function M.start(opts)
   local cfg = config.get()
   local cmd = opts.cmd
   if not cmd then
-    local bin, err = require("epicenter.install").resolve()
+    local install = require("epicenter.install")
+    local bin, err = install.resolve()
     if not bin then
       return nil, err
+    end
+    -- Ask the binary what it can do BEFORE spawning it. A build that predates
+    -- the editor server answers `--version` fine and exits 2 on every start,
+    -- so starting it produces one raw "Client navgraph quit with exit code 2"
+    -- per restart and no word of the cause or the remedy (F7).
+    local unservable = install.unservable_reason(bin)
+    if unservable then
+      servers[root] = {
+        cmd = { bin, "lsp" },
+        restarts = 0,
+        root = root,
+        stopping = false,
+        buffers = {},
+        starting = false,
+        failed = { reason = unservable, at = os.date("!%Y-%m-%dT%H:%M:%SZ") },
+      }
+      log.error("navgraph for %s: %s", root, unservable)
+      return nil, unservable
     end
     cmd = vim.list_extend({ bin, "lsp" }, cfg.navgraph.args)
   end
@@ -360,6 +397,9 @@ end
 --- @return integer|nil client_id, string|nil err
 function M.restart(opts)
   local root = vim.fs.normalize(opts.root)
+  -- An explicit restart is the "I have fixed it, try again" gesture: what the
+  -- binary at that path could do when we last asked may no longer be true.
+  require("epicenter.install").forget_capabilities()
   local dying = servers[root]
   local buffers = dying and vim.deepcopy(dying.buffers) or {}
   if opts.bufnr then
@@ -398,7 +438,9 @@ function M.attach(bufnr)
   local _, err = M.start({ root = root, bufnr = bufnr })
   if err then
     log.warn("attach skipped for %s: %s", name, err)
-    require("epicenter.install").first_run_notice()
+    -- Says the reason itself, once - "there is no binary" is only one of them
+    -- (F7); a binary that cannot serve is the likelier one.
+    require("epicenter.install").announce(err)
   end
 end
 
@@ -491,13 +533,15 @@ function M.roots()
 end
 
 --- @param root string
---- @return { client_id: integer|nil, protocol_version: integer|nil, restarts: integer }
+--- @return { client_id: integer|nil, protocol_version: integer|nil, restarts: integer,
+---   failed: { reason: string, at: string }|nil }
 function M.info(root)
   local state = servers[vim.fs.normalize(root)] or {}
   return {
     client_id = state.client_id,
     protocol_version = state.protocol_version,
     restarts = state.restarts or 0,
+    failed = state.failed,
   }
 end
 
@@ -529,6 +573,10 @@ function M.request(method, params, cb, opts)
   end
   if not session then
     local state = servers[root]
+    if state and state.failed then
+      cb({ code = -32002, message = state.failed.reason .. " - see :checkhealth epicenter" }, nil)
+      return { cancel = function() end }
+    end
     -- Requests between the server starting and on_init are normal, not
     -- an absent server: say so, instead of an alarming "not running".
     if state and state.starting then

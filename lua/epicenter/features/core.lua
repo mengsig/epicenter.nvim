@@ -26,6 +26,7 @@ function M.server_info(root)
     client_id = info.client_id,
     protocol = info.protocol_version,
     restarts = info.restarts,
+    failed = info.failed and info.failed.reason or nil,
     pid = client and client.rpc and client.rpc.pid or nil,
   }
 end
@@ -49,7 +50,9 @@ function M.dashboard_lines(view)
   row(lines, spans, "epicenter", require("epicenter.version"))
   row(lines, spans, "root", vim.fn.fnamemodify(view.root, ":~"))
 
-  local server_parts = { server.running and "running" or "stopped" }
+  -- A server this session gave up on reads as its reason, not a bare
+  -- "stopped" that could equally mean "not started yet" (F7).
+  local server_parts = { server.failed or (server.running and "running" or "stopped") }
   if server.pid then
     table.insert(server_parts, "pid " .. server.pid)
   elseif server.client_id then

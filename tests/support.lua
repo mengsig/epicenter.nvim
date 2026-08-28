@@ -100,6 +100,28 @@ function M.stop_fake(root)
   require("epicenter.client").stop(root)
 end
 
+--- Binaries a spec built for itself, under its own temp directory. The
+--- hermeticity guard accepts these: a shim the suite wrote is not "whatever
+--- happens to be on $PATH", which is the only thing that guard exists to
+--- catch. Global, because the guard runs in another spec file.
+_G.EPICENTER_TEST_OWNED_BINARIES = _G.EPICENTER_TEST_OWNED_BINARIES or {}
+
+--- @param path string
+--- @return string path
+function M.own_binary(path)
+  _G.EPICENTER_TEST_OWNED_BINARIES[path] = true
+  return path
+end
+
+--- Announces a crash a spec is about to cause on purpose. Neovim prints its
+--- own "Client navgraph quit with exit code N" for it, in the exact shape a
+--- real regression has, and a release is cut on that output - so say which
+--- ones were asked for (F5).
+--- @param why string
+function M.expect_exit_notice(why)
+  io.stderr:write(("note: %s - the LSP exit notice(s) below are expected\n"):format(why))
+end
+
 --- Issues a request against the running server and blocks for its response.
 --- @return table|nil err, any result
 function M.request(root, method, params, timeout_ms)

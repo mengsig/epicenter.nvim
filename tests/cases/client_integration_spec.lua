@@ -122,6 +122,7 @@ describe("client against the fake navgraph server", function()
 
     -- Crash it: exit without shutdown first, exactly what a killed process
     -- leaves behind (the fake reports exit 1 in that case).
+    support.expect_exit_notice("simulating a crashed server to prove the restart path")
     require("epicenter.compat").lsp_notify(vim.lsp.get_client_by_id(id), "exit", {})
 
     wait(function()
