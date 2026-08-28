@@ -283,8 +283,11 @@ end
 
 --- Prints the failures and the one-line tally, and returns the exit code.
 --- Shared by both lanes' runners so their output is identical.
+--- @param write? fun(...) test seam for `io.write`, so a spec can capture
+---   the report without monkeypatching a stdlib global
 --- @return integer exit_code
-function M.report(passed, failed, results, file_count, elapsed_ms)
+function M.report(passed, failed, results, file_count, elapsed_ms, write)
+  write = write or io.write
   local out = {}
   local function w(fmt, ...)
     table.insert(out, select("#", ...) > 0 and fmt:format(...) or fmt)
@@ -301,7 +304,12 @@ function M.report(passed, failed, results, file_count, elapsed_ms)
   end
 
   w("%d passed, %d failed  (%d files, %.0fms)", passed, failed, file_count, elapsed_ms)
-  io.write(table.concat(out, "\n"), "\n")
+  -- A leading newline, not just a trailing one: Neovim's own LSP exit
+  -- notices (e.g. a spec that provokes a crash on purpose) print without a
+  -- trailing newline in headless mode, so this report used to start on
+  -- whatever partial line that notice left behind - gluing the tally onto
+  -- it on a release's own test log (F5).
+  write("\n", table.concat(out, "\n"), "\n")
   io.stdout:flush()
   return failed == 0 and 0 or 1
 end
