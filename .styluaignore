@@ -1,0 +1,3 @@
+# Fixture trees are sample code for the indexer, not this project's source;
+# they are formatted the way the language's own conventions want them.
+tests/fixtures/

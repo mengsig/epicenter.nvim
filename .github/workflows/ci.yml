@@ -1,0 +1,138 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / nvim ${{ matrix.nvim }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nvim: [v0.10.4, v0.11.0, stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+      - name: nvim version
+        run: nvim --version
+      - name: test
+        run: make test
+      - name: smoke
+        run: make smoke
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua lsp plugin scripts tests
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "luajit-openresty"
+      - uses: leafo/gh-actions-luarocks@v4
+      # Luarocks manifest mirrors are flaky (they intermittently 404 the Lua
+      # 5.1 lookup luacheck needs), so this pulls a pinned, sha256-verified
+      # standalone binary first and only falls back to luarocks.
+      - name: install luacheck
+        run: |
+          bin="$(scripts/install-luacheck.sh "$RUNNER_TEMP/bin")"
+          echo "LUACHECK=$bin" >> "$GITHUB_ENV"
+      - name: luacheck
+        run: |
+          "$LUACHECK" lua lsp plugin scripts tests --exclude-files 'tests/fixtures/**'
+
+  real:
+    name: real navgraph (nvim ${{ matrix.nvim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The compat boundary (0.10) and the floor everything else builds on
+        # (stable) - the fake lane's matrix (nvim/, F10) already covers the
+        # rest; a real-binary build per extra version buys little more here.
+        nvim: [v0.10.4, stable]
+    steps:
+      - uses: actions/checkout@v4
+
+      # `secrets` is not available in a job-level `if`, so the gate is a step.
+      # A fork PR structurally never has repo secrets (GitHub withholds them),
+      # so that skips with a warning; on `main` or a tag - this release's own
+      # evidence - a missing secret is a real gap and must fail the run, not
+      # report a skip as green (F10).
+      - name: navgraph source availability
+        id: gate
+        env:
+          NAVGRAPH_TOKEN: ${{ secrets.NAVGRAPH_TOKEN }}
+          IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_RELEASE_REF: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [ -n "$NAVGRAPH_TOKEN" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_FORK_PR" = "true" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=real-server lane SKIPPED::A fork PR has no access to the NAVGRAPH_TOKEN secret, so NavGraph could not be cloned and built. make test-real did NOT run - the plugin was proven against the fake server only."
+            echo "::warning title=real-server lane SKIPPED::NAVGRAPH_TOKEN is a repo secret and forks never receive it; this lane runs once the PR lands, or from a branch on this repo."
+          elif [ "$IS_RELEASE_REF" = "true" ]; then
+            echo "::error title=real-server lane MISSING::NAVGRAPH_TOKEN is not set on $GITHUB_REF. make test-real did NOT run, so this release's real-server claim is unverified - set the secret."
+            exit 1
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=real-server lane SKIPPED::Set the NAVGRAPH_TOKEN secret to run make test-real against the real navgraph binary."
+          fi
+
+      - name: checkout navgraph
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: mengsig/NavGraph
+          token: ${{ secrets.NAVGRAPH_TOKEN }}
+          path: navgraph-src
+
+      - name: zig
+        if: steps.gate.outputs.build == 'true'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: build navgraph
+        if: steps.gate.outputs.build == 'true'
+        working-directory: navgraph-src
+        run: zig build -Doptimize=ReleaseFast
+
+      - if: steps.gate.outputs.build == 'true'
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+
+      - name: test-real
+        if: steps.gate.outputs.build == 'true'
+        run: make test-real NAVGRAPH_BIN="$PWD/navgraph-src/zig-out/bin/navgraph"
+
+  docs:
+    name: docs in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: helptags build
+        run: nvim --headless --clean -c 'helptags doc' -c 'quit'
+      - name: docs in sync with the registry
+        run: make docs-check
+      - name: contract in sync with its pin
+        run: make contract-check

@@ -1,0 +1,585 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 720" width="1080" height="720" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15">
+<rect width="1080" height="720" fill="#1c1c1c"/>
+<text x="18" y="15" fill="#585858">5</text>
+<text x="36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171 180" y="15" fill="#c7c7c7">_USERS:&#160;dict&#160;=&#160;{}</text>
+<text x="18" y="35" fill="#585858">6</text>
+<text x="18" y="55" fill="#585858">7</text>
+<text x="18" y="75" fill="#585858">8</text>
+<text x="36 45 54 63 72 81 90 99" y="75" fill="#c7c7c7">class&#160;Us</text>
+<rect x="108" y="60" width="882" height="20" fill="#3a3a3a"/>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="75" fill="#767676">╭────────────────────────────────────────────────────────────────────────────────────────────────╮</text>
+<text x="18" y="95" fill="#585858">9</text>
+<text x="72 81 90 99" y="95" fill="#c7c7c7">"""I</text>
+<rect x="108" y="80" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="95" fill="#767676">│</text>
+<rect x="117" y="80" width="864" height="20" fill="#3a3a3a"/>
+<text x="126 135 144 153 162 171" y="95" fill="#c7c7c7">&gt;&#160;user</text>
+<rect x="981" y="80" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="95" fill="#767676">│</text>
+<text x="9 18" y="115" fill="#585858">10</text>
+<rect x="108" y="100" width="234" height="20" fill="#3a3a3a"/>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333" y="115" fill="#767676">╰─────────────────────────</text>
+<rect x="342" y="100" width="414" height="20" fill="#3a3a3a"/>
+<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738" y="115" fill="#767676" font-style="italic">↵&#160;jump&#160;·&#160;^t/^v/^x&#160;open&#160;·&#160;^n/^p&#160;move&#160;·&#160;?&#160;help</text>
+<rect x="756" y="100" width="234" height="20" fill="#3a3a3a"/>
+<text x="756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="115" fill="#767676">─────────────────────────╯</text>
+<text x="9 18" y="135" fill="#585858">11</text>
+<text x="72 81 90" y="135" fill="#c7c7c7">def</text>
+<rect x="108" y="120" width="162" height="20" fill="#3a3a3a"/>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261" y="135" fill="#767676">╭─────────────────</text>
+<rect x="270" y="120" width="72" height="20" fill="#3a3a3a"/>
+<text x="279 288 297 306 315 324" y="135" fill="#c7c7c7" font-weight="bold">search</text>
+<rect x="342" y="120" width="648" height="20" fill="#3a3a3a"/>
+<text x="342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="135" fill="#767676">─────────────────╮╭────────────────────────────────────────────────────╮</text>
+<text x="9 18" y="155" fill="#585858">12</text>
+<rect x="108" y="140" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="155" fill="#767676">│</text>
+<rect x="117" y="140" width="378" height="20" fill="#464d4d"/>
+<text x="126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486" y="155" fill="#c7c7c7" font-weight="bold">cl&#160;User&#160;&#160;py_fastapi/app/models.py:10&#160;&#160;&lt;-6</text>
+<rect x="495" y="140" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="155" fill="#767676">││</text>
+<rect x="513" y="140" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="140" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="155" fill="#767676">│</text>
+<text x="9 18" y="175" fill="#585858">13</text>
+<rect x="108" y="160" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="175" fill="#767676">│</text>
+<rect x="117" y="160" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="175" fill="#c7c7c7">cl</text>
+<rect x="153" y="160" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="175" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="160" width="63" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243" y="175" fill="#c7c7c7">Service</text>
+<rect x="252" y="160" width="198" height="20" fill="#3a3a3a"/>
+<text x="252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="175" fill="#767676">…ces/user_service.py:8</text>
+<rect x="450" y="160" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="175" fill="#5f8787">&lt;-8</text>
+<rect x="495" y="160" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="175" fill="#767676">││</text>
+<rect x="513" y="160" width="36" height="20" fill="#3a3a3a"/>
+<text x="513 522 531 540" y="175" fill="#af875f">from</text>
+<rect x="549" y="160" width="90" height="20" fill="#3a3a3a"/>
+<text x="558 567 576 585 594 603 612 621" y="175" fill="#c7c7c7">pydantic</text>
+<rect x="639" y="160" width="54" height="20" fill="#3a3a3a"/>
+<text x="639 648 657 666 675 684" y="175" fill="#af875f">import</text>
+<rect x="693" y="160" width="288" height="20" fill="#3a3a3a"/>
+<text x="702 711 720 729 738 747 756 765 774" y="175" fill="#c7c7c7">BaseModel</text>
+<rect x="981" y="160" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="175" fill="#767676">│</text>
+<text x="9 18" y="195" fill="#585858">14</text>
+<rect x="108" y="180" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="195" fill="#767676">│</text>
+<rect x="117" y="180" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="195" fill="#c7c7c7">me</text>
+<rect x="153" y="180" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="195" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="180" width="117" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297" y="195" fill="#c7c7c7">Service.fetch</text>
+<rect x="306" y="180" width="144" height="20" fill="#3a3a3a"/>
+<text x="306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="195" fill="#767676">…r_service.py:11</text>
+<rect x="450" y="180" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="195" fill="#5f8787">&lt;-3</text>
+<rect x="495" y="180" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="195" fill="#767676">││</text>
+<rect x="513" y="180" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="180" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="195" fill="#767676">│</text>
+<text x="9 18" y="215" fill="#585858">15</text>
+<rect x="108" y="200" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="215" fill="#767676">│</text>
+<rect x="117" y="200" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="215" fill="#c7c7c7">me</text>
+<rect x="153" y="200" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="215" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="200" width="126" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306" y="215" fill="#c7c7c7">Service.create</text>
+<rect x="315" y="200" width="135" height="20" fill="#3a3a3a"/>
+<text x="315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="215" fill="#767676">…_service.py:22</text>
+<rect x="450" y="200" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="215" fill="#5f8787">&lt;-3</text>
+<rect x="495" y="200" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="215" fill="#767676">││</text>
+<rect x="513" y="200" width="36" height="20" fill="#3a3a3a"/>
+<text x="513 522 531 540" y="215" fill="#af875f">from</text>
+<rect x="549" y="200" width="81" height="20" fill="#3a3a3a"/>
+<text x="558 567 576 585 594 603 612" y="215" fill="#c7c7c7">.config</text>
+<rect x="630" y="200" width="54" height="20" fill="#3a3a3a"/>
+<text x="630 639 648 657 666 675" y="215" fill="#af875f">import</text>
+<rect x="684" y="200" width="297" height="20" fill="#3a3a3a"/>
+<text x="693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864" y="215" fill="#c7c7c7">SUPPORTED_CURRENCIES</text>
+<rect x="981" y="200" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="215" fill="#767676">│</text>
+<text x="9 18" y="235" fill="#585858">16</text>
+<rect x="108" y="220" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="235" fill="#767676">│</text>
+<rect x="117" y="220" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="235" fill="#c7c7c7">me</text>
+<rect x="153" y="220" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="235" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="220" width="126" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306" y="235" fill="#c7c7c7">Service._query</text>
+<rect x="315" y="220" width="135" height="20" fill="#3a3a3a"/>
+<text x="315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="235" fill="#767676">…_service.py:18</text>
+<rect x="450" y="220" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="235" fill="#5f8787">&lt;-2</text>
+<rect x="495" y="220" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="235" fill="#767676">││</text>
+<rect x="513" y="220" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="220" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="235" fill="#767676">│</text>
+<text x="9 18" y="255" fill="#585858">17</text>
+<rect x="108" y="240" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="255" fill="#767676">│</text>
+<rect x="117" y="240" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="255" fill="#c7c7c7">me</text>
+<rect x="153" y="240" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="255" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="240" width="126" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306" y="255" fill="#c7c7c7">Service.remove</text>
+<rect x="315" y="240" width="135" height="20" fill="#3a3a3a"/>
+<text x="315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="255" fill="#767676">…_service.py:29</text>
+<rect x="450" y="240" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="255" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="240" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="255" fill="#767676">││</text>
+<rect x="513" y="240" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="240" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="255" fill="#767676">│</text>
+<text x="9 18" y="275" fill="#585858">18</text>
+<text x="72 81 90" y="275" fill="#c7c7c7">def</text>
+<rect x="108" y="260" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="275" fill="#767676">│</text>
+<rect x="117" y="260" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="275" fill="#c7c7c7">me</text>
+<rect x="153" y="260" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="275" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="260" width="144" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324" y="275" fill="#c7c7c7">Service.list_all</text>
+<rect x="333" y="260" width="117" height="20" fill="#3a3a3a"/>
+<text x="333 342 351 360 369 378 387 396 405 414 423 432 441" y="275" fill="#767676">…ervice.py:36</text>
+<rect x="450" y="260" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="275" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="260" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="275" fill="#767676">││</text>
+<rect x="513" y="260" width="45" height="20" fill="#4b5454"/>
+<text x="513 522 531 540 549" y="275" fill="#af87af">class</text>
+<rect x="558" y="260" width="9" height="20" fill="#4b5454"/>
+<rect x="567" y="260" width="36" height="20" fill="#4b5454"/>
+<text x="567 576 585 594" y="275" fill="#5f87af">User</text>
+<rect x="603" y="260" width="378" height="20" fill="#4b5454"/>
+<text x="603" y="275" fill="#c7c7c7">:</text>
+<rect x="981" y="260" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="275" fill="#767676">│</text>
+<text x="9 18" y="295" fill="#585858">19</text>
+<rect x="108" y="280" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="295" fill="#767676">│</text>
+<rect x="117" y="280" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="295" fill="#c7c7c7">me</text>
+<rect x="153" y="280" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="295" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="280" width="135" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306 315" y="295" fill="#c7c7c7">Service.replace</text>
+<rect x="324" y="280" width="126" height="20" fill="#3a3a3a"/>
+<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="295" fill="#767676">…service.py:40</text>
+<rect x="450" y="280" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="295" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="280" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="295" fill="#767676">││</text>
+<rect x="513" y="280" width="36" height="20" fill="#4b5454"/>
+<rect x="549" y="280" width="432" height="20" fill="#4b5454"/>
+<text x="549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972" y="295" fill="#5faf5f">"""A&#160;single&#160;user&#160;record:&#160;an&#160;id&#160;plus&#160;profile&#160;fiel</text>
+<rect x="981" y="280" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="295" fill="#767676">│</text>
+<text x="9 18" y="315" fill="#585858">20</text>
+<rect x="108" y="300" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="315" fill="#767676">│</text>
+<rect x="117" y="300" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="315" fill="#c7c7c7">me</text>
+<rect x="153" y="300" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="315" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="300" width="180" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360" y="315" fill="#c7c7c7">Service.update_email</text>
+<rect x="369" y="300" width="81" height="20" fill="#3a3a3a"/>
+<text x="369 378 387 396 405 414 423 432 441" y="315" fill="#767676">…ce.py:48</text>
+<rect x="450" y="300" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="315" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="300" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="315" fill="#767676">││</text>
+<rect x="513" y="300" width="468" height="20" fill="#4b5454"/>
+<rect x="981" y="300" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="315" fill="#767676">│</text>
+<text x="9 18" y="335" fill="#585858">21</text>
+<rect x="108" y="320" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="335" fill="#767676">│</text>
+<rect x="117" y="320" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="335" fill="#c7c7c7">me</text>
+<rect x="153" y="320" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="335" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="320" width="81" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261" y="335" fill="#c7c7c7">.__init__</text>
+<rect x="270" y="320" width="243" height="20" fill="#3a3a3a"/>
+<text x="270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="335" fill="#767676">…fastapi/app/models.py:13││</text>
+<rect x="513" y="320" width="36" height="20" fill="#4b5454"/>
+<rect x="549" y="320" width="27" height="20" fill="#4b5454"/>
+<text x="549 558 567" y="335" fill="#af87af">def</text>
+<rect x="576" y="320" width="9" height="20" fill="#4b5454"/>
+<rect x="585" y="320" width="72" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630 639 648" y="335" fill="#87afaf">__init__</text>
+<rect x="657" y="320" width="9" height="20" fill="#4b5454"/>
+<text x="657" y="335" fill="#c7c7c7">(</text>
+<rect x="666" y="320" width="36" height="20" fill="#4b5454"/>
+<text x="666 675 684 693" y="335" fill="#87afaf">self</text>
+<rect x="702" y="320" width="18" height="20" fill="#4b5454"/>
+<text x="702" y="335" fill="#c7c7c7">,</text>
+<rect x="720" y="320" width="18" height="20" fill="#4b5454"/>
+<text x="720 729" y="335" fill="#87afaf">id</text>
+<rect x="738" y="320" width="18" height="20" fill="#4b5454"/>
+<text x="738" y="335" fill="#c7c7c7">:</text>
+<rect x="756" y="320" width="27" height="20" fill="#4b5454"/>
+<text x="756 765 774" y="335" fill="#87afaf">int</text>
+<rect x="783" y="320" width="72" height="20" fill="#4b5454"/>
+<text x="783 792 801 810 819 828 837" y="335" fill="#c7c7c7">,&#160;name:</text>
+<rect x="855" y="320" width="27" height="20" fill="#4b5454"/>
+<text x="855 864 873" y="335" fill="#87afaf">str</text>
+<rect x="882" y="320" width="81" height="20" fill="#4b5454"/>
+<text x="882 891 900 909 918 927 936 945" y="335" fill="#c7c7c7">,&#160;email:</text>
+<rect x="963" y="320" width="18" height="20" fill="#4b5454"/>
+<text x="963 972" y="335" fill="#87afaf">st</text>
+<rect x="981" y="320" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="335" fill="#767676">│</text>
+<text x="9 18" y="355" fill="#585858">22</text>
+<text x="72 81 90" y="355" fill="#c7c7c7">def</text>
+<rect x="108" y="340" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="355" fill="#767676">│</text>
+<rect x="117" y="340" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="355" fill="#c7c7c7">me</text>
+<rect x="153" y="340" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="355" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="340" width="81" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261" y="355" fill="#c7c7c7">.__repr__</text>
+<rect x="270" y="340" width="243" height="20" fill="#3a3a3a"/>
+<text x="270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="355" fill="#767676">…fastapi/app/models.py:18││</text>
+<rect x="513" y="340" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="340" width="36" height="20" fill="#4b5454"/>
+<text x="585 594 603 612" y="355" fill="#87afaf">self</text>
+<rect x="621" y="340" width="54" height="20" fill="#4b5454"/>
+<text x="621 630 639 648 657" y="355" fill="#c7c7c7">.id&#160;=</text>
+<rect x="675" y="340" width="18" height="20" fill="#4b5454"/>
+<text x="675 684" y="355" fill="#87afaf">id</text>
+<rect x="693" y="340" width="288" height="20" fill="#4b5454"/>
+<rect x="981" y="340" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="355" fill="#767676">│</text>
+<text x="9 18" y="375" fill="#585858">23</text>
+<rect x="108" y="360" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="375" fill="#767676">│</text>
+<rect x="117" y="360" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="375" fill="#c7c7c7">me</text>
+<rect x="153" y="360" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="375" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="360" width="63" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243" y="375" fill="#c7c7c7">.__eq__</text>
+<rect x="252" y="360" width="261" height="20" fill="#3a3a3a"/>
+<text x="252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="375" fill="#767676">…y_fastapi/app/models.py:21││</text>
+<rect x="513" y="360" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="360" width="36" height="20" fill="#4b5454"/>
+<text x="585 594 603 612" y="375" fill="#87afaf">self</text>
+<rect x="621" y="360" width="360" height="20" fill="#4b5454"/>
+<text x="621 630 639 648 657 666 675 684 693 702 711 720" y="375" fill="#c7c7c7">.name&#160;=&#160;name</text>
+<rect x="981" y="360" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="375" fill="#767676">│</text>
+<text x="9 18" y="395" fill="#585858">24</text>
+<rect x="108" y="380" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="395" fill="#767676">│</text>
+<rect x="117" y="380" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="395" fill="#c7c7c7">me</text>
+<rect x="153" y="380" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="395" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="380" width="81" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261" y="395" fill="#c7c7c7">.__hash__</text>
+<rect x="270" y="380" width="243" height="20" fill="#3a3a3a"/>
+<text x="270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="395" fill="#767676">…fastapi/app/models.py:24││</text>
+<rect x="513" y="380" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="380" width="36" height="20" fill="#4b5454"/>
+<text x="585 594 603 612" y="395" fill="#87afaf">self</text>
+<rect x="621" y="380" width="360" height="20" fill="#4b5454"/>
+<text x="621 630 639 648 657 666 675 684 693 702 711 720 729 738" y="395" fill="#c7c7c7">.email&#160;=&#160;email</text>
+<rect x="981" y="380" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="395" fill="#767676">│</text>
+<text x="9 18" y="415" fill="#585858">25</text>
+<rect x="108" y="400" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="415" fill="#767676">│</text>
+<rect x="117" y="400" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="415" fill="#c7c7c7">cl</text>
+<rect x="153" y="400" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="415" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="400" width="54" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234" y="415" fill="#c7c7c7">Create</text>
+<rect x="243" y="400" width="270" height="20" fill="#3a3a3a"/>
+<text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="415" fill="#767676">…py_fastapi/app/models.py:98││</text>
+<rect x="513" y="400" width="468" height="20" fill="#4b5454"/>
+<rect x="981" y="400" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="415" fill="#767676">│</text>
+<text x="9 18" y="435" fill="#585858">26</text>
+<rect x="108" y="420" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="435" fill="#767676">│</text>
+<rect x="117" y="420" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="435" fill="#c7c7c7">fi</text>
+<rect x="153" y="420" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="435" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="420" width="99" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279" y="435" fill="#c7c7c7">Create.name</text>
+<rect x="288" y="420" width="225" height="20" fill="#3a3a3a"/>
+<text x="288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="435" fill="#767676">…tapi/app/models.py:101││</text>
+<rect x="513" y="420" width="36" height="20" fill="#4b5454"/>
+<rect x="549" y="420" width="27" height="20" fill="#4b5454"/>
+<text x="549 558 567" y="435" fill="#af87af">def</text>
+<rect x="576" y="420" width="9" height="20" fill="#4b5454"/>
+<rect x="585" y="420" width="72" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630 639 648" y="435" fill="#87afaf">__repr__</text>
+<rect x="657" y="420" width="9" height="20" fill="#4b5454"/>
+<text x="657" y="435" fill="#c7c7c7">(</text>
+<rect x="666" y="420" width="36" height="20" fill="#4b5454"/>
+<text x="666 675 684 693" y="435" fill="#87afaf">self</text>
+<rect x="702" y="420" width="45" height="20" fill="#4b5454"/>
+<text x="702 711 720 729" y="435" fill="#c7c7c7">)&#160;-&gt;</text>
+<rect x="747" y="420" width="27" height="20" fill="#4b5454"/>
+<text x="747 756 765" y="435" fill="#87afaf">str</text>
+<rect x="774" y="420" width="207" height="20" fill="#4b5454"/>
+<text x="774" y="435" fill="#c7c7c7">:</text>
+<rect x="981" y="420" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="435" fill="#767676">│</text>
+<text x="9 18" y="455" fill="#585858">27</text>
+<rect x="108" y="440" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="455" fill="#767676">│</text>
+<rect x="117" y="440" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="455" fill="#c7c7c7">fi</text>
+<rect x="153" y="440" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="455" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="440" width="108" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261 270 279 288" y="455" fill="#c7c7c7">Create.email</text>
+<rect x="297" y="440" width="216" height="20" fill="#3a3a3a"/>
+<text x="297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="455" fill="#767676">…api/app/models.py:102││</text>
+<rect x="513" y="440" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="440" width="54" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630" y="455" fill="#af87af">return</text>
+<rect x="639" y="440" width="9" height="20" fill="#4b5454"/>
+<rect x="648" y="440" width="90" height="20" fill="#4b5454"/>
+<text x="648 657 666 675 684 693 702 711 720 729" y="455" fill="#5faf5f">f"User(id=</text>
+<rect x="738" y="440" width="9" height="20" fill="#4b5454"/>
+<text x="738" y="455" fill="#5f8787">{</text>
+<rect x="747" y="440" width="36" height="20" fill="#4b5454"/>
+<text x="747 756 765 774" y="455" fill="#87afaf">self</text>
+<rect x="783" y="440" width="27" height="20" fill="#4b5454"/>
+<text x="783 792 801" y="455" fill="#c7c7c7">.id</text>
+<rect x="810" y="440" width="27" height="20" fill="#4b5454"/>
+<text x="810 819 828" y="455" fill="#5f8787">!r}</text>
+<rect x="837" y="440" width="63" height="20" fill="#4b5454"/>
+<text x="837 846 855 864 873 882 891" y="455" fill="#5faf5f">,&#160;name=</text>
+<rect x="900" y="440" width="9" height="20" fill="#4b5454"/>
+<text x="900" y="455" fill="#5f8787">{</text>
+<rect x="909" y="440" width="36" height="20" fill="#4b5454"/>
+<text x="909 918 927 936" y="455" fill="#87afaf">self</text>
+<rect x="945" y="440" width="36" height="20" fill="#4b5454"/>
+<text x="945 954 963 972" y="455" fill="#c7c7c7">.nam</text>
+<rect x="981" y="440" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="455" fill="#767676">│</text>
+<text x="9 18" y="475" fill="#585858">28</text>
+<rect x="108" y="460" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="475" fill="#767676">│</text>
+<rect x="117" y="460" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="475" fill="#c7c7c7">cl</text>
+<rect x="153" y="460" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="475" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="460" width="27" height="20" fill="#3a3a3a"/>
+<text x="189 198 207" y="475" fill="#c7c7c7">Out</text>
+<rect x="216" y="460" width="270" height="20" fill="#3a3a3a"/>
+<text x="234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477" y="475" fill="#767676">py_fastapi/app/models.py:105</text>
+<rect x="486" y="460" width="9" height="20" fill="#3a3a3a"/>
+<rect x="495" y="460" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="475" fill="#767676">││</text>
+<rect x="513" y="460" width="468" height="20" fill="#4b5454"/>
+<rect x="981" y="460" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="475" fill="#767676">│</text>
+<text x="9 18" y="495" fill="#585858">29</text>
+<text x="72 81 90" y="495" fill="#c7c7c7">def</text>
+<rect x="108" y="480" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="495" fill="#767676">│</text>
+<rect x="117" y="480" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="495" fill="#c7c7c7">fi</text>
+<rect x="153" y="480" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="495" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="480" width="54" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234" y="495" fill="#c7c7c7">Out.id</text>
+<rect x="243" y="480" width="270" height="20" fill="#3a3a3a"/>
+<text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="495" fill="#767676">…y_fastapi/app/models.py:108││</text>
+<rect x="513" y="480" width="36" height="20" fill="#4b5454"/>
+<rect x="549" y="480" width="27" height="20" fill="#4b5454"/>
+<text x="549 558 567" y="495" fill="#af87af">def</text>
+<rect x="576" y="480" width="9" height="20" fill="#4b5454"/>
+<rect x="585" y="480" width="54" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630" y="495" fill="#87afaf">__eq__</text>
+<rect x="639" y="480" width="9" height="20" fill="#4b5454"/>
+<text x="639" y="495" fill="#c7c7c7">(</text>
+<rect x="648" y="480" width="36" height="20" fill="#4b5454"/>
+<text x="648 657 666 675" y="495" fill="#87afaf">self</text>
+<rect x="684" y="480" width="81" height="20" fill="#4b5454"/>
+<text x="684 693 702 711 720 729 738 747" y="495" fill="#c7c7c7">,&#160;other:</text>
+<rect x="765" y="480" width="54" height="20" fill="#4b5454"/>
+<text x="765 774 783 792 801 810" y="495" fill="#87afaf">object</text>
+<rect x="819" y="480" width="45" height="20" fill="#4b5454"/>
+<text x="819 828 837 846" y="495" fill="#c7c7c7">)&#160;-&gt;</text>
+<rect x="864" y="480" width="36" height="20" fill="#4b5454"/>
+<text x="864 873 882 891" y="495" fill="#87afaf">bool</text>
+<rect x="900" y="480" width="81" height="20" fill="#4b5454"/>
+<text x="900" y="495" fill="#c7c7c7">:</text>
+<rect x="981" y="480" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="495" fill="#767676">│</text>
+<text x="9 18" y="515" fill="#585858">30</text>
+<rect x="108" y="500" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="515" fill="#767676">│</text>
+<rect x="117" y="500" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="515" fill="#c7c7c7">fi</text>
+<rect x="153" y="500" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="515" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="500" width="72" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252" y="515" fill="#c7c7c7">Out.name</text>
+<rect x="261" y="500" width="252" height="20" fill="#3a3a3a"/>
+<text x="261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="515" fill="#767676">…fastapi/app/models.py:109││</text>
+<rect x="513" y="500" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="500" width="54" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630" y="515" fill="#af87af">return</text>
+<rect x="639" y="500" width="9" height="20" fill="#4b5454"/>
+<rect x="648" y="500" width="90" height="20" fill="#4b5454"/>
+<text x="648 657 666 675 684 693 702 711 720 729" y="515" fill="#87afaf">isinstance</text>
+<rect x="738" y="500" width="126" height="20" fill="#4b5454"/>
+<text x="738 747 756 765 774 783 792 801 810 819 828 837 846" y="515" fill="#c7c7c7">(other,&#160;User)</text>
+<rect x="864" y="500" width="27" height="20" fill="#4b5454"/>
+<text x="864 873 882" y="515" fill="#af87af">and</text>
+<rect x="891" y="500" width="90" height="20" fill="#4b5454"/>
+<text x="900 909 918 927 936 945 954 963" y="515" fill="#c7c7c7">other.id</text>
+<rect x="981" y="500" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="515" fill="#767676">│</text>
+<text x="9 18" y="535" fill="#585858">31</text>
+<rect x="108" y="520" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="535" fill="#767676">│</text>
+<rect x="117" y="520" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="535" fill="#c7c7c7">fi</text>
+<rect x="153" y="520" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180" y="535" fill="#87afaf" font-weight="bold">User</text>
+<rect x="189" y="520" width="81" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216 225 234 243 252 261" y="535" fill="#c7c7c7">Out.email</text>
+<rect x="270" y="520" width="243" height="20" fill="#3a3a3a"/>
+<text x="270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="535" fill="#767676">…astapi/app/models.py:110││</text>
+<rect x="513" y="520" width="468" height="20" fill="#4b5454"/>
+<rect x="981" y="520" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="535" fill="#767676">│</text>
+<text x="9 18" y="555" fill="#585858">32</text>
+<rect x="108" y="540" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="555" fill="#767676">│</text>
+<rect x="117" y="540" width="45" height="20" fill="#3a3a3a"/>
+<text x="126 135 144 153" y="555" fill="#c7c7c7">va&#160;_</text>
+<rect x="162" y="540" width="36" height="20" fill="#3a3a3a"/>
+<text x="162 171 180 189" y="555" fill="#87afaf" font-weight="bold">USER</text>
+<rect x="198" y="540" width="9" height="20" fill="#3a3a3a"/>
+<text x="198" y="555" fill="#c7c7c7">S</text>
+<rect x="207" y="540" width="243" height="20" fill="#3a3a3a"/>
+<text x="207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="555" fill="#767676">…services/user_service.py:5</text>
+<rect x="450" y="540" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="555" fill="#5f8787">&lt;-6</text>
+<rect x="495" y="540" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="555" fill="#767676">││</text>
+<rect x="513" y="540" width="36" height="20" fill="#4b5454"/>
+<rect x="549" y="540" width="27" height="20" fill="#4b5454"/>
+<text x="549 558 567" y="555" fill="#af87af">def</text>
+<rect x="576" y="540" width="9" height="20" fill="#4b5454"/>
+<rect x="585" y="540" width="72" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630 639 648" y="555" fill="#87afaf">__hash__</text>
+<rect x="657" y="540" width="9" height="20" fill="#4b5454"/>
+<text x="657" y="555" fill="#c7c7c7">(</text>
+<rect x="666" y="540" width="36" height="20" fill="#4b5454"/>
+<text x="666 675 684 693" y="555" fill="#87afaf">self</text>
+<rect x="702" y="540" width="45" height="20" fill="#4b5454"/>
+<text x="702 711 720 729" y="555" fill="#c7c7c7">)&#160;-&gt;</text>
+<rect x="747" y="540" width="27" height="20" fill="#4b5454"/>
+<text x="747 756 765" y="555" fill="#87afaf">int</text>
+<rect x="774" y="540" width="207" height="20" fill="#4b5454"/>
+<text x="774" y="555" fill="#c7c7c7">:</text>
+<rect x="981" y="540" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="555" fill="#767676">│</text>
+<text x="9 18" y="575" fill="#585858">33</text>
+<rect x="108" y="560" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="575" fill="#767676">│</text>
+<rect x="117" y="560" width="72" height="20" fill="#3a3a3a"/>
+<text x="126 135 144 153 162 171 180" y="575" fill="#c7c7c7">fn&#160;get_</text>
+<rect x="189" y="560" width="36" height="20" fill="#3a3a3a"/>
+<text x="189 198 207 216" y="575" fill="#87afaf" font-weight="bold">user</text>
+<rect x="225" y="560" width="225" height="20" fill="#3a3a3a"/>
+<text x="225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="575" fill="#767676">…i/app/routes/users.py:18</text>
+<rect x="450" y="560" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="575" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="560" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="575" fill="#767676">││</text>
+<rect x="513" y="560" width="72" height="20" fill="#4b5454"/>
+<rect x="585" y="560" width="54" height="20" fill="#4b5454"/>
+<text x="585 594 603 612 621 630" y="575" fill="#af87af">return</text>
+<rect x="639" y="560" width="9" height="20" fill="#4b5454"/>
+<rect x="648" y="560" width="36" height="20" fill="#4b5454"/>
+<text x="648 657 666 675" y="575" fill="#87afaf">hash</text>
+<rect x="684" y="560" width="9" height="20" fill="#4b5454"/>
+<text x="684" y="575" fill="#c7c7c7">(</text>
+<rect x="693" y="560" width="36" height="20" fill="#4b5454"/>
+<text x="693 702 711 720" y="575" fill="#87afaf">self</text>
+<rect x="729" y="560" width="252" height="20" fill="#4b5454"/>
+<text x="729 738 747 756" y="575" fill="#c7c7c7">.id)</text>
+<rect x="981" y="560" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="575" fill="#767676">│</text>
+<text x="9 18" y="595" fill="#585858">34</text>
+<rect x="108" y="580" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="595" fill="#767676">│</text>
+<rect x="117" y="580" width="81" height="20" fill="#3a3a3a"/>
+<text x="126 135 144 153 162 171 180 189" y="595" fill="#c7c7c7">fn&#160;list_</text>
+<rect x="198" y="580" width="36" height="20" fill="#3a3a3a"/>
+<text x="198 207 216 225" y="595" fill="#87afaf" font-weight="bold">user</text>
+<rect x="234" y="580" width="9" height="20" fill="#3a3a3a"/>
+<text x="234" y="595" fill="#c7c7c7">s</text>
+<rect x="243" y="580" width="207" height="20" fill="#3a3a3a"/>
+<text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="595" fill="#767676">…app/routes/users.py:11</text>
+<rect x="450" y="580" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="595" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="580" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="595" fill="#767676">││</text>
+<rect x="513" y="580" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="580" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="595" fill="#767676">│</text>
+<text x="9 18" y="615" fill="#585858">35</text>
+<rect x="108" y="600" width="9" height="20" fill="#3a3a3a"/>
+<text x="108" y="615" fill="#767676">│</text>
+<rect x="117" y="600" width="90" height="20" fill="#3a3a3a"/>
+<text x="126 135 144 153 162 171 180 189 198" y="615" fill="#c7c7c7">fi&#160;Order.</text>
+<rect x="207" y="600" width="36" height="20" fill="#3a3a3a"/>
+<text x="207 216 225 234" y="615" fill="#87afaf" font-weight="bold">user</text>
+<rect x="243" y="600" width="27" height="20" fill="#3a3a3a"/>
+<text x="243 252 261" y="615" fill="#c7c7c7">_id</text>
+<rect x="270" y="600" width="180" height="20" fill="#3a3a3a"/>
+<text x="270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441" y="615" fill="#767676">…pi/app/models.py:84</text>
+<rect x="450" y="600" width="45" height="20" fill="#3a3a3a"/>
+<text x="468 477 486" y="615" fill="#5f8787">&lt;-1</text>
+<rect x="495" y="600" width="18" height="20" fill="#3a3a3a"/>
+<text x="495 504" y="615" fill="#767676">││</text>
+<rect x="513" y="600" width="468" height="20" fill="#3a3a3a"/>
+<rect x="981" y="600" width="9" height="20" fill="#3a3a3a"/>
+<text x="981" y="615" fill="#767676">│</text>
+<text x="9 18" y="635" fill="#585858">36</text>
+<text x="72 81 90" y="635" fill="#c7c7c7">def</text>
+<rect x="108" y="620" width="180" height="20" fill="#3a3a3a"/>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279" y="635" fill="#767676">╰───────────────────</text>
+<rect x="288" y="620" width="36" height="20" fill="#3a3a3a"/>
+<text x="297 306" y="635" fill="#767676" font-style="italic">43</text>
+<rect x="324" y="620" width="666" height="20" fill="#3a3a3a"/>
+<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="635" fill="#767676">───────────────────╯╰────────────────────────────────────────────────────╯</text>
+<text x="9 18" y="655" fill="#585858">37</text>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549" y="655" fill="#c7c7c7">"""Return&#160;every&#160;stored&#160;user&#160;as&#160;a&#160;domain&#160;object."""</text>
+<text x="9 18" y="675" fill="#585858">38</text>
+<text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783" y="675" fill="#c7c7c7">return&#160;[User(uid,&#160;row["name"],&#160;row["email"])&#160;for&#160;uid,&#160;row&#160;in&#160;_USERS.items()]</text>
+<text x="9 18" y="695" fill="#585858">39</text>
+</svg>
