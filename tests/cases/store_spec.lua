@@ -88,41 +88,44 @@ describe("reading state back", function()
     expect.eq(stray_temp_files(), {})
   end)
 
-  it("gives two interleaved writers their own temp file, so a rename can never publish the other's data (M2)", function()
-    local path = store.path("impact", root)
-    local original_writefile = vim.fn.writefile
-    local nested = false
-    -- Two Neovim instances writing the same project file: the second
-    -- instance's whole write (its own temp file, written and renamed) lands
-    -- while the first is still holding its own temp file, unrenamed.
-    vim.fn.writefile = function(lines, temp_path, ...)
-      local result = original_writefile(lines, temp_path, ...)
-      if not nested and temp_path:match("%.tmp$") then
-        nested = true
-        local ok_b, err_b = store.write("impact", root, { entries = { b = "from-B" } })
-        expect.eq({ ok_b, err_b }, { true, nil }, "the interleaved writer must succeed honestly")
+  it(
+    "gives two interleaved writers their own temp file, so a rename can never publish the other's data (M2)",
+    function()
+      local path = store.path("impact", root)
+      local original_writefile = vim.fn.writefile
+      local nested = false
+      -- Two Neovim instances writing the same project file: the second
+      -- instance's whole write (its own temp file, written and renamed) lands
+      -- while the first is still holding its own temp file, unrenamed.
+      vim.fn.writefile = function(lines, temp_path, ...)
+        local result = original_writefile(lines, temp_path, ...)
+        if not nested and temp_path:match("%.tmp$") then
+          nested = true
+          local ok_b, err_b = store.write("impact", root, { entries = { b = "from-B" } })
+          expect.eq({ ok_b, err_b }, { true, nil }, "the interleaved writer must succeed honestly")
+        end
+        return result
       end
-      return result
+
+      local ok_a, err_a = store.write("impact", root, { entries = { a = "from-A" } })
+      vim.fn.writefile = original_writefile
+
+      expect.eq(
+        { ok_a, err_a },
+        { true, nil },
+        "a writer whose own temp file nothing else touched must succeed too"
+      )
+      -- Whichever rename actually ran last wins - that is ordinary last-write-
+      -- wins, not the M2 bug. The bug was a writer reporting ok=true while its
+      -- OWN encoded data was never what got published.
+      expect.eq(
+        store.read("impact", root),
+        { entries = { a = "from-A" } },
+        "the outer write's rename ran last and must publish exactly its own data"
+      )
+      expect.eq(vim.fn.glob(path .. ".*.tmp", true, true), {}, "no stray temp files left behind")
     end
-
-    local ok_a, err_a = store.write("impact", root, { entries = { a = "from-A" } })
-    vim.fn.writefile = original_writefile
-
-    expect.eq(
-      { ok_a, err_a },
-      { true, nil },
-      "a writer whose own temp file nothing else touched must succeed too"
-    )
-    -- Whichever rename actually ran last wins - that is ordinary last-write-
-    -- wins, not the M2 bug. The bug was a writer reporting ok=true while its
-    -- OWN encoded data was never what got published.
-    expect.eq(
-      store.read("impact", root),
-      { entries = { a = "from-A" } },
-      "the outer write's rename ran last and must publish exactly its own data"
-    )
-    expect.eq(vim.fn.glob(path .. ".*.tmp", true, true), {}, "no stray temp files left behind")
-  end)
+  )
 end)
 
 describe("approvals written from two Neovim instances", function()
