@@ -174,6 +174,20 @@ local function open_unused(ctx)
   return view.panel
 end
 
+--- The toast for a graph export. Names the truncation honestly when the
+--- renderer's own node cap capped the view, rather than reporting flat
+--- success on a partial graph (F2). Pure, so it is testable without a server.
+--- @param result { truncated: boolean, nodes?: integer, nodesTotal?: integer }
+--- @return string message, string? level
+function M.graph_message(absolute, result)
+  local message = "graph written to " .. vim.fn.fnamemodify(absolute, ":~")
+  if not result.truncated then
+    return message, nil
+  end
+  return ("%s (%d of %d nodes shown)"):format(message, result.nodes or 0, result.nodesTotal or 0),
+    "warn"
+end
+
 local function export_graph(ctx)
   local root_mod = require("epicenter.root")
   local progress = require("epicenter.ui.toast").progress("exporting the graph")
@@ -187,7 +201,7 @@ local function export_graph(ctx)
     end
     -- `path` comes back root-relative, per contract.
     local absolute = vim.fs.joinpath(root, result.path)
-    progress.finish("graph written to " .. vim.fn.fnamemodify(absolute, ":~"))
+    progress.finish(M.graph_message(absolute, result))
     vim.ui.open(absolute)
   end, { bufnr = ctx.bufnr, channel = "graph" })
 end

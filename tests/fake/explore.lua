@@ -20,6 +20,9 @@ local function fail(code, fmt, ...)
   error({ code = code, message = fmt:format(...) }, 0)
 end
 
+--- `navgraph/graph`'s own node cap - see that handler below.
+local NODE_CAP = 400
+
 -- Call graph -------------------------------------------------------------------
 
 --- Words on `line` immediately followed by `(`, skipping control-flow keywords.
@@ -493,8 +496,8 @@ return {
   --- Writes a standalone HTML file under `.navgraph/`, content-hashed so a
   --- repeated request for the same view reuses one file. `path` is a filter
   --- over which subgraph to draw - the server always chooses the output path.
-  --- `truncated` is always false here (F3: schema conformance only) - this
-  --- fake enforces no node cap yet, F2 adds one so truncation is testable.
+  --- `nodes`/`nodesTotal`/`truncated` mirror the real renderer's own node cap
+  --- (F2): NODE_CAP is a representative fake value, not derived from it.
   ["navgraph/graph"] = function(ctx, params)
     local graph = graph_of(ctx.index)
     local edges, touched = {}, {}
@@ -507,9 +510,21 @@ return {
         end
       end
     end
-    local nodes_total = 0
-    for _ in pairs(touched) do
-      nodes_total = nodes_total + 1
+
+    local ids = vim.tbl_keys(touched)
+    table.sort(ids)
+    local nodes_total = #ids
+    local truncated = nodes_total > NODE_CAP
+    local shown = nodes_total
+    if truncated then
+      shown = NODE_CAP
+      local kept = {}
+      for i = 1, NODE_CAP do
+        kept[ids[i]] = true
+      end
+      edges = vim.tbl_filter(function(edge)
+        return kept[edge.from.id] and kept[edge.to.id]
+      end, edges)
     end
 
     local lines = { "<!doctype html><title>navgraph</title><pre>digraph navgraph {" }
@@ -527,6 +542,6 @@ return {
       assert(io.open(vim.fs.joinpath(ctx.root, rel), "w"), "fake server could not write graph file")
     fh:write(content)
     fh:close()
-    return { path = rel, nodes = nodes_total, nodesTotal = nodes_total, truncated = false }
+    return { path = rel, nodes = shown, nodesTotal = nodes_total, truncated = truncated }
   end,
 }

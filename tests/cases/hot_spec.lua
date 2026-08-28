@@ -193,6 +193,24 @@ describe("hot bar scale", function()
   end)
 end)
 
+describe("hot graph export message (F2)", function()
+  it("reports flat success when the graph was not capped", function()
+    local message, level =
+      hot.graph_message("/proj/.navgraph/graph-abc.html", { path = "x", truncated = false })
+    expect.matches(message, "^graph written to ")
+    expect.eq(level, nil)
+  end)
+
+  it("names the truncation rather than presenting a capped subgraph as the graph", function()
+    local message, level = hot.graph_message(
+      "/proj/.navgraph/graph-abc.html",
+      { path = "x", truncated = true, nodes = 400, nodesTotal = 612 }
+    )
+    expect.matches(message, "400 of 612 nodes shown")
+    expect.eq(level, "warn")
+  end)
+end)
+
 --- Exercises `tests/fake/explore.lua`'s `navgraph/unused` handler directly
 --- against a synthetic index: no fixture file on disk has "test" in its name,
 --- so the shared fixture tree cannot exercise `tests = "only"` on its own.
@@ -240,5 +258,81 @@ describe("navgraph/unused fake fidelity (merge-gate F7)", function()
       { "helper_fn" },
       "the unused test helper is listed, not the production symbol tests happen to call"
     )
+  end)
+end)
+
+--- Exercises `tests/fake/explore.lua`'s `navgraph/graph` handler directly
+--- against a synthetic index bigger than its NODE_CAP: no fixture on disk
+--- is anywhere near large enough to trip the renderer's node cap on its own.
+describe("navgraph/graph fake fidelity (F2)", function()
+  it("truncates and reports nodesTotal once the graph exceeds the node cap", function()
+    -- A straight call chain w1 -> w2 -> ... -> wN: N-1 edges touch all N
+    -- symbols, so nodesTotal is exactly N.
+    local N = 450
+    local symbols, lines = {}, {}
+    for i = 1, N do
+      table.insert(symbols, {
+        id = i,
+        name = "w" .. i,
+        qualified = "w" .. i,
+        kind = "fn",
+        file = "big.lua",
+        uri = "file:///proj/big.lua",
+        line = (i - 1) * 3 + 1,
+        endLine = (i - 1) * 3 + 3,
+        test = false,
+      })
+      table.insert(lines, ("function w%d()"):format(i))
+      table.insert(lines, i < N and ("  w%d()"):format(i + 1) or "  -- leaf")
+      table.insert(lines, "end")
+    end
+    local index = { symbols = symbols, sources = { ["big.lua"] = lines } }
+
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local handlers = require("fake.explore")
+    local ok, result = pcall(handlers["navgraph/graph"], { index = index, root = root }, {})
+    assert(ok, tostring(result))
+
+    expect.eq(result.nodesTotal, N)
+    expect.eq(result.truncated, true)
+    expect.truthy(result.nodes < result.nodesTotal, "fewer nodes shown than the graph has")
+  end)
+
+  it("does not truncate a graph under the cap", function()
+    local index = {
+      symbols = {
+        {
+          id = 1,
+          name = "a",
+          qualified = "a",
+          kind = "fn",
+          file = "small.lua",
+          uri = "file:///proj/small.lua",
+          line = 1,
+          endLine = 3,
+          test = false,
+        },
+        {
+          id = 2,
+          name = "b",
+          qualified = "b",
+          kind = "fn",
+          file = "small.lua",
+          uri = "file:///proj/small.lua",
+          line = 4,
+          endLine = 6,
+          test = false,
+        },
+      },
+      sources = { ["small.lua"] = { "function a()", "  b()", "end", "function b()", "end" } },
+    }
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local handlers = require("fake.explore")
+    local ok, result = pcall(handlers["navgraph/graph"], { index = index, root = root }, {})
+    assert(ok, tostring(result))
+    expect.eq(result.truncated, false)
+    expect.eq(result.nodes, result.nodesTotal)
   end)
 end)
