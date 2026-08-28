@@ -289,7 +289,14 @@ function Palette:_install_keys()
   map("n", "?", function()
     self:toggle_help()
   end)
-  map({ "i", "n" }, "<Esc>", function()
+  -- The prompt opens in insert mode, so `<Esc>` closing outright (its old
+  -- behaviour) meant `?`, `q`, `j`/`k` - every normal-mode key the footer
+  -- advertises - had no way to be reached at all (F15). One `<Esc>` now
+  -- drops to normal mode, like everywhere else in Neovim; a second closes.
+  map("i", "<Esc>", function()
+    vim.cmd("stopinsert")
+  end)
+  map("n", "<Esc>", function()
     self:close()
   end)
   map("n", "q", function()

@@ -181,6 +181,42 @@ describe("search palette against the fake navgraph server", function()
     p2:close()
   end)
 
+  -- F15: the prompt opens in insert mode, and <Esc> used to close outright -
+  -- so every normal-mode key the footer advertises (?, j, k, q) had no way
+  -- to be reached at all. One <Esc> now drops to normal mode, like anywhere
+  -- else in Neovim; a second closes.
+  it("reaches ? and q through <Esc>, rather than <Esc> closing outright", function()
+    -- A headless session cannot actually enter insert mode (no UI attached
+    -- for `:startinsert` to hand control to), so this drives the prompt's
+    -- own per-mode key callbacks directly, the same way blast/explore's
+    -- specs drive a panel's keys - the real regression, and the real fix,
+    -- are which callback fires for which mode, not the mode transition
+    -- itself.
+    local p = epicenter.run("search", {}, buf)
+
+    local function press(mode, lhs)
+      for _, map in ipairs(vim.api.nvim_buf_get_keymap(p.prompt_win.buf, mode)) do
+        if map.lhs == lhs and map.callback then
+          return map.callback()
+        end
+      end
+      error(("no %s-mode mapping for %s"):format(mode, lhs))
+    end
+
+    -- The prompt opens in insert mode: this is the key <Esc> actually fires
+    -- first. It used to close the palette outright, which left every
+    -- normal-mode key below unreachable from the prompt's own start state.
+    press("i", "<Esc>")
+    expect.truthy(p.open, "the first <Esc> drops to normal mode, it does not close")
+
+    press("n", "?")
+    expect.truthy(p.help_open, "? is now reachable")
+    press("n", "?")
+
+    press("n", "q")
+    expect.falsy(p.open, "q closes from normal mode")
+  end)
+
   it("reflows the whole palette, list height included, on a real VimResized", function()
     local p = epicenter.run("search", {}, buf)
     local before_box = p.results_win:geometry()

@@ -338,8 +338,9 @@ Inside the palette:
 | `<C-r>`            | Toggle reference mode (grep: regex)           |
 | `<C-k>`            | Cycle the kind filter (search only)           |
 | `<C-y>`            | Yank `file:line`                              |
-| `?`                | Toggle the key help (normal mode)             |
-| `<Esc>` / `q`      | Close                                         |
+| `?` / `j` / `k`    | Key help / move (normal mode)                 |
+| `<Esc>`            | Normal mode, then close (like everywhere else in Neovim) |
+| `q`                | Close (normal mode)                           |
 
 ## Commands
 
