@@ -23,6 +23,7 @@ CONTENTS                                                   *epicenter-contents*
          badges ............................... |epicenter-badges|
      - explore ................................ |epicenter-explore|
      - peek ................................... |epicenter-peek|
+     - crumbs ................................. |epicenter-crumbs|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -102,6 +103,7 @@ The binary is looked up in this order:
     callers  |epicenter-explore|  Who calls the symbol under the cursor
     callees  |epicenter-explore|  What the symbol under the cursor calls
     peek     |epicenter-peek|     Read the definition under the cursor
+    crumbs   |epicenter-crumbs|   Toggle the breadcrumb winbar in this window
     path     |epicenter-path|     Call chain between two symbols
     outline  |epicenter-outline|  Live symbol outline of the current buffer
     hot      |epicenter-hot|      Most depended-on symbols, ranked by fan-in
@@ -186,6 +188,7 @@ Defaults: >lua
         strict = false,
         tests = "with",
       },
+      crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
       explore = { debounce_ms = 100 },
       grep = { debounce_ms = 60, limit = 200 },
       highlights = {},
@@ -574,6 +577,42 @@ PEEK                                                           *epicenter-peek*
     The same component answers `o` inside every panel - there it takes focus,
     because the panel already holds the cursor.
 
+==============================================================================
+CRUMBS                                                       *epicenter-crumbs*
+
+Two one-line components for your own statusline and winbar. Both read a cache
+on every redraw and ask the server at most once per line the cursor reaches;
+with no server running for the project both are empty and nothing is sent.
+
+                                                    *epicenter.breadcrumbs()*
+require("epicenter").breadcrumbs()
+    The enclosing chain of the cursor's line, outermost first, joined by
+    `crumbs.separator`. For a winbar: >lua
+
+        vim.wo.winbar = "%{v:lua.require'epicenter'.breadcrumbs()}"
+<
+    Set `crumbs.winbar = true` to have epicenter install exactly that on every
+    code window - it never overwrites a winbar you set yourself.
+
+                                                     *epicenter.statusline()*
+require("epicenter").statusline()
+    The fan-in/fan-out of whatever the cursor is inside, e.g. `⌁ 12 ← · 4 →`.
+    Drop it into lualine, heirline, or `statusline` directly: >lua
+
+        vim.o.statusline = "%f %{v:lua.require'epicenter'.statusline()}"
+<
+                                                         *:Epicenter-crumbs*
+:Epicenter crumbs
+    Turns the breadcrumb winbar on or off in this window, without editing the
+    config for a one-off look.
+
+Against a server older than protocol 1.1 the chain is the enclosing definition
+alone - what that server can answer, rather than an invented chain.
+
+Options: >lua
+
+    crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
+<
 ==============================================================================
 PATH                                                           *epicenter-path*
 

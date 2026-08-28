@@ -44,6 +44,7 @@ local EXPECTED_COMMANDS = {
   "callers",
   "callees",
   "peek",
+  "crumbs",
   "path",
   "outline",
   "hot",

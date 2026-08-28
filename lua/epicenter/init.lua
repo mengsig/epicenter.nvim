@@ -220,6 +220,25 @@ function M.install(opts)
   return require("epicenter.install").install(opts)
 end
 
+--- The enclosing chain of the cursor's line, for a winbar:
+--- `vim.wo.winbar = "%{v:lua.require'epicenter'.breadcrumbs()}"`. Empty while
+--- the first answer is in flight, and empty for good when no server is
+--- running for the buffer's project.
+--- @param bufnr? integer
+--- @return string
+function M.breadcrumbs(bufnr)
+  return require("epicenter.features.crumbs").breadcrumbs(bufnr)
+end
+
+--- The fan-in/fan-out fragment for a statusline (lualine, heirline, or
+--- `%{...}` in `statusline` itself), e.g. `⌁ 12 ← · 4 →`. Same cost rules as
+--- `M.breadcrumbs`.
+--- @param bufnr? integer
+--- @return string
+function M.statusline(bufnr)
+  return require("epicenter.features.crumbs").statusline(bufnr)
+end
+
 --- Keys the last setup() silently replaced an existing mapping to install
 --- (F13) - `:checkhealth epicenter` surfaces this so a user whose own
 --- mapping got overwritten gets a signal from somewhere.

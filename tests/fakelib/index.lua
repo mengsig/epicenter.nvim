@@ -209,6 +209,27 @@ function M.word_at(index, file, line, column)
   end
 end
 
+--- Byte span of the identifier under `column` (1-based) on `line` of `file`,
+--- as 1-based inclusive offsets. `nil` when the column is not on one.
+--- @return integer|nil from, integer|nil to
+function M.word_span(index, file, line, column)
+  local text = (index.sources[file] or {})[line]
+  if not text then
+    return nil, nil
+  end
+  local from = 1
+  while true do
+    local first, last = text:find("[%w_]+", from)
+    if not first then
+      return nil, nil
+    end
+    if column >= first and column <= last + 1 then
+      return first, last
+    end
+    from = last + 1
+  end
+end
+
 --- Symbol whose body spans `line` (1-based) in `file`, innermost first.
 function M.enclosing(index, file, line)
   local best = nil

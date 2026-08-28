@@ -2,17 +2,54 @@
 --- grep, plus the standard LSP requests that resolve through the same index.
 local index = require("fakelib.index")
 
+--- v1.1: the identifier's own LSP range, for the client that wants to know
+--- exactly which characters it resolved.
+--- @return table|nil
+local function identifier_range(ctx, file, line, column)
+  local from, to = index.word_span(ctx.index, file, line, column)
+  if not from then
+    return nil
+  end
+  return {
+    start = { line = line - 1, character = from - 1 },
+    ["end"] = { line = line - 1, character = to },
+  }
+end
+
+--- v1.1: the enclosing chain, outermost -> innermost, for winbar breadcrumbs.
+local function breadcrumbs_of(ctx, file, line)
+  local chain = {}
+  for _, symbol in ipairs(ctx.index.symbols) do
+    if symbol.file == file and symbol.line <= line and line <= symbol.endLine then
+      table.insert(chain, symbol)
+    end
+  end
+  table.sort(chain, function(a, b)
+    return a.line < b.line
+  end)
+  return chain
+end
+
 --- @param ctx { root: string, index: table, overlays: table }
 local function symbol_at(ctx, params)
   local file = ctx.to_relative(params.uri)
   local line = (params.position.line or 0) + 1
-  local word = index.word_at(ctx.index, file, line, (params.position.character or 0) + 1)
+  local column = (params.position.character or 0) + 1
+  local word = index.word_at(ctx.index, file, line, column)
+  local crumbs = breadcrumbs_of(ctx, file, line)
 
   -- Off an identifier the real server has nothing to report - not even the
   -- enclosing definition (F11). Reporting one here is what let a blast target
   -- at `character = 0` pass the fake lane and fail against the real server.
   if not word then
-    return { word = "", symbol = vim.NIL, enclosing = vim.NIL, candidates = {} }
+    return {
+      word = "",
+      symbol = vim.NIL,
+      enclosing = vim.NIL,
+      candidates = {},
+      range = vim.NIL,
+      breadcrumbs = crumbs,
+    }
   end
 
   -- Same-file definitions win; the rest come back as ambiguity candidates.
@@ -35,6 +72,8 @@ local function symbol_at(ctx, params)
     symbol = candidates[1] or vim.NIL,
     enclosing = index.enclosing(ctx.index, file, line) or vim.NIL,
     candidates = vim.list_slice(candidates, 2, #candidates),
+    range = identifier_range(ctx, file, line, column) or vim.NIL,
+    breadcrumbs = crumbs,
   }
 end
 
@@ -52,9 +91,16 @@ local function status(ctx)
       languages[lang] = (languages[lang] or 0) + 1
     end
   end
+  local backend_languages = {}
+  for lang in pairs(languages) do
+    backend_languages[lang] = "heuristic"
+  end
+
   return {
     root = ctx.root,
     protocolVersion = 1,
+    protocolMinor = 1,
+    backend = { default = "auto", languages = backend_languages },
     version = "fake-0.1.0",
     files = #ctx.index.files,
     symbols = #ctx.index.symbols,

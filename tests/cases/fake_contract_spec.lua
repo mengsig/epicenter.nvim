@@ -138,7 +138,10 @@ describe("the fake answers the real navgraph/* shapes", function()
   it("navgraph/status carries exactly the contract's fields, no invented pid (F2)", function()
     local err, result = support.request(root, "navgraph/status", {})
     expect.eq(err, nil)
+    -- v1 plus what v1.1 adds, and nothing else - `pid` in particular is not
+    -- something this method reports (F2).
     expect.eq(keys_of(result), {
+      "backend",
       "cache",
       "edges",
       "files",
@@ -146,10 +149,13 @@ describe("the fake answers the real navgraph/* shapes", function()
       "languages",
       "lastIndexMs",
       "overlays",
+      "protocolMinor",
       "protocolVersion",
       "root",
       "symbols",
       "version",
     })
+    expect.eq(result.protocolMinor, 1)
+    expect.eq(result.backend.default, "auto")
   end)
 end)

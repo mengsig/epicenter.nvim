@@ -50,6 +50,11 @@ local POSITION = object({
   character = required(int()),
 })
 
+local RANGE = object({
+  start = required(POSITION),
+  ["end"] = required(POSITION),
+})
+
 --- Symbol, as `docs/lsp.md` "Shared result shapes" defines it. `doc` is the
 --- only optional member: a definition with no doc comment omits it.
 local SYMBOL = object({
@@ -109,9 +114,16 @@ local BLAST_RESULT = object({
   summary = required(SUMMARY),
 })
 
+--- v1.1 adds `protocolMinor` and `backend`; both optional, since a v1.0
+--- server answers `navgraph/status` without them.
 local STATUS_RESULT = object({
   root = required(str()),
   protocolVersion = required(int()),
+  protocolMinor = int(),
+  backend = object({
+    default = required(str()),
+    languages = required({ kind = "table" }),
+  }),
   version = required(str()),
   files = required(int()),
   symbols = required(int()),
@@ -159,6 +171,9 @@ M.METHODS = {
     result = STATUS_RESULT,
   },
 
+  -- v1.1 adds `range` and `breadcrumbs`. Both stay OPTIONAL here: a v1.0
+  -- server answers this method without them, and the contract's response
+  -- checking is forward-compatible, not version-gated.
   ["navgraph/symbolAt"] = {
     params = { uri = required(str()), position = required(POSITION) },
     result = object({
@@ -166,6 +181,8 @@ M.METHODS = {
       symbol = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
       enclosing = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
       candidates = required(list_of(SYMBOL)),
+      range = vim.tbl_extend("force", RANGE, { nullable = true }),
+      breadcrumbs = list_of(SYMBOL),
     }),
   },
 

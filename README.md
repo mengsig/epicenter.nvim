@@ -189,6 +189,23 @@ borrowed from the buffer underneath and handed straight back.
 The same component answers `o` inside every panel — there it takes focus,
 because the panel already holds the cursor.
 
+### Breadcrumbs and statusline
+
+Two one-line components for your own bars. Both read a cache on every redraw
+and ask the server at most once per line the cursor reaches; with no server
+running for the project both are empty and nothing is sent.
+
+```lua
+-- the enclosing chain, outermost first
+vim.wo.winbar = "%{v:lua.require'epicenter'.breadcrumbs()}"
+-- fan-in / fan-out of whatever the cursor is inside:  ⌁ 12 ← · 4 →
+vim.o.statusline = "%f %{v:lua.require'epicenter'.statusline()}"
+```
+
+`crumbs = { winbar = true }` installs the winbar on every code window for you —
+it never overwrites a winbar you set yourself. `:Epicenter crumbs` toggles it
+in one window.
+
 ### Call path — `:Epicenter path`, `<leader>ep`
 
 The chain between two symbols, drawn one rung at a time.
@@ -365,26 +382,27 @@ Inside the palette:
 `:Epicenter <subcommand>`, with completion.
 
 <!-- registry:commands -->
-| Subcommand | Does                                       |
-| ---------- | ------------------------------------------ |
-| `search`   | Fuzzy symbol search across the project     |
-| `grep`     | Repo-wide text search, unsaved edits too   |
-| `blast`    | Blast radius of the symbol at the cursor   |
-| `hover`    | What this symbol is, and who calls it      |
-| `diff`     | Impact of the changes since a git ref      |
-| `callers`  | Who calls the symbol under the cursor      |
-| `callees`  | What the symbol under the cursor calls     |
-| `peek`     | Read the definition under the cursor       |
-| `path`     | Call chain between two symbols             |
-| `outline`  | Live symbol outline of the current buffer  |
-| `hot`      | Most depended-on symbols, ranked by fan-in |
-| `unused`   | Symbols nothing in the index reaches       |
-| `graph`    | Write the call graph to a file and open it |
-| `status`   | Dashboard: index, server, languages, log   |
-| `install`  | Download or build the navgraph binary      |
-| `restart`  | Restart the server for this project        |
-| `rescan`   | Re-stat every file and rebuild the index   |
-| `log`      | Open the epicenter log                     |
+| Subcommand | Does                                        |
+| ---------- | ------------------------------------------- |
+| `search`   | Fuzzy symbol search across the project      |
+| `grep`     | Repo-wide text search, unsaved edits too    |
+| `blast`    | Blast radius of the symbol at the cursor    |
+| `hover`    | What this symbol is, and who calls it       |
+| `diff`     | Impact of the changes since a git ref       |
+| `callers`  | Who calls the symbol under the cursor       |
+| `callees`  | What the symbol under the cursor calls      |
+| `peek`     | Read the definition under the cursor        |
+| `crumbs`   | Toggle the breadcrumb winbar in this window |
+| `path`     | Call chain between two symbols              |
+| `outline`  | Live symbol outline of the current buffer   |
+| `hot`      | Most depended-on symbols, ranked by fan-in  |
+| `unused`   | Symbols nothing in the index reaches        |
+| `graph`    | Write the call graph to a file and open it  |
+| `status`   | Dashboard: index, server, languages, log    |
+| `install`  | Download or build the navgraph binary       |
+| `restart`  | Restart the server for this project         |
+| `rescan`   | Re-stat every file and rebuild the index    |
+| `log`      | Open the epicenter log                      |
 <!-- /registry:commands -->
 
 Every subcommand ships today; none are pending.
@@ -480,6 +498,7 @@ require("epicenter").setup({
     strict = false,                         -- drop name-resolved (heuristic) edges
     tests = "with",                         -- "with" | "without" | "only"
   },
+  crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
   explore = { debounce_ms = 100 },          -- quiet time after a reindex before rows refetch
   grep = { debounce_ms = 60, limit = 200 },
   highlights = {},                          -- e.g. { EpicenterAccent = { fg = "#7aa2f7" } }

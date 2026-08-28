@@ -155,6 +155,7 @@ local DRIVEN = {
   { "callers", {} },
   { "callees", {} },
   { "peek", {} },
+  { "crumbs", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },

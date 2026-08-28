@@ -83,6 +83,23 @@ local RESTART_FORGIVE_MS = 60000
 --- its internal bookkeeping to catch up.
 local RESTART_STOP_TIMEOUT_MS = 2000
 
+--- Standard LSP methods the v1.1 protocol adds, and the server capability that
+--- announces each. A `navgraph/*` method announces itself instead, by being
+--- listed in `experimental.navgraph.methods` - which the contract says a
+--- server does "only when implemented", so it is the one honest signal.
+local STANDARD_CAPABILITY = {
+  ["textDocument/prepareCallHierarchy"] = "callHierarchyProvider",
+  ["callHierarchy/incomingCalls"] = "callHierarchyProvider",
+  ["callHierarchy/outgoingCalls"] = "callHierarchyProvider",
+  ["textDocument/prepareTypeHierarchy"] = "typeHierarchyProvider",
+  ["typeHierarchy/supertypes"] = "typeHierarchyProvider",
+  ["typeHierarchy/subtypes"] = "typeHierarchyProvider",
+  ["textDocument/implementation"] = "implementationProvider",
+  ["textDocument/typeDefinition"] = "typeDefinitionProvider",
+  ["textDocument/documentHighlight"] = "documentHighlightProvider",
+  ["textDocument/codeLens"] = "codeLensProvider",
+}
+
 --- The contract's disambiguating name form for a Symbol: `qualified@file`
 --- (`docs/lsp.md`: "Names accept the same `Parent.name` / `name@path` forms
 --- as every CLI name argument"). A bare `qualified` is NOT unique - `router`
@@ -381,8 +398,7 @@ function M.start(opts)
       end
       state.starting = false
       state.session = M.session(lsp_rpc(client.id))
-      local experimental = vim.tbl_get(client.server_capabilities or {}, "experimental", "navgraph")
-      state.protocol_version = experimental and experimental.protocolVersion or nil
+      M.record_capabilities(state, client.server_capabilities)
       log.info("navgraph attached to %s (protocol %s)", root, tostring(state.protocol_version))
       -- A crash streak must not disable the server forever: forgive it once
       -- this run has stayed healthy for a while.
@@ -502,7 +518,6 @@ function M.adopt(client, bufnr)
   if cfg.lsp.fallback_only then
     install_fallback_guard(client)
   end
-  local experimental = vim.tbl_get(client.server_capabilities or {}, "experimental", "navgraph")
   local state = {
     cmd = client.config.cmd or {},
     restarts = 0,
@@ -512,12 +527,50 @@ function M.adopt(client, bufnr)
     starting = false,
     client_id = client.id,
     adopted = true,
-    protocol_version = experimental and experimental.protocolVersion or nil,
   }
+  M.record_capabilities(state, client.server_capabilities)
   state.session = M.session(lsp_rpc(client.id))
   servers[root] = state
   log.info("navgraph adopted for %s (protocol %s)", root, tostring(state.protocol_version))
 end
+
+--- Reads what the handshake announced onto `state`: the protocol version and
+--- the exact `navgraph/*` methods this server implements. Shared by `M.start`
+--- and `M.adopt` so a `vim.lsp.enable`-started server is gated identically.
+--- @param state table
+--- @param announced table|nil the server's `server_capabilities`
+function M.record_capabilities(state, announced)
+  local experimental = vim.tbl_get(announced or {}, "experimental", "navgraph")
+  state.protocol_version = experimental and experimental.protocolVersion or nil
+  state.capabilities = announced or {}
+  state.methods = {}
+  for _, name in ipairs((experimental and experimental.methods) or {}) do
+    state.methods[name] = true
+  end
+end
+
+--- Whether the server serving this buffer implements `method`. A v1.0 server
+--- answers false for everything v1.1 added, so a feature degrades calmly
+--- instead of sending a request that comes back `-32601`.
+--- @param method string
+--- @param opts? { bufnr?: integer, root?: string }
+--- @return boolean
+function M.supports(method, opts)
+  opts = opts or {}
+  local root = opts.root and vim.fs.normalize(opts.root)
+    or root_mod.find(opts.bufnr, config.get().lsp.root_markers)
+  local state = servers[root]
+  if not state or not state.session then
+    return false
+  end
+  local capability = STANDARD_CAPABILITY[method]
+  if capability then
+    return state.capabilities ~= nil and state.capabilities[capability] ~= nil
+  end
+  return (state.methods or {})[method] == true
+end
+
+M.STANDARD_CAPABILITY = STANDARD_CAPABILITY
 
 --- @param root string
 --- @return epicenter.Session|nil
@@ -575,9 +628,12 @@ end
 
 --- Registers a session directly. Tests use it to drive the request layer
 --- without spawning a process.
-function M.register_session(root, session)
-  servers[vim.fs.normalize(root)] =
-    { session = session, cmd = {}, restarts = 0, root = root, buffers = {} }
+--- @param announced? table stands in for a handshake, so a spec can drive the
+---   v1.1-gated paths without a server that speaks them
+function M.register_session(root, session, announced)
+  local state = { session = session, cmd = {}, restarts = 0, root = root, buffers = {} }
+  M.record_capabilities(state, announced)
+  servers[vim.fs.normalize(root)] = state
 end
 
 -- Typed request layer ----------------------------------------------------------
