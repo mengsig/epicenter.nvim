@@ -46,14 +46,25 @@ local function give_back(buf, lhs, saved)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
+  -- Deleting the peek's own map may legitimately fail (the buffer was
+  -- re-mapped meanwhile); losing the user's OWN mapping is a real failure.
   pcall(vim.keymap.del, "n", lhs, { buffer = buf })
   if saved then
-    pcall(vim.fn.mapset, saved)
+    local ok, err = pcall(vim.fn.mapset, saved)
+    if not ok then
+      require("epicenter").notify(
+        ("peek could not put your %s mapping back: %s"):format(lhs, err),
+        "warn"
+      )
+    end
   end
 end
 
 --- @param target epicenter.Target
---- @param opts? { focus?: boolean, on_go?: fun(target: epicenter.Target) }
+--- @param opts? { focus?: boolean, on_go?: fun(target: epicenter.Target),
+---   origin_win?: integer } `origin_win` is where `<CR>` goes; a focused peek
+---   opened from a panel must name the window the reader came FROM, since the
+---   current window is the panel's own float.
 --- @return epicenter.Peek
 function M.open(target, opts)
   opts = opts or {}
@@ -67,7 +78,7 @@ function M.open(target, opts)
     target = target,
     focus = focus,
     on_go = opts.on_go,
-    origin_win = vim.api.nvim_get_current_win(),
+    origin_win = opts.origin_win or vim.api.nvim_get_current_win(),
     origin_buf = vim.api.nvim_get_current_buf(),
     borrowed = {},
     closed = false,

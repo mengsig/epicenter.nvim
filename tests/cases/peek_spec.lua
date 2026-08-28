@@ -187,4 +187,52 @@ describe("peek against the fake navgraph server", function()
     card:close()
     panel:close()
   end)
+
+  it("opens the file in the reader's window on <CR>, not inside the panel", function()
+    local source_win = vim.api.nvim_get_current_win()
+    local panel = epicenter.run("callers", {}, buf)
+    wait(function()
+      return panel:valid() and panel.list:count() > 0
+    end, 10000, "callers rows")
+    local panel_win = panel.win.win
+    local target = panel:target()
+
+    -- A real `o` inside the panel: the peek is opened by the panel itself.
+    vim.api.nvim_set_current_win(panel_win)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("o", true, false, true), "x", false)
+    local card = wait(function()
+      return peek.current()
+    end, 5000, "the panel's peek")
+
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+    wait(function()
+      return not card:valid() and vim.api.nvim_get_current_win() == source_win
+    end, 5000, "the jump landing in the reader's own window")
+    expect.eq(
+      vim.api.nvim_win_get_buf(source_win),
+      vim.fn.bufnr(target.path),
+      "the file opened where the reader was, not in the panel's float"
+    )
+    expect.falsy(
+      vim.api.nvim_win_is_valid(panel_win)
+        and vim.api.nvim_win_get_buf(panel_win) == vim.fn.bufnr(target.path),
+      "and never inside the panel's own window"
+    )
+    if panel:valid() then
+      panel:close()
+    end
+  end)
+
+  it("drops an unfocused peek whose answer arrives after the reader moved on", function()
+    local other = vim.api.nvim_create_buf(true, false)
+    local before = #floats()
+    epicenter.run("peek", {}, buf)
+    -- Before the answer lands: the reader is somewhere else entirely.
+    vim.api.nvim_set_current_buf(other)
+    vim.wait(500)
+    expect.eq(peek.current(), nil, "no float over a buffer nobody asked about")
+    expect.eq(#floats(), before)
+    vim.api.nvim_set_current_buf(buf)
+    vim.api.nvim_buf_delete(other, { force = true })
+  end)
 end)

@@ -26,8 +26,18 @@ local function open(ctx)
   local blast = require("epicenter.features.blast")
   local client = require("epicenter.client")
   local target = blast.cursor_target(ctx.bufnr)
+  local origin_win = vim.api.nvim_get_current_win()
 
   client.symbol_at(target, function(err, result)
+    -- An unfocused peek borrows <CR> and `q` on the buffer the reader is in.
+    -- If they moved on while the server thought, those keys - and the float -
+    -- would land on a place they never asked about.
+    if
+      vim.api.nvim_get_current_win() ~= origin_win
+      or vim.api.nvim_get_current_buf() ~= ctx.bufnr
+    then
+      return
+    end
     if err then
       return require("epicenter").notify(err.message or "navgraph did not answer", "error")
     end

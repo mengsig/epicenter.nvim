@@ -66,9 +66,11 @@ end
 --- `gp` peek (`ui.peek`); focused here, because the panel holds the cursor
 --- and `q` has to reach the float.
 --- @param target epicenter.Target
+--- @param origin_win? integer where `<CR>` should open the file - the window
+---   the reader came from, never the panel's own float.
 --- @return epicenter.Peek
-function M.peek(target)
-  return require("epicenter.ui.peek").open(target, { focus = true })
+function M.peek(target, origin_win)
+  return require("epicenter.ui.peek").open(target, { focus = true, origin_win = origin_win })
 end
 
 -- Remembered layout -------------------------------------------------------------
@@ -356,7 +358,7 @@ function Panel:_install_keys()
     actions["o"] = function()
       local target = self:target()
       if target then
-        M.peek(target)
+        M.peek(target, self.previous_win)
       end
     end
     actions["y"] = function()
