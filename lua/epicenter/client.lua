@@ -325,7 +325,7 @@ end
 --- @param opts { root: string, cmd?: string[], bufnr?: integer, restarts?: integer }
 --- @return integer|nil client_id, string|nil err
 function M.start(opts)
-  local root = vim.fs.normalize(opts.root)
+  local root = root_mod.normalize(opts.root)
   local existing = servers[root]
   -- A root this session already gave up on: an automatic attach must not
   -- walk back into the same crash loop, one raw exit notice per try. An
@@ -437,7 +437,7 @@ end
 --- @param opts { root: string, cmd?: string[], bufnr?: integer, restarts?: integer }
 --- @return integer|nil client_id, string|nil err
 function M.restart(opts)
-  local root = vim.fs.normalize(opts.root)
+  local root = root_mod.normalize(opts.root)
   -- An explicit restart is the "I have fixed it, try again" gesture: what the
   -- binary at that path could do when we last asked may no longer be true.
   require("epicenter.install").forget_capabilities()
@@ -499,7 +499,7 @@ end
 function M.adopt(client, bufnr)
   local cfg = config.get()
   local root =
-    vim.fs.normalize(client.config.root_dir or root_mod.find(bufnr, cfg.lsp.root_markers))
+    root_mod.normalize(client.config.root_dir or root_mod.find(bufnr, cfg.lsp.root_markers))
   local existing = servers[root]
   if existing and existing.client_id == client.id then
     if bufnr then
@@ -557,7 +557,7 @@ end
 --- @return boolean
 function M.supports(method, opts)
   opts = opts or {}
-  local root = opts.root and vim.fs.normalize(opts.root)
+  local root = opts.root and root_mod.normalize(opts.root)
     or root_mod.find(opts.bufnr, config.get().lsp.root_markers)
   local state = servers[root]
   if not state or not state.session then
@@ -590,7 +590,7 @@ end
 --- @param root string
 --- @return epicenter.Session|nil
 function M.session_for_root(root)
-  local state = servers[vim.fs.normalize(root)]
+  local state = servers[root_mod.normalize(root)]
   return state and state.session or nil
 end
 
@@ -603,7 +603,7 @@ end
 
 --- Stops the server for `root` (an intentional stop never restarts).
 function M.stop(root)
-  local state = servers[vim.fs.normalize(root)]
+  local state = servers[root_mod.normalize(root)]
   if not state then
     return
   end
@@ -612,7 +612,7 @@ function M.stop(root)
   if client then
     compat.lsp_stop(client)
   end
-  servers[vim.fs.normalize(root)] = nil
+  servers[root_mod.normalize(root)] = nil
 end
 
 function M.stop_all()
@@ -632,7 +632,7 @@ end
 --- @return { client_id: integer|nil, protocol_version: integer|nil, restarts: integer,
 ---   failed: { reason: string, at: string }|nil }
 function M.info(root)
-  local state = servers[vim.fs.normalize(root)] or {}
+  local state = servers[root_mod.normalize(root)] or {}
   return {
     client_id = state.client_id,
     protocol_version = state.protocol_version,
@@ -648,7 +648,7 @@ end
 function M.register_session(root, session, announced)
   local state = { session = session, cmd = {}, restarts = 0, root = root, buffers = {} }
   M.record_capabilities(state, announced)
-  servers[vim.fs.normalize(root)] = state
+  servers[root_mod.normalize(root)] = state
 end
 
 -- Typed request layer ----------------------------------------------------------
@@ -660,7 +660,7 @@ end
 --- @return { cancel: fun() }
 function M.request(method, params, cb, opts)
   opts = opts or {}
-  local root = opts.root and vim.fs.normalize(opts.root)
+  local root = opts.root and root_mod.normalize(opts.root)
     or root_mod.find(opts.bufnr, config.get().lsp.root_markers)
   local session
   if opts.root then

@@ -68,6 +68,11 @@ questions an agent asks about a symbol.
   drops the achievable rate below 30fps; a single fixed skip (the 1.0
   behaviour) only happened to hold that floor at the default 60fps.
 - **`:Epicenter` completion** covers every new flag and subcommand argument.
+- **Fix**: a project root reached through a symlink (macOS's own `/var` ->
+  `/private/var` tempdir, or a symlinked checkout) could key its server
+  record under two different strings and miss its own live session,
+  surfacing as a false "navgraph is not running". Root and root-relative
+  paths now resolve symlinks consistently everywhere they are computed.
 
 ### Neovim support and testing
 

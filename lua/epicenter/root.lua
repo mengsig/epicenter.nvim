@@ -3,6 +3,19 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+--- `vim.fs.normalize` plus symlink resolution, so two paths naming the same
+--- directory through different aliases (macOS's /var -> /private/var, a
+--- symlinked project checkout) key the same server record instead of two.
+--- Falls back to the normalized-only form when realpath fails - a path that
+--- does not exist on disk yet is not itself an error here.
+--- @param path string
+--- @return string
+function M.normalize(path)
+  local normalized = vim.fs.normalize(path)
+  local real = uv.fs_realpath(normalized)
+  return real and vim.fs.normalize(real) or normalized
+end
+
 --- Walks upward from dir looking for the first marker present, markers checked
 --- in order at each level (so `.navgraph` beats `.git` in the same directory).
 --- @param dir string
@@ -12,7 +25,7 @@ function M.find_from(dir, markers)
   if type(dir) ~= "string" or dir == "" then
     return nil
   end
-  local current = vim.fs.normalize(dir)
+  local current = M.normalize(dir)
   while current do
     for _, marker in ipairs(markers) do
       if uv.fs_stat(vim.fs.joinpath(current, marker)) then
@@ -36,7 +49,7 @@ function M.find(bufnr, markers)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   markers = markers or require("epicenter.config").get().lsp.root_markers
 
-  local cwd = vim.fs.normalize(uv.cwd() or ".")
+  local cwd = M.normalize(uv.cwd() or ".")
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return cwd
   end
@@ -46,7 +59,7 @@ function M.find(bufnr, markers)
     return M.find_from(cwd, markers) or cwd
   end
 
-  local dir = vim.fs.dirname(vim.fs.normalize(name))
+  local dir = vim.fs.dirname(M.normalize(name))
   return M.find_from(dir, markers) or cwd
 end
 
@@ -61,8 +74,8 @@ function M.relative(bufnr, root)
   if name == "" then
     return nil
   end
-  local normalized = vim.fs.normalize(name)
-  local root_norm = vim.fs.normalize(root)
+  local normalized = M.normalize(name)
+  local root_norm = M.normalize(root)
   if not vim.startswith(normalized, root_norm .. "/") then
     return nil
   end
