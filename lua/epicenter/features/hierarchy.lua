@@ -37,21 +37,12 @@ local TYPE_GROUPS = {
   { key = "implementors", label = "implementors", helper = nil },
 }
 
---- Whether the server serving `bufnr` speaks a method the v1.1 addendum
---- added. Only claimed when a server IS running: with none, the request's own
---- "navgraph is not running" is the honest message.
---- @return string|nil reason the panel should show instead of rows
+--- The notice line a panel shows when this buffer's server predates the
+--- method - two leading spaces, as every other panel notice has.
+--- @return string|nil
 local function unsupported(bufnr, method, what)
-  local client = require("epicenter.client")
-  if not client.session_for_buf(bufnr) then
-    return nil
-  end
-  if client.supports(method, { bufnr = bufnr }) then
-    return nil
-  end
-  return ("  %s needs navgraph protocol 1.1 - `:Epicenter status` says what this one speaks"):format(
-    what
-  )
+  local reason = require("epicenter.client").unsupported_reason(bufnr, method, what)
+  return reason and ("  " .. reason) or nil
 end
 
 -- Nodes --------------------------------------------------------------------------

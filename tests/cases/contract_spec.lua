@@ -38,6 +38,7 @@ local function symbol(over)
     callees = 1,
     exported = true,
     test = false,
+    contentHash = "0123456789abcdef",
   }, over or {})
 end
 
@@ -143,6 +144,29 @@ ANSWERS["typeHierarchy/supertypes"] = {}
 ANSWERS["typeHierarchy/subtypes"] = {}
 ANSWERS["textDocument/implementation"] = {}
 
+ANSWERS["navgraph/context"] = {
+  symbol = symbol(),
+  definition = {
+    text = "function M.handle() end",
+    range = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 8, character = 0 },
+    },
+  },
+  signature = "function M.handle()",
+  callers = {},
+  callees = {},
+  types = {},
+  tests = {},
+  truncated = false,
+  tokensEstimate = 12,
+}
+ANSWERS["navgraph/where"] = {
+  enclosing = symbol(),
+  breadcrumbs = { symbol() },
+  file = "app/server.lua",
+}
+
 --- A session that records what a feature sent and answers from ANSWERS, so
 --- chained requests (symbolAt -> blast) reach their second call.
 local function recorder()
@@ -194,6 +218,10 @@ local DRIVEN = {
   { "hierarchy", {} },
   { "hierarchy", { "outgoing" } },
   { "types", {} },
+  { "context", {} },
+  { "context", { "M.handle", "--budget", "500" } },
+  { "where", {} },
+  { "where", { "app/server.lua:4" } },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },
@@ -273,7 +301,13 @@ describe("every feature builds contract-shaped requests", function()
         navgraph = {
           protocolVersion = 1,
           protocolMinor = 1,
-          methods = { "navgraph/impact", "navgraph/tests", "navgraph/types" },
+          methods = {
+            "navgraph/impact",
+            "navgraph/tests",
+            "navgraph/types",
+            "navgraph/context",
+            "navgraph/where",
+          },
         },
       },
     })

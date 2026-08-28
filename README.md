@@ -227,6 +227,24 @@ Both ride the standard LSP call- and type-hierarchy methods the v1.1 protocol
 adds — any editor gets them, not just this one. Against an older server the
 panel says so and sends nothing.
 
+### LLM context — `:Epicenter context`, `<leader>ey`
+
+One symbol, packaged for a model: signature, doc, body, callers, callees,
+types and tests, each with its `file:line`, as markdown on the `+` register.
+A toast reports the token estimate.
+
+```
+context for OrderService.place yanked · ~734 tokens
+```
+
+`--budget 800` trims the bundle to fit — bodies go first, then tests, then
+types, then callees, and the markdown says it was trimmed. `--qf` puts the
+same members in the quickfix list.
+
+`:Epicenter where app/services/order_service.py:112` answers the reverse
+question — which definition a line is inside of, with the chain that reaches
+it. Paste a stack-trace frame straight in.
+
 ### Call path — `:Epicenter path`, `<leader>ep`
 
 The chain between two symbols, drawn one rung at a time.
@@ -380,6 +398,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>eP` | `:Epicenter peek`      | Read the definition under the cursor     |
 | `<leader>eH` | `:Epicenter hierarchy` | Call hierarchy at the cursor             |
 | `<leader>eT` | `:Epicenter types`     | Supertypes, subtypes and implementors    |
+| `<leader>ey` | `:Epicenter context`   | Yank a symbol's context bundle           |
 | `<leader>ep` | `:Epicenter path`      | Call chain between two symbols           |
 | `<leader>eo` | `:Epicenter outline`   | Live symbol outline of this buffer       |
 | `<leader>eh` | `:Epicenter hot`       | Most depended-on symbols, by fan-in      |
@@ -418,6 +437,8 @@ Inside the palette:
 | `crumbs`    | Toggle the breadcrumb winbar here        |
 | `hierarchy` | Call hierarchy at the cursor             |
 | `types`     | Supertypes, subtypes and implementors    |
+| `context`   | Yank a symbol's context bundle           |
+| `where`     | What encloses this line                  |
 | `path`      | Call chain between two symbols           |
 | `outline`   | Live symbol outline of this buffer       |
 | `hot`       | Most depended-on symbols, by fan-in      |

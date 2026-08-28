@@ -60,6 +60,11 @@ local RANGE = object({
 
 --- Symbol, as `docs/lsp.md` "Shared result shapes" defines it. `doc` is the
 --- only optional member: a definition with no doc comment omits it.
+--- v1.1 adds `contentHash`, the key clients store per-site state under. It
+--- stays OPTIONAL here for the same reason `protocolMinor` does: a v1.0
+--- server answers every shared method without it, and response checking is
+--- forward-compatible, not version-gated. Every v1.1-only method that keys
+--- state on a hash requires its own copy of it.
 local SYMBOL = object({
   id = required(int()),
   name = required(str()),
@@ -76,6 +81,7 @@ local SYMBOL = object({
   callees = required(int()),
   exported = required(bool()),
   test = required(bool()),
+  contentHash = str(),
 })
 
 --- Node is recursive; `children` is patched in below.
@@ -489,15 +495,53 @@ M.METHODS = {
         depth = required(int()),
         via = required(list_of(int())),
         exact = required(bool()),
+        contentHash = required(str()),
       }))),
       edges = required(list_of(EDGE)),
       summary = required(SUMMARY),
+      --- Hash of the whole working change: client state scoped to one change.
+      changeId = required(str()),
       hunks = required(list_of(object({
         uri = required(str()),
         range = required(RANGE),
         roots = required(list_of(SYMBOL)),
       }))),
       truncated = required(bool()),
+    }),
+  },
+
+  --- Everything an editing agent needs about one symbol, in one call,
+  --- trimmed to `budget` tokens.
+  ["navgraph/context"] = {
+    target = "required",
+    params = params(TARGET, {
+      budget = int(),
+      include = list_of(str({
+        enum = { "callers", "callees", "types", "tests", "body" },
+      })),
+    }),
+    result = object({
+      symbol = required(SYMBOL),
+      definition = required(object({ text = required(str()), range = required(RANGE) })),
+      signature = required(str()),
+      doc = str(),
+      callers = required(list_of(SYMBOL)),
+      callees = required(list_of(SYMBOL)),
+      types = required(list_of(SYMBOL)),
+      tests = required(list_of(SYMBOL)),
+      truncated = required(bool()),
+      tokensEstimate = required(int()),
+    }),
+  },
+
+  --- The symbol enclosing a line - a stack-trace or diff-hunk lookup, which
+  --- is a LINE, not a cursor position, so no `position` here.
+  ["navgraph/where"] = {
+    params = { uri = required(str()), line = required(int()) },
+    result = object({
+      enclosing = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
+      breadcrumbs = required(list_of(SYMBOL)),
+      file = required(str()),
     }),
   },
 

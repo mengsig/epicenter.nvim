@@ -96,6 +96,19 @@ function M.attach(root, bufnr)
   assert(ok, "buffer did not attach to navgraph")
 end
 
+--- Skips the running test when the server for `root` does not announce
+--- `method` - the honest answer for a v1.1 spec against a server that does
+--- not speak v1.1 yet, rather than a failure or a silent pass.
+--- @param what string names the surface under test, for the skip line
+function M.require_method(root, method, what)
+  if require("epicenter.client").supports(method, { root = root }) then
+    return
+  end
+  require("harness").skip(
+    ("%s: this navgraph does not announce %s (protocol 1.1)"):format(what, method)
+  )
+end
+
 function M.stop_fake(root)
   require("epicenter.client").stop(root)
 end

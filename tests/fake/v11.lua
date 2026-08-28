@@ -1,6 +1,7 @@
 --- The v1.1 area of the fake navgraph server: the custom `navgraph/tests`,
---- `navgraph/types` and `navgraph/impact`, plus the standard LSP call- and
---- type-hierarchy methods the addendum adds.
+--- `navgraph/types`, `navgraph/impact`, `navgraph/context` and
+--- `navgraph/where`, plus the standard LSP call- and type-hierarchy methods
+--- the addendum adds.
 ---
 --- Shapes are exactly the addendum's and no others - `tests/contract/schema.lua`
 --- checks both directions on the wire, so a feature written against an
@@ -214,6 +215,18 @@ local function changed_roots(ctx, params)
   return roots
 end
 
+--- Identity of the whole working change: the changed definitions and the
+--- text they currently hold. Editing any of them yields a new id, which is
+--- exactly what a client scoping state to "this change" needs.
+local function change_id(roots)
+  local parts = {}
+  for _, symbol in ipairs(roots) do
+    table.insert(parts, ("%s@%s:%s"):format(symbol.qualified, symbol.file, symbol.contentHash))
+  end
+  table.sort(parts)
+  return vim.fn.sha256(table.concat(parts, "\n")):sub(1, 16)
+end
+
 --- One hunk per changed definition: the fixture's stand-in for a real diff's
 --- hunks, which is as much as an overlay-vs-disk comparison can honestly say
 --- without a git tree.
@@ -243,6 +256,78 @@ local function hunks_of(ctx, roots)
   return vim.tbl_map(function(hunk)
     return { uri = hunk.uri, range = hunk.range, roots = hunk.roots }
   end, order)
+end
+
+-- Context ----------------------------------------------------------------------
+
+--- Which parts of the bundle the caller asked for; no `include` means all.
+local function include_set(include)
+  if type(include) ~= "table" or #include == 0 then
+    return { callers = true, callees = true, types = true, tests = true, body = true }
+  end
+  local set = {}
+  for _, name in ipairs(include) do
+    set[name] = true
+  end
+  return set
+end
+
+local function definition_text(ctx, symbol)
+  local lines = ctx.index.sources[symbol.file] or {}
+  return table.concat(vim.list_slice(lines, symbol.line, math.min(symbol.endLine, #lines)), "\n")
+end
+
+local function neighbour_symbols(ctx, symbol, direction)
+  local out = {}
+  for _, edge in ipairs(graph.edges_of(ctx.index, symbol.id, direction)) do
+    local other = graph.symbol_by_id(ctx.index, edge.other)
+    if other then
+      table.insert(out, graph.symbol(ctx.index, other))
+    end
+  end
+  return out
+end
+
+--- Rough token count, the way every budget-trimming client estimates one:
+--- four characters to a token. Deliberately not a tokenizer.
+local function tokens_of(bundle)
+  local chars = #bundle.definition.text + #bundle.signature + #(bundle.doc or "")
+  for _, key in ipairs({ "callers", "callees", "types", "tests" }) do
+    for _, symbol in ipairs(bundle[key]) do
+      chars = chars + #symbol.qualified + #symbol.file + #symbol.sig
+    end
+  end
+  return math.ceil(chars / 4)
+end
+
+--- Drops bodies first, then tests, then types, then callees - the addendum's
+--- order. Returns whether anything was dropped.
+local function trim_to_budget(bundle, budget)
+  local steps = {
+    function()
+      bundle.definition.text = ""
+    end,
+    function()
+      bundle.tests = {}
+    end,
+    function()
+      bundle.types = {}
+    end,
+    function()
+      bundle.callees = {}
+    end,
+  }
+  local dropped = false
+  for _, drop in ipairs(steps) do
+    if tokens_of(bundle) <= budget then
+      return dropped
+    end
+    drop()
+    dropped = true
+  end
+  -- Signature, doc and callers are the floor: over budget with only those
+  -- left is still `truncated`, never a silently emptied bundle.
+  return dropped
 end
 
 return {
@@ -287,9 +372,64 @@ return {
       strict = params.strict,
       limit = params.limit,
     })
+    for _, node in ipairs(blast.nodes) do
+      node.contentHash = node.symbol.contentHash
+    end
     blast.hunks = hunks_of(ctx, roots)
+    blast.changeId = change_id(roots)
     blast.truncated = blast.summary.truncated
     return blast
+  end,
+
+  --- One call carrying everything an editing agent needs about a symbol,
+  --- trimmed to the budget by dropping bodies, then tests, then types, then
+  --- callees - the addendum's order, and the honest `truncated` that goes
+  --- with it.
+  ["navgraph/context"] = function(ctx, params)
+    local symbol = target_symbol(ctx, params, "navgraph/context")
+    local wanted = include_set(params.include)
+    local supertypes, subtypes = types_of(ctx, symbol)
+    local tests = {}
+    for _, entry in ipairs((tests_reaching(ctx, symbol, 20))) do
+      table.insert(tests, entry.symbol)
+    end
+
+    local bundle = {
+      symbol = graph.symbol(ctx.index, symbol),
+      definition = {
+        text = wanted.body and definition_text(ctx, symbol) or "",
+        range = range_of(symbol),
+      },
+      signature = symbol.sig,
+      doc = graph.symbol(ctx.index, symbol).doc,
+      callers = wanted.callers and neighbour_symbols(ctx, symbol, "callers") or {},
+      callees = wanted.callees and neighbour_symbols(ctx, symbol, "callees") or {},
+      types = wanted.types and vim.list_extend(supertypes, subtypes) or {},
+      tests = wanted.tests and tests or {},
+    }
+    bundle.truncated = trim_to_budget(bundle, params.budget or 2000)
+    bundle.tokensEstimate = tokens_of(bundle)
+    return bundle
+  end,
+
+  --- A LINE, not a cursor position: what a pasted stack-trace frame gives.
+  ["navgraph/where"] = function(ctx, params)
+    local file = ctx.to_relative(params.uri)
+    local line = (params.line or 0) + 1
+    local chain = {}
+    for _, symbol in ipairs(ctx.index.symbols) do
+      if symbol.file == file and symbol.line <= line and line <= symbol.endLine then
+        table.insert(chain, graph.symbol(ctx.index, symbol))
+      end
+    end
+    table.sort(chain, function(a, b)
+      return a.line < b.line
+    end)
+    return {
+      enclosing = chain[#chain] or vim.NIL,
+      breadcrumbs = chain,
+      file = file,
+    }
   end,
 
   ["textDocument/prepareCallHierarchy"] = function(ctx, params)

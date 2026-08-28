@@ -572,6 +572,21 @@ end
 
 M.STANDARD_CAPABILITY = STANDARD_CAPABILITY
 
+--- The line a feature shows instead of rows when this buffer's server is too
+--- old for `method`. Nil means "go ahead": either the server speaks it, or
+--- none is running at all - and then the request's own "navgraph is not
+--- running" is the honest message, not a version complaint.
+--- @param what string the feature's own name, for the message
+--- @return string|nil
+function M.unsupported_reason(bufnr, method, what)
+  if not M.session_for_buf(bufnr) or M.supports(method, { bufnr = bufnr }) then
+    return nil
+  end
+  return ("%s needs navgraph protocol 1.1 - `:Epicenter status` says what this one speaks"):format(
+    what
+  )
+end
+
 --- @param root string
 --- @return epicenter.Session|nil
 function M.session_for_root(root)
@@ -703,6 +718,8 @@ local HELPERS = {
   tests = "navgraph/tests",
   types = "navgraph/types",
   impact = "navgraph/impact",
+  context = "navgraph/context",
+  where = "navgraph/where",
   prepare_call_hierarchy = "textDocument/prepareCallHierarchy",
   incoming_calls = "callHierarchy/incomingCalls",
   outgoing_calls = "callHierarchy/outgoingCalls",

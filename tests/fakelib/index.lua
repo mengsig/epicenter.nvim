@@ -120,6 +120,22 @@ local SCANNERS = { lua = scan_lua, python = scan_python }
 --- unsaved buffer text and takes precedence over the file on disk.
 --- @param root string
 --- @param overlays? table<string, string>
+--- v1.1 `contentHash`: a stable hash of a definition's source text with
+--- whitespace normalised, so a reformat does not read as a code change.
+--- Short on purpose - it is an identity key clients store, not a digest.
+--- @param lines string[]|nil the file's lines
+--- @return string
+function M.content_hash(lines, first, last)
+  local body = {}
+  for i = first, math.min(last, #(lines or {})) do
+    local text = vim.trim((lines[i]:gsub("%s+", " ")))
+    if text ~= "" then
+      table.insert(body, text)
+    end
+  end
+  return vim.fn.sha256(table.concat(body, "\n")):sub(1, 16)
+end
+
 function M.build(root, overlays)
   overlays = overlays or {}
   local started = uv.hrtime()
@@ -165,6 +181,12 @@ function M.build(root, overlays)
         })
       end
     end
+  end
+
+  -- v1.1 `contentHash`: needs endLine, so it waits for the whole file's
+  -- definitions to be scanned.
+  for _, symbol in ipairs(symbols) do
+    symbol.contentHash = M.content_hash(sources[symbol.file], symbol.line, symbol.endLine)
   end
 
   -- Fan-in: call sites of each name outside its own definition line.

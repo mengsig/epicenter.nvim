@@ -25,6 +25,7 @@ CONTENTS                                                   *epicenter-contents*
      - peek ................................... |epicenter-peek|
      - crumbs ................................. |epicenter-crumbs|
      - hierarchy .............................. |epicenter-hierarchy|
+     - context ................................ |epicenter-context|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -107,6 +108,8 @@ The binary is looked up in this order:
     crumbs     |epicenter-crumbs|     Toggle the breadcrumb winbar here
     hierarchy  |epicenter-hierarchy|  Call hierarchy at the cursor
     types      |epicenter-hierarchy|  Supertypes, subtypes and implementors
+    context    |epicenter-context|    Yank a symbol's context bundle
+    where      |epicenter-context|    What encloses this line
     path       |epicenter-path|       Call chain between two symbols
     outline    |epicenter-outline|    Live symbol outline of this buffer
     hot        |epicenter-hot|        Most depended-on symbols, by fan-in
@@ -154,6 +157,7 @@ change `keymaps.prefix`.
     <leader>eP  :Epicenter peek       Read the definition under the cursor
     <leader>eH  :Epicenter hierarchy  Call hierarchy at the cursor
     <leader>eT  :Epicenter types      Supertypes, subtypes and implementors
+    <leader>ey  :Epicenter context    Yank a symbol's context bundle
     <leader>ep  :Epicenter path       Call chain between two symbols
     <leader>eo  :Epicenter outline    Live symbol outline of this buffer
     <leader>eh  :Epicenter hot        Most depended-on symbols, by fan-in
@@ -650,6 +654,35 @@ Keys are the shared panel keys (|epicenter-explore| lists them), plus:
     l, h            expand (fetching the level) / collapse
     d               call hierarchy: flip incoming <-> outgoing
 
+==============================================================================
+CONTEXT                                                     *epicenter-context*
+
+The two questions an editing agent asks about code: everything about one
+symbol, and what a line belongs to. Both need protocol 1.1; against an older
+server the command says so and sends nothing.
+
+                                                       *:Epicenter-context*
+:Epicenter context [symbol] [--budget {n}]                     *<leader>ey*
+    Yanks one symbol's context bundle to the `+` register as compact markdown:
+    signature, doc, body, callers, callees, types and tests, each with its
+    `file:line`. Without {symbol} the cursor's own definition is used. A toast
+    reports the token estimate.
+
+    The server trims the bundle to {n} tokens (2000 by default) by dropping
+    bodies first, then tests, then types, then callees; a trimmed bundle says
+    so, in the markdown and in the toast.
+
+    With `--qf` (or `--loc`) the bundle's members also land in the quickfix
+    list, so the same set is walkable with `:cnext`.
+
+                                                         *:Epicenter-where*
+:Epicenter where [{file}:{line}]
+    The definition enclosing a line, with the breadcrumb chain that reaches
+    it. Without an argument, the cursor's line. Paste a frame off a stack
+    trace or a diff header to find out what it is inside of: >
+
+        :Epicenter where app/services/order_service.py:112
+<
 ==============================================================================
 PATH                                                           *epicenter-path*
 

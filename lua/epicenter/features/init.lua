@@ -13,6 +13,7 @@ return {
   require("epicenter.features.peek"),
   require("epicenter.features.crumbs"),
   require("epicenter.features.hierarchy"),
+  require("epicenter.features.context"),
   require("epicenter.features.path"),
   require("epicenter.features.outline"),
   require("epicenter.features.hot"),
