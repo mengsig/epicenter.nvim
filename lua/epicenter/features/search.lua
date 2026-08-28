@@ -94,7 +94,9 @@ function M.render_symbol(item, _, width)
 end
 
 --- Row for a `navgraph/grep` item: location, the line, and the match lit.
---- The file elides before the matched line's own text ever does (F12).
+--- The file elides before the matched line's own text ever does (F12), down
+--- to its basename - past that floor the match text itself elides from the
+--- right, rather than the path collapsing to nothing on a long match (D1).
 --- @param width integer|nil the panel's current width; nil skips fitting
 function M.render_match(item, _, pattern, width)
   local text_mod = require("epicenter.ui.text")
@@ -104,7 +106,8 @@ function M.render_match(item, _, pattern, width)
   local leading = #item.text - #item.text:gsub("^%s+", "")
   local tail = line_tag .. "  " .. body
 
-  local text, shown_file = text_mod.fit(head, item.file, tail, width)
+  local text, shown_file =
+    text_mod.fit(head, item.file, tail, width, { min_middle = vim.fn.fnamemodify(item.file, ":t") })
   local spans = {}
   table.insert(spans, { hl = "EpicenterMuted", from = #head, to = #head + #shown_file + #line_tag })
 

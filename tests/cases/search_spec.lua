@@ -103,7 +103,10 @@ describe("search rows", function()
     expect.matches(row.text, "7$", "the fan%-in count survives")
   end)
 
-  it("elides a long file before a grep row ever loses the matched line", function()
+  -- D1: at this width, holding the path's basename means the match text no
+  -- longer survives whole - it elides on the right instead, rather than the
+  -- path eliding to nothing (see the #D1 case below for that scenario).
+  it("elides a long file before a grep row ever loses its basename", function()
     local row = search.render_match({
       file = "py_fastapi/app/services/order_service.py",
       line = 10,
@@ -111,8 +114,27 @@ describe("search rows", function()
       text = "  log_request(method, path)",
     }, 1, "log_request", 34)
     expect.truthy(vim.fn.strdisplaywidth(row.text) <= 34, "fits: " .. row.text)
-    expect.matches(row.text, "…", "the file was elided")
-    expect.matches(row.text, "log_request%(method, path%)$", "the matched line survives whole")
+    expect.matches(row.text, "order_service%.py:10", "the basename and line survive")
+  end)
+
+  -- D1: a match line long enough that the file used to elide to nothing
+  -- (budget went negative on `middle`), while the match text still
+  -- overflowed the row uncut. The basename now survives, and the overflow
+  -- moves to the match text, which elides from the right instead.
+  it("keeps the file's basename when a long match used to erase it (#D1)", function()
+    local row = search.render_match({
+      file = "py_fastapi/app/services/order_service.py",
+      line = 4,
+      character = 21,
+      text = "from ..config import MAX_ITEMS_PER_ORDER",
+    }, 1, "MAX_ITEMS_PER_", 41)
+    expect.truthy(vim.fn.strdisplaywidth(row.text) <= 41, "fits: " .. row.text)
+    expect.matches(row.text, "order_service%.py:4", "the basename and line survive")
+    expect.matches(
+      row.text,
+      "…$",
+      "the overflowing match elides on the right, not the window edge"
+    )
   end)
 
   it("declares both palette commands and their keymaps", function()
