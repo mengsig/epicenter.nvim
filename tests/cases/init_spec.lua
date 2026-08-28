@@ -125,3 +125,25 @@ describe("attach sweep on setup (F19)", function()
     )
   end)
 end)
+
+--- H1: a byte-identical copy of this file shipped at lua/epicenter/ui/init.lua
+--- and passed every other check because nothing loads it. `did_setup` is the
+--- entry point's own module-level sentinel - a second file defining it would
+--- be a second, independent `setup()`/`reset()` with its own keymap state.
+describe("the plugin has exactly one entry point", function()
+  it("has only lua/epicenter/init.lua define the setup sentinel", function()
+    local repo = vim.fn.fnamemodify(vim.fn.resolve(debug.getinfo(1, "S").source:sub(2)), ":p:h:h:h")
+    local offenders = {}
+    for _, path in ipairs(vim.fn.globpath(vim.fs.joinpath(repo, "lua"), "**/*.lua", false, true)) do
+      local content = table.concat(vim.fn.readfile(path), "\n")
+      if content:find("local did_setup = false", 1, true) then
+        table.insert(offenders, vim.fn.fnamemodify(path, ":."))
+      end
+    end
+    expect.eq(
+      offenders,
+      { "lua/epicenter/init.lua" },
+      "exactly one module may define the plugin setup entry point"
+    )
+  end)
+end)
