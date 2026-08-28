@@ -153,9 +153,11 @@ local function fetch(bufnr)
   client.impact({ depth = cfg.impact.depth, direction = direction }, function(err, result)
     if err then
       -- Ambient work never interrupts: the log is where a repeated failure
-      -- shows up, and `:Epicenter impact` says it out loud when asked.
+      -- shows up, and `:Epicenter impact` says it out loud when asked. But
+      -- holding the PREVIOUS change's approvals is not "not interrupting"
+      -- (L2) - the working change has already moved on, so forget it too.
       require("epicenter.log").warn("impact: %s", err.message or "no answer")
-      return
+      return forget()
     end
     -- The contract makes changeId required, and every approval is scoped to
     -- it: without one there is no honest way to say what has been reviewed.

@@ -129,6 +129,49 @@ describe("impact approvals", function()
     expect.falsy(approvals.approved(state, symbol({ contentHash = "hash1" })))
     expect.truthy(approvals.approved(state, symbol({ contentHash = "hash10" })))
   end)
+
+  it("a no-op `u` on a row nobody approved does not record a revoke (L1)", function()
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
+    local changed = approvals.set(state, symbol(), false)
+    expect.falsy(changed, "there was nothing to undo")
+    expect.falsy(state.revoked and state.revoked[approvals.key(symbol())])
+  end)
+
+  it(
+    "a stray `u` on an unapproved row does not poison another instance's later real approval (L1)",
+    function()
+      local dir = vim.fs.normalize(vim.fn.tempname())
+      vim.fn.mkdir(dir, "p")
+      require("epicenter.store").set_root(dir)
+      local root = vim.fs.joinpath(dir, "project")
+      vim.fn.mkdir(root, "p")
+
+      -- Instance A never approved this row. It presses `u` on it by mistake
+      -- (a real no-op) - the poison, if any, sits unsaved in memory: `u`'s
+      -- own approve() returns early on `not changed` and never saves.
+      local a = approvals.load(root, "change1")
+      local a_changed = approvals.set(a, symbol({ contentHash = "h1" }), false)
+      expect.falsy(a_changed, "nothing to undo")
+
+      -- Instance B approves that same row for real and saves it.
+      local b = approvals.load(root, "change1")
+      expect.truthy(approvals.set(b, symbol({ contentHash = "h1" }), true))
+      expect.truthy(approvals.save(root, b))
+
+      -- A's own later, unrelated save (e.g. approving a different row) must
+      -- not carry a poisoned revoke for the row it never touched.
+      expect.truthy(approvals.set(a, symbol({ contentHash = "h2" }), true))
+      expect.truthy(approvals.save(root, a))
+
+      local reloaded = approvals.load(root, "change1")
+      expect.truthy(
+        approvals.approved(reloaded, symbol({ contentHash = "h1" })),
+        "B's real approval must survive A's earlier no-op `u`"
+      )
+
+      require("epicenter.store").set_root(nil)
+    end
+  )
 end)
 
 describe("the impact review model", function()
@@ -346,6 +389,35 @@ describe("impact against the fake navgraph server", function()
     expect.eq(marks.mark_at(watched, 9), nil)
   end)
 
+  it(
+    "forgets rather than pins approvals to the change a failed request left behind (L2)",
+    function()
+      edit()
+      answered()
+
+      local client = require("epicenter.client")
+      local original_impact = client.impact
+      client.impact = function(_, cb)
+        cb({ message = "boom" })
+      end
+
+      -- Restored even if the wait below times out (L4): a stub left in place
+      -- would silently fail every later test's real impact request.
+      local ok, err = pcall(function()
+        require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+        wait(function()
+          return impact.current() == nil
+        end, 10000, "a failed request must not pin approvals to the previous change")
+      end)
+      client.impact = original_impact
+      if not ok then
+        error(err, 0)
+      end
+
+      expect.eq(impact.statusline(), "", "no stale review is claimed once the request failed")
+    end
+  )
+
   it("marks every impacted definition once the buffer is unsaved", function()
     edit()
     answered()
@@ -405,6 +477,35 @@ describe("impact against the fake navgraph server", function()
       vim.fn.getreg(require("epicenter.features.context").target_register()),
       "## impact · 0/%d+ reviewed"
     )
+  end)
+
+  it("does not claim a missing content hash on the ordinary `u`/`a` no-op (L1)", function()
+    edit()
+    answered()
+
+    panel = epicenter.run("review", {}, edited)
+    wait(function()
+      return panel:valid() and panel.list:count() > 1
+    end, 10000, "the review rows")
+
+    local notices = {}
+    local original_notify = epicenter.notify
+    epicenter.notify = function(msg, level)
+      table.insert(notices, { msg = msg, level = level })
+    end
+
+    panel.list:select(2)
+    vim.api.nvim_set_current_win(panel.win.win)
+    -- `u` on a row nobody has approved yet: a real no-op, not a missing hash.
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("u", true, false, true), "x", false)
+
+    epicenter.notify = original_notify
+    for _, notice in ipairs(notices) do
+      expect.falsy(
+        notice.msg:find("no content hash", 1, true),
+        "an ordinary no-op must not claim a missing content hash: " .. notice.msg
+      )
+    end
   end)
 
   it("--qf sends the rows the review panel had already filled itself with", function()

@@ -212,17 +212,25 @@ function M.open(session)
     if #symbols == 0 then
       return
     end
-    local changed = false
+    -- L1: `not changed` used to always read as "no hash to key on", but the
+    -- same false covers the ordinary no-op of `a` on an already-ticked row
+    -- or `u` on one nobody ticked - track the two causes separately.
+    local changed, no_hash = false, false
     for _, symbol in ipairs(symbols) do
-      if approvals.set(session.state, symbol, approved) then
+      if not approvals.key(symbol) then
+        no_hash = true
+      elseif approvals.set(session.state, symbol, approved) then
         changed = true
       end
     end
     if not changed then
-      return require("epicenter").notify(
-        "navgraph sent no content hash for this row - nothing to remember",
-        "warn"
-      )
+      if no_hash then
+        require("epicenter").notify(
+          "navgraph sent no content hash for this row - nothing to remember",
+          "warn"
+        )
+      end
+      return
     end
     local ok, err = approvals.save(session.root, session.state)
     if not ok then

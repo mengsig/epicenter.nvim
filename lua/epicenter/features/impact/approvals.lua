@@ -113,12 +113,16 @@ function M.set(state, symbol, approved)
   end
   local before = state.entries[key]
   state.entries[key] = approved and state.change_id or nil
+  local changed = before ~= state.entries[key]
   -- Taking an approval back has to survive the merge in `save`: without this
   -- another instance's copy of the same entry would put the tick straight
-  -- back.
-  state.revoked = state.revoked or {}
-  state.revoked[key] = (not approved) and true or nil
-  return before ~= state.entries[key]
+  -- back. Only a REAL take-back counts (L1): `u` on a row nobody approved is
+  -- a no-op that must not poison another instance's real approval of it.
+  if changed and not approved then
+    state.revoked = state.revoked or {}
+    state.revoked[key] = true
+  end
+  return changed
 end
 
 return M
