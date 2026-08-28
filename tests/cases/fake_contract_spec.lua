@@ -68,6 +68,22 @@ describe("the fake answers the real navgraph/* shapes", function()
     )
   end)
 
+  it("navgraph/path: an ambiguous endpoint comes back as candidates, not a walk (F1)", function()
+    -- handle_request collides: M.handle_request (server.lua) and
+    -- RequestHandler.handle_request (handlers.py) share the bare name.
+    local err, result =
+      support.request(root, "navgraph/path", { from = "handle_request", to = "M.start" })
+    expect.eq(err, nil)
+    expect.eq(result.path, {}, "the walk must not run between ambiguous endpoints")
+    expect.eq(#result.ambiguousFrom, 2)
+    local qualified = vim.tbl_map(function(symbol)
+      return symbol.qualified
+    end, result.ambiguousFrom)
+    table.sort(qualified)
+    expect.eq(qualified, { "M.handle_request", "RequestHandler.handle_request" })
+    expect.eq(result.ambiguousTo, {}, "M.start is unique")
+  end)
+
   it("navgraph/outline returns {files:[{file,lang,symbols}]}, symbols flat", function()
     local err, result = support.request(root, "navgraph/outline", { path = "app/server.lua" })
     expect.eq(err, nil)

@@ -2,6 +2,10 @@
 --- a vertical ladder. No config requires at file scope - see `epicenter.registry`.
 local M = {}
 
+-- Forward-declared: `disambiguate` (below) re-queries through `find`, which
+-- is defined after `show` since it is `show`'s only caller.
+local find
+
 local function append(text, spans, chunk, hl)
   if chunk == "" then
     return text
@@ -130,8 +134,92 @@ local function open_window(lines, title, footer, on_close)
   return win
 end
 
---- @param result { path: table[] } a flat Symbol[]; empty when no chain exists
-local function show(result, from, to, previous_win)
+--- A palette listing `{ symbol = Symbol }` items, common ground between a
+--- live search (`pick`) and a fixed candidate list (`pick_candidate`).
+local function symbol_palette(bufnr, title, opts)
+  local icons = require("epicenter.ui.icons")
+  local palette = require("epicenter.ui.palette")
+  local search = require("epicenter.features.search")
+  return palette.open(vim.tbl_extend("force", {
+    title = title,
+    prompt_prefix = " " .. icons.ui("search") .. " ",
+    state = { bufnr = bufnr },
+    render_item = search.render_symbol,
+    preview_of = function(item)
+      return {
+        path = vim.uri_to_fname(item.symbol.uri),
+        line = item.symbol.line,
+        end_line = item.symbol.endLine,
+      }
+    end,
+  }, opts))
+end
+
+--- A calm candidate picker for an ambiguous endpoint (F1): the contract sends
+--- every same-name definition back rather than running the walk, so this
+--- offers them the same way the rest of the plugin finds a symbol - from the
+--- fixed candidate list the server already resolved, not a live query.
+--- @param candidates table[] Symbol[]
+local function pick_candidate(bufnr, title, candidates, on_pick)
+  local items = vim.tbl_map(function(symbol)
+    return { symbol = symbol }
+  end, candidates)
+  return symbol_palette(bufnr, title, {
+    empty_text = "  no candidates",
+    source = function(_, _, cb)
+      cb(nil, items, #items)
+    end,
+    on_accept = function(item)
+      on_pick(item.symbol.qualified)
+    end,
+  })
+end
+
+--- `from`/`to` are re-resolved through `find` (bottom of this file) once
+--- every ambiguous side has a chosen candidate, so the re-query goes through
+--- the exact same path a fresh `:Epicenter path` call would.
+local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+  if #ambiguous_from > 0 then
+    return pick_candidate(
+      bufnr,
+      (" %s is ambiguous - pick one "):format(from),
+      ambiguous_from,
+      function(picked_from)
+        if #ambiguous_to > 0 then
+          pick_candidate(
+            bufnr,
+            (" %s is ambiguous - pick one "):format(to),
+            ambiguous_to,
+            function(picked_to)
+              find(bufnr, picked_from, picked_to)
+            end
+          )
+        else
+          find(bufnr, picked_from, to)
+        end
+      end
+    )
+  end
+  return pick_candidate(
+    bufnr,
+    (" %s is ambiguous - pick one "):format(to),
+    ambiguous_to,
+    function(picked_to)
+      find(bufnr, from, picked_to)
+    end
+  )
+end
+
+--- @param result { path: table[], ambiguousFrom: table[], ambiguousTo: table[] }
+---   `path` is a flat Symbol[], empty when no chain exists; the ambiguous
+---   arrays carry same-name candidates the walk was never run against (F1).
+local function show(result, from, to, previous_win, bufnr)
+  local ambiguous_from = result.ambiguousFrom or {}
+  local ambiguous_to = result.ambiguousTo or {}
+  if #ambiguous_from > 0 or #ambiguous_to > 0 then
+    return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+  end
+
   local steps = result.path or {}
   if #steps == 0 then
     local lines = { "", ("  no call path from %s to %s"):format(from, to), "" }
@@ -186,7 +274,7 @@ local function show(result, from, to, previous_win)
   return win
 end
 
-local function find(bufnr, from, to)
+function find(bufnr, from, to)
   local client = require("epicenter.client")
   local previous_win = vim.api.nvim_get_current_win()
   local handle = { win = nil }
@@ -195,7 +283,7 @@ local function find(bufnr, from, to)
       require("epicenter").notify(err.message or "navgraph did not answer", "error")
       return
     end
-    handle.win = show(result or {}, from, to, previous_win)
+    handle.win = show(result or {}, from, to, previous_win, bufnr)
   end, { bufnr = bufnr, channel = "path" })
   return handle
 end
@@ -205,15 +293,8 @@ end
 local function pick(bufnr, title, on_pick)
   local client = require("epicenter.client")
   local cfg = require("epicenter.config").get()
-  local icons = require("epicenter.ui.icons")
-  local palette = require("epicenter.ui.palette")
-  local search = require("epicenter.features.search")
-
-  return palette.open({
-    title = title,
-    prompt_prefix = " " .. icons.ui("search") .. " ",
+  return symbol_palette(bufnr, title, {
     debounce_ms = cfg.search.debounce_ms,
-    state = { bufnr = bufnr },
     empty_text = "  no symbols match",
     source = function(query, state, cb)
       client.search({ query = query, limit = cfg.search.limit }, function(err, result)
@@ -222,14 +303,6 @@ local function pick(bufnr, title, on_pick)
         end
         cb(nil, result.items or {}, result.total)
       end, { bufnr = state.bufnr, channel = "path-pick" })
-    end,
-    render_item = search.render_symbol,
-    preview_of = function(item)
-      return {
-        path = vim.uri_to_fname(item.symbol.uri),
-        line = item.symbol.line,
-        end_line = item.symbol.endLine,
-      }
     end,
     on_accept = function(item)
       on_pick(item.symbol.qualified)

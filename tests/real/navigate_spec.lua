@@ -47,6 +47,26 @@ describe("real navgraph: navigation panels", function()
     expect.matches(text, "no call path")
   end)
 
+  --- F1: `get` is ambiguous between OrderService.get and ItemService.get in
+  --- this fixture - the exact case the review found answered as a confident
+  --- "no call path" even though OrderService.place -> OrderService.get is a
+  --- real edge.
+  it("F1: an ambiguous endpoint offers a candidate picker against the real server", function()
+    local handle = epicenter.run("path", { "fetch", "get" }, buf)
+    local win = wait(function()
+      return handle.win
+    end, 20000, "the ambiguity candidate picker")
+    opened = win
+    wait(function()
+      return win.list:count() > 0
+    end, 20000, "candidates listed")
+    local qualified = vim.tbl_map(function(item)
+      return item.symbol.qualified
+    end, win.list:items())
+    table.sort(qualified)
+    expect.eq(qualified, { "ItemService.get", "OrderService.get" })
+  end)
+
   it("outlines the current buffer from the real index", function()
     local panel = epicenter.run("outline", {}, buf)
     opened = panel

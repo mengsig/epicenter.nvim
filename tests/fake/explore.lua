@@ -157,6 +157,33 @@ local function find_named(index, name)
   return nil
 end
 
+--- `navgraph/path`'s own resolution (contract): an exact qualified match
+--- wins outright even when other symbols share its bare name; otherwise
+--- every bare-name match is a candidate, and the walk is only run between
+--- unique endpoints (F1). Unlike `find_named`, a bare-name collision is
+--- reported rather than silently resolved to the first definition.
+--- @return table|nil, table[] the resolved symbol, or nil plus its candidates
+local function resolve_path_endpoint(index, name)
+  if type(name) ~= "string" or name == "" then
+    return nil, {}
+  end
+  for _, symbol in ipairs(index.symbols) do
+    if symbol.qualified == name then
+      return symbol, {}
+    end
+  end
+  local candidates = {}
+  for _, symbol in ipairs(index.symbols) do
+    if symbol.name == name then
+      table.insert(candidates, symbol)
+    end
+  end
+  if #candidates == 1 then
+    return candidates[1], {}
+  end
+  return nil, candidates
+end
+
 --- Identifiers on `line`, each flagged as a call when a `(` follows it.
 local function mentions(line)
   local out, from = {}, 1
@@ -318,25 +345,35 @@ return {
     return tree_for(ctx, params, "callees", "navgraph/calls")
   end,
 
-  -- `ambiguousFrom`/`ambiguousTo` are always empty here (F3: schema
-  -- conformance only) - F1 teaches this handler to actually detect a
-  -- bare-name collision instead of silently resolving to the first match.
   ["navgraph/path"] = function(ctx, params)
-    local from, to = find_named(ctx.index, params.from), find_named(ctx.index, params.to)
-    if not from or not to then
+    local function empty()
       return { path = {}, ambiguousFrom = {}, ambiguousTo = {} }
+    end
+    local function symbols_of(list)
+      return vim.tbl_map(function(symbol)
+        return symbol_of(ctx.index, symbol)
+      end, list)
+    end
+
+    local from, ambiguous_from = resolve_path_endpoint(ctx.index, params.from)
+    local to, ambiguous_to = resolve_path_endpoint(ctx.index, params.to)
+    -- Ambiguous either way: the walk never runs (contract, F1), and both
+    -- candidate lists come back so the caller can re-ask unambiguously.
+    if #ambiguous_from > 0 or #ambiguous_to > 0 then
+      return {
+        path = {},
+        ambiguousFrom = symbols_of(ambiguous_from),
+        ambiguousTo = symbols_of(ambiguous_to),
+      }
+    end
+    if not from or not to then
+      return empty()
     end
     local chain = shortest_path(graph_of(ctx.index), from, to)
     if not chain then
-      return { path = {}, ambiguousFrom = {}, ambiguousTo = {} }
+      return empty()
     end
-    return {
-      path = vim.tbl_map(function(symbol)
-        return symbol_of(ctx.index, symbol)
-      end, chain),
-      ambiguousFrom = {},
-      ambiguousTo = {},
-    }
+    return { path = symbols_of(chain), ambiguousFrom = {}, ambiguousTo = {} }
   end,
 
   ["navgraph/outline"] = function(ctx, params)

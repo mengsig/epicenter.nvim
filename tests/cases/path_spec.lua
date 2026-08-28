@@ -118,6 +118,80 @@ describe("path against the fake navgraph server", function()
   end)
 end)
 
+--- F1: `navgraph/path` never answers an ambiguous name as "no call path" - it
+--- sends the candidates back instead. `handle_request` collides on purpose:
+--- M.handle_request (app/server.lua) and RequestHandler.handle_request
+--- (app/handlers.py) share the bare name in the shared fixture.
+describe("path ambiguity picker against the fake navgraph server (F1)", function()
+  local root, buf, handle
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if handle and handle.win then
+      pcall(function()
+        handle.win:close()
+      end)
+    end
+    handle = nil
+  end)
+
+  it("offers a candidate picker rather than a confident 'no call path'", function()
+    handle = require("epicenter").run("path", { "handle_request", "M.start" }, buf)
+    wait(function()
+      return handle.win ~= nil and handle.win.list:count() > 0
+    end, 10000, "ambiguity candidate picker")
+
+    local qualified = vim.tbl_map(function(item)
+      return item.symbol.qualified
+    end, handle.win.list:items())
+    table.sort(qualified)
+    expect.eq(qualified, { "M.handle_request", "RequestHandler.handle_request" })
+  end)
+
+  it("re-queries the path once the intended endpoint is chosen", function()
+    handle = require("epicenter").run("path", { "handle_request", "M.start" }, buf)
+    wait(function()
+      return handle.win ~= nil and handle.win.list:count() > 0
+    end, 10000, "ambiguity candidate picker")
+
+    local index
+    for i, item in ipairs(handle.win.list:items()) do
+      if item.symbol.qualified == "M.handle_request" then
+        index = i
+      end
+    end
+    assert(index, "M.handle_request must be offered as a candidate")
+    handle.win.list:select(index)
+    handle.win:accept("edit")
+    handle = nil -- accept() closes the picker itself
+
+    local ladder_buf
+    wait(function()
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local candidate = vim.api.nvim_win_get_buf(win)
+        if vim.bo[candidate].filetype == "epicenter-path" then
+          ladder_buf = candidate
+          return true
+        end
+      end
+      return false
+    end, 10000, "the re-queried path ladder")
+
+    local text = table.concat(vim.api.nvim_buf_get_lines(ladder_buf, 0, -1, false), "\n")
+    expect.matches(text, "M%.handle_request")
+    expect.matches(text, "M%.start")
+    vim.api.nvim_buf_delete(ladder_buf, { force = true })
+  end)
+end)
+
 describe("path window against the fake navgraph server, with real animation", function()
   local root, buf, handle
 
