@@ -813,6 +813,25 @@ describe("the protocol 1.1 gate on impact/review", function()
     vim.fn.setqflist({}, "f")
   end)
 
+  --- LOW-2: `review export` on a gated buffer used to fall through to
+  --- `open_review`, opening a panel instead of reporting anything about the
+  --- export it was actually asked for.
+  it("review export on a gated buffer reports why instead of opening a panel", function()
+    register_v10()
+    local notices = {}
+    local toast = require("epicenter.ui.toast")
+    local original = toast.notify
+    toast.notify = function(msg)
+      table.insert(notices, msg)
+    end
+    local handle = epicenter.run("review", { "export" }, buf)
+    toast.notify = original
+
+    expect.eq(#notices, 1)
+    expect.matches(notices[1], "protocol 1.1")
+    expect.eq(handle, nil, "export reports the gate rather than opening a panel")
+  end)
+
   it("clears the gate once a capable session appears, and answers for real", function()
     local sent = register_v10()
     panel = epicenter.run("impact", {}, buf)

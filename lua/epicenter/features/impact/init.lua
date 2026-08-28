@@ -215,10 +215,15 @@ end
 
 local function run_review(ctx)
   local epicenter = require("epicenter")
-  local reason =
-    require("epicenter.client").unsupported_reason(ctx.bufnr, "navgraph/impact", "impact review")
+  local client = require("epicenter.client")
+  local reason = client.unsupported_reason(ctx.bufnr, "navgraph/impact", "impact review")
   if reason then
-    return open_review(current, reason)
+    -- `export` reports why rather than opening a panel to say it - the same
+    -- toast-not-panel choice `client.gate` makes with no panel to write into.
+    if ctx.args[1] == "export" then
+      return epicenter.notify(reason, "warn")
+    end
+    return open_review(current, client.gate_notice(ctx.bufnr, "navgraph/impact", "impact review"))
   end
   if not current.answered then
     return epicenter.notify("no working change to review", "info")
