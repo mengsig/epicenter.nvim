@@ -179,6 +179,40 @@ describe("outline sidebar against the fake navgraph server", function()
     end, 10000, "outline after the reindex")
   end)
 
+  it("coalesces a burst of reindexes into one debounced pass (F5)", function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = false,
+      outline = { debounce_ms = 250 },
+      -- Isolates the count to the sidebar's own requests: blast's badges
+      -- feature also calls `client.outline` on every reindex, independently.
+      badges = false,
+    })
+    open("app/handlers.py")
+
+    local client = require("epicenter.client")
+    local calls, original = 0, client.outline
+    client.outline = function(...)
+      calls = calls + 1
+      return original(...)
+    end
+
+    local ok = pcall(function()
+      for _ = 1, 5 do
+        support.request(root, "navgraph/rescan", {})
+      end
+      wait(function()
+        return calls == 1
+      end, 10000, "one settled pass for a burst of 5 reindexes, not one pass per reindex")
+      -- Confirm it stays at 1: a bug that fires per-reindex would keep growing.
+      vim.wait(500)
+      expect.eq(calls, 1)
+    end)
+    client.outline = original
+    assert(ok)
+  end)
+
   it("follows a buffer switch", function()
     open("app/handlers.py")
     vim.api.nvim_set_current_win(outline.current().source_win)

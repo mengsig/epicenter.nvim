@@ -257,6 +257,7 @@ local function open(ctx)
       if state then
         state.unsubscribe()
         state.debouncer.close()
+        state.refresh_debounce.close()
         pcall(vim.api.nvim_del_augroup_by_id, state.augroup)
         state = nil
       end
@@ -266,9 +267,20 @@ local function open(ctx)
   state.debouncer = require("epicenter.ui.prompt").debounce(cfg.outline.debounce_ms, function()
     M.sync_cursor()
   end)
+  -- A separate debouncer from the cursor-sync one above: `navgraph/indexed`
+  -- fires after every reindex, including the 2s watch poll, so a typing burst
+  -- would otherwise issue one `navgraph/outline` request per keystroke window.
+  state.refresh_debounce = require("epicenter.ui.prompt").debounce(
+    cfg.outline.debounce_ms,
+    function()
+      if state and state.panel:valid() then
+        request()
+      end
+    end
+  )
   state.unsubscribe = require("epicenter.events").on(events.INDEXED, function()
     if state and state.panel:valid() then
-      request()
+      state.refresh_debounce.call()
     end
   end)
   state.augroup = install_autocmds()
