@@ -96,14 +96,36 @@ function Palette:_apply_layout(box)
   self.list:set_width(boxes.results.width)
 end
 
---- Closes and forgets the preview pane once its window has no room; unlike
---- the transient dip during the open animation, a settled resize below the
---- threshold means the pane stays gone until the palette is reopened.
+--- Opens the preview window and its widget together, so neither can exist
+--- without the other - shared by `M.open` and the resize-restore path (D2).
+function Palette:_create_preview(boxes)
+  self.preview_win = window.open({
+    box = boxes.preview,
+    focusable = false,
+    zindex = 100,
+  })
+  self.preview = preview_mod.new({
+    buf = self.preview_win.buf,
+    win = self.preview_win.win,
+    height = boxes.preview.height,
+  })
+end
+
+--- Closes and forgets the preview pane once its window has no room. A
+--- settled resize back above the threshold recreates it (D2) - `want_preview`
+--- is the palette's own eligibility (config + the caller wanting one at all)
+--- and outlives a drop, unlike the window and widget themselves.
 function Palette:_drop_preview()
   self.preview_win:close()
   self.preview_win = nil
   self.preview = nil
-  self.want_preview = false
+end
+
+--- Recreates the preview pane once a resize gives it room back (D2), then
+--- paints whatever the list's current selection already resolves to.
+function Palette:_restore_preview(boxes)
+  self:_create_preview(boxes)
+  self:_update_preview()
 end
 
 --- Reflow after a `VimResized`: geometry changes, nothing animates.
@@ -112,8 +134,11 @@ function Palette:reflow()
     return
   end
   self.box = self:_box()
-  if self.preview_win and M.layout(self.box, self.want_preview).preview == nil then
+  local boxes = M.layout(self.box, self.want_preview)
+  if self.preview_win and not boxes.preview then
     self:_drop_preview()
+  elseif self.want_preview and not self.preview_win and boxes.preview then
+    self:_restore_preview(boxes)
   end
   self:_apply_layout(self.box)
   self.list:draw()
@@ -352,11 +377,7 @@ function M.open(spec)
     zindex = 100,
   })
   if boxes.preview then
-    self.preview_win = window.open({
-      box = boxes.preview,
-      focusable = false,
-      zindex = 100,
-    })
+    self:_create_preview(boxes)
   end
   self.prompt_win = window.open({
     box = boxes.prompt,
@@ -387,13 +408,6 @@ function M.open(spec)
     render_item = spec.render_item,
     empty_text = spec.empty_text or "  type to search",
   })
-  if self.preview_win then
-    self.preview = preview_mod.new({
-      buf = self.preview_win.buf,
-      win = self.preview_win.win,
-      height = boxes.preview.height,
-    })
-  end
 
   self.prompt = prompt_mod.new({
     buf = self.prompt_win.buf,

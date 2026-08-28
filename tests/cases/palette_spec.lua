@@ -166,7 +166,32 @@ describe("palette resize across the preview threshold (F2)", function()
     end
 
     expect.eq(p.preview_win, nil, "settled below the threshold, the pane is dropped")
-    expect.eq(p.want_preview, false)
+    p:close()
+  end)
+
+  -- D2: the pane used to stay gone for the rest of the palette's life once
+  -- dropped, even after a resize gave it room back.
+  it("restores the preview pane once a resize gives it room back (#D2)", function()
+    local p = open_wide()
+    expect.truthy(p.preview_win ~= nil, "opens wide with a preview pane")
+
+    p.columns = 60
+    p:reflow()
+    expect.eq(p.preview_win, nil, "dropped below the threshold")
+
+    p.columns = 160
+    p:reflow()
+    expect.truthy(p.preview_win ~= nil, "the pane returns once there's room again")
+    expect.truthy(p.preview ~= nil)
+    expect.truthy(p.preview_win:valid())
+
+    -- Back down and up again: a drop/restore cycle must not accumulate
+    -- stale windows or break on repetition.
+    p.columns = 60
+    p:reflow()
+    p.columns = 160
+    p:reflow()
+    expect.truthy(p.preview_win ~= nil and p.preview_win:valid())
     p:close()
   end)
 
