@@ -106,7 +106,11 @@ end
 -- The runner ---------------------------------------------------------------------
 
 --- The shell command for one test, or nil plus the reason there is none.
---- `%f` is the test's file (absolute), `%s` its own name. Pure.
+--- `%f` is the test's file (absolute), `%s` its own name. Both are
+--- shell-escaped as they are substituted - a project under `~/my project/`
+--- would otherwise be split into two arguments, and a name carrying a shell
+--- metacharacter would be EXECUTED. Templates must not quote them again.
+--- Pure.
 --- @param symbol table a protocol Symbol
 --- @param runners table<string, string> `tests.runner`
 --- @return string|nil command, string|nil reason
@@ -125,7 +129,7 @@ function M.command_for(symbol, runners)
   -- placeholder at a time with a function.
   return (
     template:gsub("%%[fs]", function(token)
-      return token == "%f" and path or symbol.name
+      return vim.fn.shellescape(token == "%f" and path or symbol.name)
     end)
   )
 end
@@ -275,18 +279,26 @@ local function open_tests(ctx)
       if err then
         return view.panel:notice("  " .. (err.message or "navgraph did not answer"))
       end
+      -- A bare `null` is an ordinary LSP answer, and the addendum is loose
+      -- about where the summary sits (see `M.truncated`). Neither may leave
+      -- the panel reading "loading..." forever.
+      if type(result) ~= "table" or type(result.tests) ~= "table" then
+        return view.panel:notice("  navgraph sent no test list for this symbol")
+      end
+      local name = vim.tbl_get(result, "symbol", "qualified") or "this symbol"
       local files = M.group_by_file(result.tests)
       if #files == 0 then
-        return view.panel:notice(("  no test reaches %s"):format(result.symbol.qualified))
+        return view.panel:notice(("  no test reaches %s"):format(name))
       end
+      local summary = result.summary or {}
+      local count = type(summary.count) == "number" and summary.count or #result.tests
+      local depth = type(summary.maxDepth) == "number"
+          and (" · max depth %d"):format(summary.maxDepth)
+        or ""
       view.panel:set_roots(files, { expand_roots = true })
-      view.panel:set_title((" tests · %s "):format(result.symbol.qualified))
+      view.panel:set_title((" tests · %s "):format(name))
       view.panel:set_footer(
-        (" %d%s · max depth %d · r run "):format(
-          result.summary.count,
-          M.truncated(result) and "+" or "",
-          result.summary.maxDepth
-        )
+        (" %d%s%s · r run "):format(count, M.truncated(result) and "+" or "", depth)
       )
     end, { bufnr = ctx.bufnr, channel = "tests" })
   end

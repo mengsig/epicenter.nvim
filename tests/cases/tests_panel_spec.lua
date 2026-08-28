@@ -63,8 +63,29 @@ describe("the test runner template", function()
 
   it("substitutes the file and the test's own name", function()
     local command = tests.command_for(symbol({ uri = "file:///proj/app/test_flow.py" }), RUNNERS)
-    expect.eq(command, "pytest /proj/app/test_flow.py::test_dispatch")
+    expect.eq(command, "pytest '/proj/app/test_flow.py'::'test_dispatch'")
   end)
+
+  it(
+    "escapes a path with a space and a name with a quote, rather than letting the shell split them",
+    function()
+      local dir = vim.fs.normalize(vim.fn.tempname()) .. " with space"
+      vim.fn.mkdir(dir, "p")
+      local path = vim.fs.joinpath(dir, "it's a test.py")
+      vim.fn.writefile({ "def test_a(): pass" }, path)
+
+      local command = tests.command_for(
+        symbol({ uri = vim.uri_from_fname(path), name = "test_a'b" }),
+        { python = "echo %f %s" }
+      )
+      -- Run it: the assertion is what the SHELL ends up passing, not the
+      -- spelling of the escape.
+      local out = vim.fn.system({ vim.o.shell, vim.o.shellcmdflag, command })
+      expect.eq(vim.trim(out), ("%s %s"):format(path, "test_a'b"))
+
+      vim.fn.delete(dir, "rf")
+    end
+  )
 
   it("reaches the same template whether the server says py or python", function()
     expect.eq(tests.language_of(symbol({ language = "py" })), "python")
@@ -190,8 +211,78 @@ describe("the tests panel against the fake navgraph server", function()
       return nil
     end, 10000, "the runner output")
 
-    expect.matches(output, "%$ echo ran test_dispatch in ")
-    expect.matches(output, "ran test_dispatch in ")
+    expect.matches(output, "%$ echo ran 'test_dispatch' in ", "the name is escaped in the command")
+    expect.matches(output, "\nran test_dispatch in ", "and reaches the runner unquoted")
+  end)
+end)
+
+describe("the tests panel against an answer it did not expect", function()
+  local buf, panel, temp
+
+  local function open_with(answer)
+    require("epicenter.client").register_session(temp, {
+      request = function(_, _method, _params, cb)
+        vim.schedule(function()
+          cb(nil, answer)
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, {
+      experimental = {
+        navgraph = { protocolVersion = 1, protocolMinor = 1, methods = { "navgraph/tests" } },
+      },
+    })
+    panel = epicenter.run("tests", { "only" }, buf)
+    return panel
+  end
+
+  local function body()
+    return table.concat(vim.api.nvim_buf_get_lines(panel.win.buf, 0, -1, false), "\n")
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    require("epicenter.ui.theme").apply()
+    temp = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(temp, ".navgraph"), "p")
+    local path = vim.fs.joinpath(temp, "only.py")
+    vim.fn.writefile({ "def only():", "    return 1" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(temp)
+    vim.fn.delete(temp, "rf")
+  end)
+
+  it("says so instead of leaving the panel loading when the answer is null", function()
+    open_with(nil)
+    wait(function()
+      return body():find("no test list", 1, true) ~= nil
+    end, 5000, "the notice")
+  end)
+
+  it("draws the rows when the answer carries no summary", function()
+    open_with({
+      symbol = symbol({ name = "only", qualified = "only", file = "only.py" }),
+      tests = { { symbol = symbol(), depth = 1 } },
+    })
+    wait(function()
+      return body():find("test_dispatch", 1, true) ~= nil
+    end, 5000, "the test rows")
+    expect.matches(vim.api.nvim_win_get_config(panel.win.win).title[1][1], "only")
+    local footer = vim.api.nvim_win_get_config(panel.win.win).footer[1][1]
+    expect.matches(footer, "1", "the count falls back to the rows themselves")
+    expect.falsy(footer:find("loading", 1, true))
   end)
 end)
 

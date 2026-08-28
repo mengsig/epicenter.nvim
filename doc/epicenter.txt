@@ -781,8 +781,10 @@ TESTS                                                         *epicenter-tests*
 
                                                    *epicenter-tests-runner*
 `r` runs one test through a per-language command template. `%f` is the test's
-file, `%s` its own name; the command runs in the project root through your
-`shell`, and its output streams into a scratch split. Nothing blocks. >
+file, `%s` its own name; both are shell-escaped as they are substituted, so a
+template must not quote them itself. The command runs in the project root
+through your `shell`, and its output streams into a scratch split. Nothing
+blocks. >
 
     require("epicenter").setup({
       tests = {

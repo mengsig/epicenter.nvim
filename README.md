@@ -270,8 +270,9 @@ walk run backwards. `dN` is how many calls away the target is, so a `d1` and a
 ```
 
 `r` runs the test under the cursor. The command is a per-language template —
-`%f` is the file, `%s` the test's name — and its output streams into a scratch
-split without blocking the editor.
+`%f` is the file, `%s` the test's name, each shell-escaped as it is
+substituted, so do not quote them yourself — and its output streams into a
+scratch split without blocking the editor.
 
 ```lua
 tests = { runner = { python = "pytest %f::%s", elixir = "mix test %f" } }
