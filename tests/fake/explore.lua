@@ -392,7 +392,9 @@ return {
     local graph = graph_of(ctx.index)
     local items = {}
     for _, symbol in ipairs(ctx.index.symbols) do
-      if not params.path or symbol.file == params.path then
+      -- `path` is a substring filter over the root-relative path (contract),
+      -- same as outline/unused/graph below - not an exact match (F6).
+      if not params.path or symbol.file:find(params.path, 1, true) ~= nil then
         local fan_in, fan_in_exact, fan_in_test = 0, 0, 0
         for _, edge in ipairs(graph.callers[symbol.id] or {}) do
           local n = #edge.lines
@@ -458,7 +460,9 @@ return {
         elseif tests == "without" then
           include, marked_test_only = unreached or test_only, test_only
         elseif tests == "only" then
-          include, marked_test_only = test_only, test_only
+          -- Contract: "only" lists unused test helpers - test symbols with
+          -- zero callers, not code merely used only by tests (F7).
+          include, marked_test_only = symbol.test == true and unreached, true
         end
         if include then
           table.insert(

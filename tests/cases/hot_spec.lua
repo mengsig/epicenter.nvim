@@ -104,6 +104,25 @@ describe("hot spots against the fake navgraph server", function()
     expect.truthy(vim.tbl_contains(names(), "dispatch"), "the python side shows up too")
   end)
 
+  it("filters navgraph/hot's path as a substring, not an exact match (merge-gate F6)", function()
+    -- The contract's `path` is a substring filter over the root-relative path
+    -- (same as outline/unused/graph) - `hot app` must match `app/server.lua`.
+    local err, exact = support.request(root, "navgraph/hot", { path = "app/server.lua" })
+    assert(not err, vim.inspect(err))
+    local err2, substring = support.request(root, "navgraph/hot", { path = "server" })
+    assert(not err2, vim.inspect(err2))
+    expect.truthy(#substring.items > 0, "a substring match returns results")
+    expect.eq(
+      vim.tbl_map(function(item)
+        return item.symbol.qualified
+      end, substring.items),
+      vim.tbl_map(function(item)
+        return item.symbol.qualified
+      end, exact.items),
+      "a substring of the path matches the same set as the full path"
+    )
+  end)
+
   it("lists what nothing reaches, and p drops the public ones", function()
     panel = require("epicenter").run("unused", {}, buf)
     wait(function()
@@ -163,5 +182,55 @@ describe("hot spots against the fake navgraph server", function()
 
     local after = table.concat(vim.fn.readfile(source), "\n")
     expect.eq(after, before, "the source file handed as a filter is untouched")
+  end)
+end)
+
+--- Exercises `tests/fake/explore.lua`'s `navgraph/unused` handler directly
+--- against a synthetic index: no fixture file on disk has "test" in its name,
+--- so the shared fixture tree cannot exercise `tests = "only"` on its own.
+describe("navgraph/unused fake fidelity (merge-gate F7)", function()
+  it("'only' lists unused test helpers, not code merely used only by tests", function()
+    -- helper_fn: a test symbol nothing calls - an unused test helper.
+    -- worker: a production symbol whose one caller is that test symbol.
+    local index = {
+      symbols = {
+        {
+          id = 1,
+          name = "helper_fn",
+          qualified = "helper_fn",
+          kind = "fn",
+          file = "app/helper_test.lua",
+          uri = "file:///proj/app/helper_test.lua",
+          line = 1,
+          endLine = 3,
+          test = true,
+        },
+        {
+          id = 2,
+          name = "worker",
+          qualified = "worker",
+          kind = "fn",
+          file = "app/server.lua",
+          uri = "file:///proj/app/server.lua",
+          line = 1,
+          endLine = 1,
+          test = false,
+        },
+      },
+      sources = {
+        ["app/helper_test.lua"] = { "function helper_fn()", "  worker()", "end" },
+        ["app/server.lua"] = { "function worker()" },
+      },
+    }
+    local handlers = require("fake.explore")
+    local ok, result = pcall(handlers["navgraph/unused"], { index = index }, { tests = "only" })
+    assert(ok, tostring(result))
+    expect.eq(
+      vim.tbl_map(function(item)
+        return item.symbol.qualified
+      end, result.items),
+      { "helper_fn" },
+      "the unused test helper is listed, not the production symbol tests happen to call"
+    )
   end)
 end)
