@@ -261,6 +261,22 @@ describe("hover card against the fake navgraph server", function()
     expect.matches(text, "M%.start")
   end)
 
+  -- F14: every other surface carries a footer naming its keys; the hover
+  -- card was the one exception, with its own documented keys nowhere on it.
+  it("carries a footer naming its own keys, like every other surface", function()
+    card = opened()
+    local footer = vim.api.nvim_win_get_config(card.win.win).footer
+    expect.truthy(footer, "the float has a footer")
+    local joined = table.concat(
+      vim.tbl_map(function(chunk)
+        return chunk[1]
+      end, footer),
+      ""
+    )
+    expect.matches(joined, "jump")
+    expect.matches(joined, "close")
+  end)
+
   -- F10 parity (dockmaster decision): `K` gets the SAME enclosing-definition
   -- fallback blast has - a cursor inside a body, off any identifier, resolves
   -- to the enclosing definition rather than the raw position (which

@@ -40,7 +40,9 @@ describe("status dashboard", function()
     expect.matches(body, "navgraph fake%-0%.1%.0")
     expect.matches(body, "protocol 1")
     expect.matches(body, "3 files · 9 symbols · 7 edges")
-    expect.matches(body, "1 unsaved")
+    -- F14: "overlays" counts open buffers the server holds, not modified
+    -- ones - "unsaved" claimed a fact the number does not carry.
+    expect.matches(body, "1 open")
     expect.matches(body, "4ms  2026%-08%-28")
     expect.matches(body, "/state/epicenter%.log")
   end)
@@ -215,7 +217,12 @@ describe("status dashboard against the fake navgraph server", function()
     press("l")
     toast.notify = original
     expect.falsy(win:valid(), "the dashboard steps aside for the log")
-    expect.matches(table.concat(notices, "\n"), "nothing logged yet")
+    local joined = table.concat(notices, "\n")
+    expect.matches(joined, "nothing logged yet")
+    -- F14: the dashboard's own "log" row shows this same path in tilde form
+    -- (core.lua:138) - the notice must agree, not show the absolute one.
+    local tilde_path = vim.fn.fnamemodify(require("epicenter.log").path(), ":~")
+    expect.matches(joined, vim.pesc(tilde_path), "must match the dashboard's own tilde form")
   end)
 end)
 

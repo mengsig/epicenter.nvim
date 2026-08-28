@@ -197,6 +197,37 @@ describe("hot spots against the fake navgraph server", function()
     local after = table.concat(vim.fn.readfile(source), "\n")
     expect.eq(after, before, "the source file handed as a filter is untouched")
   end)
+
+  -- F14: `vim.ui.open` returns `nil, err` when it finds no handler (a
+  -- headless box, no `xdg-open`) - the success toast already fired, so the
+  -- graph silently not opening must not be the only thing that happened.
+  it("says so when vim.ui.open finds no handler", function()
+    local notices = {}
+    local original_open, toast = vim.ui.open, require("epicenter.ui.toast")
+    local original_notify = toast.notify
+    vim.ui.open = function()
+      return nil, "no handler found"
+    end
+    toast.notify = function(msg, opts)
+      table.insert(notices, { message = msg, level = opts and opts.level })
+    end
+
+    require("epicenter").run("graph", { "app/server.lua" }, buf)
+    wait(function()
+      return #notices >= 2
+    end, 10000, "the open failure to be reported")
+    vim.ui.open, toast.notify = original_open, original_notify
+
+    expect.truthy(
+      vim.tbl_contains(
+        vim.tbl_map(function(n)
+          return n.message:match("could not open the graph") ~= nil
+        end, notices),
+        true
+      ),
+      "no notice named the failure: " .. vim.inspect(notices)
+    )
+  end)
 end)
 
 describe("hot bar scale", function()

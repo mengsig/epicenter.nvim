@@ -8,6 +8,11 @@
 --- (0.10 has no such route to prove).
 local compat = require("epicenter.compat")
 if not compat.HAS_011 then
+  -- A silent no-op file left `make test-real` reporting "33 passed" on 0.10.4
+  -- and "34 passed" on 0.12.4 with nothing saying a file was skipped, not
+  -- run - the two numbers looked like a discrepancy rather than a floor
+  -- (F14).
+  io.stderr:write("note: lsp_enable_spec.lua skipped (needs 0.11+)\n")
   return
 end
 

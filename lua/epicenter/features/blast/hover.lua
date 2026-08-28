@@ -242,6 +242,10 @@ function Card:_show(err, result)
   self.win = window.open({
     box = anchor_box(math.min(width, cfg.hover.max_width), #self.card.lines),
     title = " hover ",
+    -- Every other surface carries one (F14); this is the only one whose
+    -- documented keys (README: press again to step in) lived nowhere the
+    -- card itself said so.
+    footer = " j/k move · <CR> jump · q close ",
     zindex = 150,
     on_close = function()
       self:_cleanup()

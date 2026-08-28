@@ -236,7 +236,13 @@ local function export_graph(ctx)
     -- `path` comes back root-relative, per contract.
     local absolute = vim.fs.joinpath(root, result.path)
     progress.finish(M.graph_message(absolute, result))
-    vim.ui.open(absolute)
+    -- `vim.ui.open` returns `nil, err` when it finds no handler (a headless
+    -- box, no `xdg-open`) - the toast above already claimed success, so a
+    -- silent no-op here would be the one that lied (F14).
+    local _, open_err = vim.ui.open(absolute)
+    if open_err then
+      require("epicenter").notify("could not open the graph: " .. open_err, "warn")
+    end
   end, { bufnr = ctx.bufnr, channel = "graph" })
 end
 

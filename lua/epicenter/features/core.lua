@@ -88,7 +88,10 @@ function M.dashboard_lines(view)
         status.edges or 0
       )
     )
-    row(lines, spans, "overlays", ("%d unsaved"):format(status.overlays or 0))
+    -- `overlays` is every buffer the server holds an in-memory version of
+    -- while it's open, not the buffers with unsaved changes (F14) - an
+    -- untouched open file was reading "1 unsaved", which is simply false.
+    row(lines, spans, "overlays", ("%d open"):format(status.overlays or 0))
     -- `make screenshots` freeze (F8): navgraph/status is wall-clock and
     -- indexing-timing dependent, so a screenshot run pins both via env vars
     -- to keep the committed asset byte-identical run over run.
@@ -172,7 +175,9 @@ end
 local function open_log()
   local path = require("epicenter.log").path()
   if not (vim.uv or vim.loop).fs_stat(path) then
-    require("epicenter").notify("nothing logged yet: " .. path, "info")
+    -- The tilde form the dashboard shows beside this (F14): an absolute path
+    -- both disagreed with it and was the more likely one to clip in a toast.
+    require("epicenter").notify("nothing logged yet: " .. vim.fn.fnamemodify(path, ":~"), "info")
     return
   end
   -- vim.cmd.X() args are literal, not re-parsed - fnameescape here

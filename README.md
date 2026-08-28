@@ -261,7 +261,7 @@ What the server knows, and the three keys that change it: `r` rescan,
 │  root        ~/src/myproject                                   │
 │  server      running · pid 41207 · navgraph 0.1.0 · protocol 1 │
 │  index       31 files · 321 symbols · 254 edges                │
-│  overlays    1 unsaved                                         │
+│  overlays    1 open                                            │
 │  last index  13ms  2026-08-28T01:52:44Z                        │
 │                                                                │
 │  languages                                                     │
