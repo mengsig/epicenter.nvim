@@ -173,6 +173,26 @@ describe("release asset pattern", function()
       )
     end
   end)
+
+  it("matches only its own platform's asset, never another's or SHA256SUMS (F7)", function()
+    for _, asset in ipairs(REAL_V1_0_0_ASSETS) do
+      local pattern = install.asset_pattern(UNAME_FOR[asset])
+      for _, other in ipairs(REAL_V1_0_0_ASSETS) do
+        if other ~= asset then
+          expect.falsy(
+            glob_matches(pattern, other),
+            ("pattern %q for %s must NOT also match %s"):format(pattern, asset, other)
+          )
+        end
+      end
+      expect.falsy(
+        glob_matches(pattern, "SHA256SUMS"),
+        ("pattern %q must NOT match SHA256SUMS - that would mask a missing binary as success (F2)"):format(
+          pattern
+        )
+      )
+    end
+  end)
 end)
 
 describe("release checksum verification", function()
