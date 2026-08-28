@@ -713,12 +713,14 @@ describe("the protocol 1.1 gate on impact/review", function()
   end)
 
   it("shows the gate as a persistent line in the review panel, not a toast", function()
-    local sent = register_v10()
+    register_v10()
     panel = epicenter.run("review", {}, buf)
     wait(function()
       return panel ~= nil and panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
     end, 5000, "the gate's notice")
-    expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
+    -- No wire assertion here: `review.M.open` never issues a request of its
+    -- own (it renders the cached session), so `sent` would stay empty even
+    -- with the gate removed - the notice above is what this test proves.
   end)
 
   --- LOW-3: `answered` is documented as the panel's "a query was answered"
