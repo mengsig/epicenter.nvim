@@ -129,6 +129,18 @@ describe("checkhealth epicenter", function()
     expect.matches(report, "user: something else")
   end)
 
+  it("warns when setup() silently replaced a mapping that existed first (F13)", function()
+    -- The opposite order from the case above: a user mapping made BEFORE
+    -- setup() is the one vim.keymap.set replaces with no error of its own -
+    -- the only place that ever saw it is install_keymaps() at setup() time.
+    local target = "<leader>e" .. require("epicenter.registry").keymaps()[1].suffix
+    vim.keymap.set("n", target, function() end, { desc = "user: something first" })
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    local report = run_checkhealth()
+    expect.matches(report, "silently replaced")
+    expect.matches(report, "user: something first")
+  end)
+
   it("says plainly when keymaps are turned off", function()
     require("epicenter").setup({ keymaps = false, lsp = { auto_start = false } })
     expect.matches(run_checkhealth(), "keymaps: none installed")

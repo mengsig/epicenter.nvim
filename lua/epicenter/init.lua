@@ -8,12 +8,17 @@ local registry = require("epicenter.registry")
 local did_setup = false
 --- Keys this plugin installed, so a second setup() can take them back down.
 local installed_keys = {}
+--- Keys the last install_keymaps() overwrote an existing mapping to install
+--- (F13): `vim.keymap.set` replaces silently, so this is the only place that
+--- ever sees what a leaf key clobbered - recorded here for `:checkhealth`.
+local displaced_keys = {}
 
 local function remove_keymaps()
   for _, lhs in ipairs(installed_keys) do
     pcall(vim.keymap.del, "n", lhs)
   end
   installed_keys = {}
+  displaced_keys = {}
 end
 
 local function install_keymaps(cfg)
@@ -23,6 +28,13 @@ local function install_keymaps(cfg)
   end
   for _, map in ipairs(registry.keymaps()) do
     local lhs = cfg.keymaps.prefix .. map.suffix
+    local existing = vim.fn.maparg(lhs, "n", false, true)
+    if not vim.tbl_isempty(existing) then
+      table.insert(
+        displaced_keys,
+        { lhs = lhs, was = existing.desc or existing.rhs or "another mapping" }
+      )
+    end
     vim.keymap.set("n", lhs, function()
       M.run(map.command, {})
     end, { desc = map.desc, silent = true })
@@ -151,6 +163,14 @@ end
 --- while the download/build is still running in the background.
 function M.install(opts)
   return require("epicenter.install").install(opts)
+end
+
+--- Keys the last setup() silently replaced an existing mapping to install
+--- (F13) - `:checkhealth epicenter` surfaces this so a user whose own
+--- mapping got overwritten gets a signal from somewhere.
+--- @return { lhs: string, was: string }[]
+function M.displaced_keymaps()
+  return displaced_keys
 end
 
 --- Test seam: forgets setup state and config.

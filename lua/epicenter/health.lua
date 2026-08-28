@@ -90,10 +90,13 @@ local function check_servers()
   end
 end
 
---- Only mappings the plugin did NOT install can be seen from here: `setup()`
---- has already run, and `vim.keymap.set` replaces silently. The prefix itself
---- is the conflict worth naming - `<leader>e` mapped on its own makes every
---- epicenter key wait out `timeoutlen` before it fires.
+--- A mapping the plugin did NOT install can only be seen from here after the
+--- fact: `setup()` has already run, and `vim.keymap.set` replaces silently.
+--- The prefix itself is the conflict worth naming - `<leader>e` mapped on its
+--- own makes every epicenter key wait out `timeoutlen` before it fires. A
+--- leaf key it silently overwrote (F13) is reported separately below, from
+--- what `install_keymaps()` recorded at setup() time - the one place that
+--- ever saw what was there before.
 local function check_keymaps()
   local cfg = require("epicenter.config").get()
   if cfg.keymaps == false then
@@ -109,6 +112,18 @@ local function check_keymaps()
         direct.desc or direct.rhs or "another mapping"
       ),
       { "Change `keymaps.prefix`, or drop the conflicting mapping." }
+    )
+  end
+
+  local displaced = require("epicenter").displaced_keymaps()
+  if #displaced > 0 then
+    local items = {}
+    for _, d in ipairs(displaced) do
+      table.insert(items, ("%s (was: %s)"):format(d.lhs, d.was))
+    end
+    vim.health.warn(
+      "setup() silently replaced an existing mapping: " .. table.concat(items, ", "),
+      { "vim.keymap.set overwrites with no error - change keymaps.prefix if you meant to keep it." }
     )
   end
 
