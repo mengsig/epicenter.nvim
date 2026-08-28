@@ -322,17 +322,32 @@ end
 --- Ranks: exact > prefix > word boundary > subsequence; ties by fan-in then
 --- by the shorter path. Mirrors the `navgraph/search` contract.
 --- @param opts { query: string, kinds?: string[], limit?: integer }
+--- v1.1 `recent`: the client's own recently picked names, newest first.
+--- A match in that list outranks every other match, and a newer pick
+--- outranks an older one. Pure.
+--- @param recent string[]|nil
+--- @return table<string, integer> qualified name -> its score bonus
+local function recency_bonus(recent)
+  local bonus = {}
+  for index, qualified in ipairs(recent or {}) do
+    bonus[qualified] = 100000 - index
+  end
+  return bonus
+end
+
 function M.search(index, opts)
   local query = opts.query or ""
+  local bonus = recency_bonus(opts.recent)
   local items = {}
   for _, symbol in ipairs(index.symbols) do
     local allowed = not opts.kinds or #opts.kinds == 0 or vim.tbl_contains(opts.kinds, symbol.kind)
     if allowed then
       local matches = query == "" and {} or M.fuzzy(symbol.qualified, query)
       if matches then
+        local base = query == "" and symbol.callers or score(symbol.qualified, query, matches)
         table.insert(items, {
           symbol = symbol,
-          score = query == "" and symbol.callers or score(symbol.qualified, query, matches),
+          score = base + (bonus[symbol.qualified] or 0),
           matches = matches,
         })
       end

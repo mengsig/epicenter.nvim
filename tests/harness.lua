@@ -256,6 +256,16 @@ function M.isolate()
     end
   end
 
+  -- A buffer left pointing at a file a previous spec deleted (a tempname,
+  -- an installed shim) makes the NEXT file's first `:edit` print E211 and
+  -- redraw, which aborts headless Neovim in grid_line_flush. Wipe them.
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name ~= "" and vim.fn.filereadable(name) == 0 and vim.fn.isdirectory(name) == 0 then
+      pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    end
+  end
+
   for name in pairs(package.loaded) do
     if
       name == "epicenter"

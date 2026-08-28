@@ -32,6 +32,7 @@ CONTENTS                                                   *epicenter-contents*
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
+     - tour ................................... |epicenter-tour|
      - core .................................... |epicenter-core|
      - planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
@@ -121,6 +122,7 @@ The binary is looked up in this order:
     hot        |epicenter-hot|        Most depended-on symbols, by fan-in
     unused     |epicenter-hot|        Symbols nothing in the index reaches
     graph      |epicenter-hot|        Write the call graph and open it
+    tour       |epicenter-tour|       A minute with the whole plugin
     status     |epicenter-core|       Dashboard: index, server, languages, log
     install    |epicenter-core|       Download or build the navgraph binary
     restart    |epicenter-core|       Restart the server for this project
@@ -257,6 +259,7 @@ Defaults: >lua
           zig = "zig test %f",
         },
       },
+      tour = { offer = true },
       ui = {
         border = "rounded",
         height = 0.8,
@@ -406,7 +409,24 @@ SEARCH                                                        *epicenter-search*
     Repo-wide text search over the server's in-memory sources, so unsaved
     edits are included. Same palette, different source.
 
-Keys inside either palette:
+                                                      *epicenter-palette-modes*
+It is ONE palette in three modes, and `<C-space>` cycles them without losing
+what you have typed:
+
+    symbols         fuzzy over every definition
+    grep            the same query as text, over the whole repo
+    references      the use sites of what matches, grouped by the definition
+                    they sit inside
+
+Both commands open the same palette - `:Epicenter search` starts in symbols,
+`:Epicenter grep` in grep - and the box renames itself as you cycle.
+
+                                                        *epicenter-frecency*
+Symbols you have jumped to before rank first, per project. Each pick is sent
+back as `search.recent` on the next query, and the list is remembered under
+`stdpath("state")` - never in the project itself.
+
+Keys inside the palette:
 
     <CR>            jump to the result, pushing the jumplist
     <C-t>           open in a new tab
@@ -415,9 +435,12 @@ Keys inside either palette:
     <C-n>, <Down>   next result
     <C-p>, <Up>     previous result
     j, k            next / previous result (normal mode)
-    <C-r>           search: toggle reference mode; grep: toggle regex
-    <C-k>           search: cycle the kind filter
+    <C-space>       symbols -> grep -> references
+    <C-r>           grep: toggle regex
+    <C-k>           symbols/references: cycle the kind filter
                     (all -> functions -> types -> values)
+    <Tab>           add / remove this row from the selection
+    <C-q>, <C-l>    send the rows to the quickfix / location list
     <C-y>           yank `file:line`
     ?               toggle the key help (normal mode)
     <Esc>, q        close
@@ -879,6 +902,19 @@ Options: >lua
     hot = { limit = 30, bar_width = 12 },
     unused = { limit = 200 },
 <
+==============================================================================
+TOUR                                                           *epicenter-tour*
+
+                                                          *:Epicenter-tour*
+:Epicenter tour
+    A minute with the whole plugin: a handful of notes, each with the panel it
+    is talking about open beside it, on the buffer you are in. Running it
+    again stops it.
+
+    Nothing starts on its own. The first time a project is indexed, one notice
+    says the tour exists - once, ever. `tour = { offer = false }` turns even
+    that off.
+
 ==============================================================================
 CORE                                                           *epicenter-core*
 

@@ -395,7 +395,9 @@ describe("every feature builds contract-shaped requests", function()
   end)
 
   it("covers every ready subcommand, or names why not", function()
-    local skipped = { install = true, log = true, restart = true }
+    -- `tour` is not driven here: it opens the OTHER commands on timers, and
+    -- every one of them is already driven above.
+    local skipped = { install = true, log = true, restart = true, tour = true }
     local driven = {}
     for _, entry in ipairs(DRIVEN) do
       driven[entry[1]] = true

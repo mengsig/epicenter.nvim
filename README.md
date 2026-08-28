@@ -115,6 +115,11 @@ including the edits you have not saved.
 
 `<C-r>` switches the query to a regex.
 
+It is one palette in three modes — `<C-space>` cycles **symbols → grep →
+references** without losing what you have typed, and the box renames itself as
+you go. Symbols you have jumped to before rank first, per project, remembered
+under `stdpath("state")`.
+
 ### Blast radius — `:Epicenter blast`, `<leader>ee`
 
 What breaks if you change this. The panel is a live query: it stays open, and
@@ -404,6 +409,15 @@ What the server knows, and the three keys that change it: `r` rescan,
 ╰────────────────── r rescan · R restart · l log · q close ──────╯
 ```
 
+### Tour — `:Epicenter tour`
+
+A minute with the whole plugin: a few notes, each with the panel it is talking
+about open beside it, on the buffer you are in. Running it again stops it.
+
+Nothing starts on its own — the first time a project is indexed, one notice
+says the tour exists, once ever. `tour = { offer = false }` turns even that
+off.
+
 ### Graph — `:Epicenter graph`
 
 Writes the call graph to an HTML file under the project's `.navgraph/` and
@@ -507,6 +521,7 @@ Inside the palette:
 | `hot`       | Most depended-on symbols, by fan-in      |
 | `unused`    | Symbols nothing in the index reaches     |
 | `graph`     | Write the call graph and open it         |
+| `tour`      | A minute with the whole plugin           |
 | `status`    | Dashboard: index, server, languages, log |
 | `install`   | Download or build the navgraph binary    |
 | `restart`   | Restart the server for this project      |
@@ -658,6 +673,7 @@ require("epicenter").setup({
       zig = "zig test %f",
     },
   },
+  tour = { offer = true },
   ui = {
     border = "rounded",
     height = 0.8,                           -- fraction of the editor when <= 1, else cells

@@ -13,34 +13,56 @@ local KIND_CYCLE = {
   { label = "values", kinds = { "const", "var", "field" } },
 }
 
-local SEARCH_HELP = {
-  "  keys",
-  "",
-  "  <CR>        jump to the symbol",
+--- The three things one palette can be looking at. `<C-space>` cycles them
+--- in this order; the source, the rows and the jump all follow the mode, so
+--- switching is a keystroke rather than a different command.
+local MODES = { "symbols", "grep", "refs" }
+
+local MODE_TITLE = {
+  symbols = " search ",
+  grep = " grep ",
+  refs = " references ",
+}
+
+local SHARED_HELP = {
+  "  <CR>        jump to the result",
   "  <C-t>       open in a new tab",
   "  <C-v>       open in a vertical split",
   "  <C-x>       open in a split",
   "  <C-n>/<C-p> next / previous result",
-  "  <C-r>       toggle reference mode",
-  "  <C-k>       cycle the kind filter",
+  "  <C-space>   symbols -> grep -> references",
   "  <C-y>       yank file:line",
+  "  <C-q>/<C-l> send the rows to the quickfix / location list",
   "  ?           toggle this help (normal mode)",
   "  <Esc>       close",
 }
 
-local GREP_HELP = {
-  "  keys",
-  "",
-  "  <CR>        jump to the match",
-  "  <C-t>       open in a new tab",
-  "  <C-v>       open in a vertical split",
-  "  <C-x>       open in a split",
-  "  <C-n>/<C-p> next / previous result",
-  "  <C-r>       toggle regex",
-  "  <C-y>       yank file:line",
-  "  ?           toggle this help (normal mode)",
-  "  <Esc>       close",
+local MODE_HELP = {
+  symbols = { "  <C-k>       cycle the kind filter" },
+  grep = { "  <C-r>       toggle regex" },
+  refs = { "  <C-k>       cycle the kind filter" },
 }
+
+--- Help for the mode the palette is in. Pure.
+--- @return string[]
+function M.help_lines(state)
+  local lines = { "  keys", "" }
+  vim.list_extend(lines, MODE_HELP[state.mode] or {})
+  vim.list_extend(lines, SHARED_HELP)
+  return lines
+end
+
+--- The mode after `<C-space>`. Pure.
+--- @return string
+function M.next_mode(mode)
+  for index, name in ipairs(MODES) do
+    if name == mode then
+      return MODES[(index % #MODES) + 1]
+    end
+  end
+  return MODES[1]
+end
+
 --- Opens `path` at `line` (1-based), leaving the jumplist entry behind.
 local function jump(target, action)
   vim.cmd("normal! m'")
@@ -138,54 +160,164 @@ local function match_target(item)
   return { path = vim.uri_to_fname(item.uri), line = item.line, character = item.character }
 end
 
-local function open_symbol_palette(ctx)
-  local client = require("epicenter.client")
+-- Frecency -----------------------------------------------------------------------
+
+local RECENT_KIND = "search"
+--- How many recent picks are remembered and sent as `search.recent`.
+local RECENT_MAX = 40
+
+--- The qualified names most recently jumped to in this project, newest
+--- first. Empty until something has been picked.
+--- @return string[]
+function M.recent(root)
+  local stored = require("epicenter.store").read(RECENT_KIND, root)
+  return type(stored.recent) == "table" and stored.recent or {}
+end
+
+--- `qualified` moved to the front, older picks after it, capped. Pure.
+--- @return string[]
+function M.promote(recent, qualified)
+  local out = { qualified }
+  for _, name in ipairs(recent) do
+    if name ~= qualified and #out < RECENT_MAX then
+      table.insert(out, name)
+    end
+  end
+  return out
+end
+
+--- Remembers a pick so the server ranks it first next time. A failure to
+--- write is a log line, not a toast: the jump itself worked.
+local function remember(root, symbol)
+  local qualified = symbol and symbol.qualified
+  if type(qualified) ~= "string" or qualified == "" then
+    return
+  end
+  local ok, err = require("epicenter.store").write(RECENT_KIND, root, {
+    recent = M.promote(M.recent(root), qualified),
+  })
+  if not ok then
+    require("epicenter.log").warn("could not remember the pick: %s", err)
+  end
+end
+
+-- The palette --------------------------------------------------------------------
+
+local function symbol_source(query, state, cb)
+  local cfg = require("epicenter.config").get()
+  require("epicenter.client").search({
+    query = query,
+    refs = state.mode == "refs",
+    kinds = KIND_CYCLE[state.kind_index].kinds,
+    recent = state.recent,
+    limit = cfg.search.limit,
+  }, function(err, result)
+    if err then
+      return cb(err)
+    end
+    cb(nil, result.items or {}, result.total)
+  end, { bufnr = state.bufnr, channel = "search" })
+end
+
+local function grep_source(query, state, cb)
+  local cfg = require("epicenter.config").get()
+  state.pattern = query
+  if query == "" then
+    return cb(nil, {}, 0)
+  end
+  require("epicenter.client").grep({
+    pattern = query,
+    regex = state.regex,
+    limit = cfg.grep.limit,
+  }, function(err, result)
+    if err then
+      return cb(err)
+    end
+    cb(nil, result.items or {}, result.total)
+  end, { bufnr = state.bufnr, channel = "grep" })
+end
+
+--- One palette for all three modes. `mode` decides where the rows come from,
+--- how they draw, and what a jump means - nothing else differs, which is why
+--- `<C-space>` can switch between them mid-query.
+--- @param ctx { args: string[], bufnr: integer }
+--- @param mode "symbols"|"grep"|"refs"
+local function open_palette(ctx, mode)
   local cfg = require("epicenter.config").get()
   local palette = require("epicenter.ui.palette")
   local icons = require("epicenter.ui.icons")
+  local root = require("epicenter.root").find(ctx.bufnr)
+
+  local state = {
+    bufnr = ctx.bufnr,
+    mode = mode,
+    kind_index = 1,
+    regex = false,
+    pattern = "",
+    root = root,
+    recent = M.recent(root),
+  }
 
   return palette.open({
-    title = " search ",
+    title = MODE_TITLE[mode],
     prompt_prefix = " " .. icons.ui("search") .. " ",
     debounce_ms = cfg.search.debounce_ms,
-    state = { bufnr = ctx.bufnr, refs = false, kind_index = 1 },
-    empty_text = "  no symbols match",
-    help_lines = SEARCH_HELP,
-    source = function(query, state, cb)
-      client.search({
-        query = query,
-        refs = state.refs,
-        kinds = KIND_CYCLE[state.kind_index].kinds,
-        limit = cfg.search.limit,
-      }, function(err, result)
-        if err then
-          return cb(err)
-        end
-        cb(nil, result.items or {}, result.total)
-      end, { bufnr = state.bufnr, channel = "search" })
+    state = state,
+    empty_text = "  no matches",
+    help_lines = M.help_lines,
+    source = function(query, current, cb)
+      if current.mode == "grep" then
+        return grep_source(query, current, cb)
+      end
+      return symbol_source(query, current, cb)
     end,
-    render_item = M.render_symbol,
-    preview_of = M.symbol_target,
+    render_item = function(item, index, width)
+      if state.mode == "grep" then
+        return M.render_match(item, index, state.pattern, width)
+      end
+      return M.render_symbol(item, index, width)
+    end,
+    preview_of = function(item)
+      return state.mode == "grep" and match_target(item) or M.symbol_target(item)
+    end,
     on_accept = function(item, action)
+      if state.mode == "grep" then
+        return jump(match_target(item), action)
+      end
+      remember(state.root, item.symbol)
       jump(M.symbol_target(item), action)
     end,
-    mode_label = function(state)
-      local parts = {}
-      if state.refs then
-        table.insert(parts, "refs")
+    mode_label = function(current)
+      local parts = { current.mode }
+      if current.mode == "grep" and current.regex then
+        table.insert(parts, "regex")
       end
-      local kind = KIND_CYCLE[state.kind_index].label
+      local kind = current.mode ~= "grep" and KIND_CYCLE[current.kind_index].label or nil
       if kind then
         table.insert(parts, kind)
       end
-      return #parts > 0 and table.concat(parts, " · ") or nil
+      return table.concat(parts, " · ")
     end,
     keys = {
+      -- Terminals disagree on <C-space>: most send NUL, which Neovim spells
+      -- <C-@>. Both are mapped so the key works either way.
+      ["<C-space>"] = function(self)
+        M.cycle_mode(self)
+      end,
+      ["<C-@>"] = function(self)
+        M.cycle_mode(self)
+      end,
       ["<C-r>"] = function(self)
-        self.state.refs = not self.state.refs
+        if self.state.mode ~= "grep" then
+          return
+        end
+        self.state.regex = not self.state.regex
         self:refresh()
       end,
       ["<C-k>"] = function(self)
+        if self.state.mode == "grep" then
+          return
+        end
         self.state.kind_index = (self.state.kind_index % #KIND_CYCLE) + 1
         self:refresh()
       end,
@@ -193,53 +325,13 @@ local function open_symbol_palette(ctx)
   })
 end
 
-local function open_grep_palette(ctx)
-  local client = require("epicenter.client")
-  local cfg = require("epicenter.config").get()
-  local palette = require("epicenter.ui.palette")
-  local icons = require("epicenter.ui.icons")
-
-  local state = { bufnr = ctx.bufnr, pattern = "", regex = false }
-  return palette.open({
-    title = " grep ",
-    prompt_prefix = " " .. icons.ui("prompt") .. " ",
-    debounce_ms = cfg.grep.debounce_ms,
-    state = state,
-    empty_text = "  no lines match",
-    help_lines = GREP_HELP,
-    source = function(query, current, cb)
-      current.pattern = query
-      if query == "" then
-        return cb(nil, {}, 0)
-      end
-      client.grep({
-        pattern = query,
-        regex = current.regex,
-        limit = cfg.grep.limit,
-      }, function(err, result)
-        if err then
-          return cb(err)
-        end
-        cb(nil, result.items or {}, result.total)
-      end, { bufnr = current.bufnr, channel = "grep" })
-    end,
-    render_item = function(item, index, width)
-      return M.render_match(item, index, state.pattern, width)
-    end,
-    preview_of = match_target,
-    on_accept = function(item, action)
-      jump(match_target(item), action)
-    end,
-    mode_label = function(current)
-      return current.regex and "regex" or nil
-    end,
-    keys = {
-      ["<C-r>"] = function(self)
-        self.state.regex = not self.state.regex
-        self:refresh()
-      end,
-    },
-  })
+--- Switches the open palette to the next mode, keeping the query.
+--- @param self epicenter.Palette
+function M.cycle_mode(self)
+  self.state.mode = M.next_mode(self.state.mode)
+  self:set_title(MODE_TITLE[self.state.mode])
+  self.list:clear_marks()
+  self:refresh()
 end
 
 -- The module is its own feature spec; the render helpers above stay reachable
@@ -256,13 +348,17 @@ M.commands = {
   {
     name = "search",
     desc = "Fuzzy symbol search across the project",
-    run = open_symbol_palette,
+    run = function(ctx)
+      return open_palette(ctx, "symbols")
+    end,
     rows = true,
   },
   {
     name = "grep",
     desc = "Repo-wide text search, unsaved edits too",
-    run = open_grep_palette,
+    run = function(ctx)
+      return open_palette(ctx, "grep")
+    end,
     rows = true,
   },
 }
@@ -273,5 +369,6 @@ M.keymaps = {
 }
 
 M.KIND_CYCLE = KIND_CYCLE
+M.MODES = MODES
 
 return M

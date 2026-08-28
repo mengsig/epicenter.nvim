@@ -19,5 +19,6 @@ return {
   require("epicenter.features.path"),
   require("epicenter.features.outline"),
   require("epicenter.features.hot"),
+  require("epicenter.features.tour"),
   require("epicenter.features.core"),
 }

@@ -260,13 +260,29 @@ function Palette:move(delta)
   self:_update_preview()
 end
 
+--- Renames the palette without reopening it - a mode switch that changes
+--- what the rows ARE has to change what the box calls itself.
+function Palette:set_title(title)
+  self.results_win:set_title(title)
+end
+
+--- `help_lines` may be a function of the state, for a palette whose keys
+--- depend on the mode it is in.
+function Palette:_help_lines()
+  local lines = self.spec.help_lines
+  if type(lines) == "function" then
+    return lines(self.state)
+  end
+  return lines or HELP
+end
+
 function Palette:toggle_help()
   if not self.preview then
     return
   end
   self.help_open = not self.help_open
   if self.help_open then
-    self.preview_win:set_lines(self.spec.help_lines or HELP)
+    self.preview_win:set_lines(self:_help_lines())
   else
     self.preview.shown = nil
     self:_update_preview()
@@ -395,7 +411,8 @@ end
 ---   on_accept: fun(item, action: "edit"|"tab"|"vsplit"|"split"),
 ---   keys?: table<string, fun(palette: epicenter.Palette)>,
 ---   mode_label?: fun(state: table): string, empty_text?: string, on_close?: fun(),
----   help_lines?: string[] shown by `?`; defaults to the shared HELP block,
+---   help_lines?: string[]|fun(state: table): string[] shown by `?`;
+---     defaults to the shared HELP block,
 ---   columns?: integer, lines?: integer - test-only editor-grid override,
 ---   see `Palette:_box`; production callers must leave these nil }
 --- @return epicenter.Palette

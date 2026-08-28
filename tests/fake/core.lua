@@ -119,7 +119,12 @@ return {
   ["navgraph/symbolAt"] = symbol_at,
 
   ["navgraph/search"] = function(ctx, params)
-    local opts = { query = params.query or "", kinds = params.kinds, limit = params.limit }
+    local opts = {
+      query = params.query or "",
+      kinds = params.kinds,
+      limit = params.limit,
+      recent = params.recent,
+    }
     if params.refs then
       return index.search_refs(ctx.index, opts)
     end

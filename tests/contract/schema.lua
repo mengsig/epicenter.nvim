@@ -231,6 +231,8 @@ M.METHODS = {
       kinds = list_of(str()),
       refs = bool(),
       limit = int(),
+      -- v1.1: client-supplied qualified names that rank first.
+      recent = list_of(str()),
     }),
     result = object({
       items = required(list_of(object({
