@@ -454,6 +454,37 @@ describe("panel remembers its size and position", function()
     expect.eq(panel.win:geometry().height, resized.height, "and the burst's result is what lands")
   end)
 
+  it("keeps a nudge for the next flush when a write fails, rather than losing it (L7)", function()
+    local store = require("epicenter.store")
+    local original = store.write
+    local fail_next = true
+    store.write = function(...)
+      if fail_next then
+        fail_next = false
+        return false, "boom"
+      end
+      return original(...)
+    end
+
+    panel = open_panel("epicenter-remember-h")
+    panel:set_items({ { name = "one" } })
+    press(panel, "+")
+    local resized = panel.win:geometry()
+    -- The panel's own close flushes immediately: the first (failing) write.
+    panel:close()
+    store.write = original
+
+    -- flush_layout has no per-panel scope: closing ANY panel (even one with
+    -- no nudge of its own) flushes whatever is still pending - the earlier
+    -- nudge, if the failed write above did not already lose it.
+    local other = open_panel("epicenter-remember-h2")
+    other:set_items({ { name = "one" } })
+    other:close()
+
+    panel = open_panel("epicenter-remember-h")
+    expect.eq(panel.win:geometry().height, resized.height, "the earlier nudge survived and landed")
+  end)
+
   it("does not remember geometry for an explicit box or a vsplit panel", function()
     panel = panel_mod.open({
       title = " test ",

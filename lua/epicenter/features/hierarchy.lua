@@ -222,10 +222,17 @@ local function calls_to_nodes(direction, entries, parent_key)
   local key = CALL_METHOD[direction].key
   local nodes = {}
   for _, entry in ipairs(entries or {}) do
-    table.insert(
-      nodes,
-      node_of_item(entry[key], parent_key, { sites = #(entry.fromRanges or {}), expandable = true })
-    )
+    local item = entry[key]
+    -- L5: a hostile/older server can answer an entry with no item at all -
+    -- contract-check pins the protocol, so this is defensive, not expected.
+    if item then
+      table.insert(
+        nodes,
+        node_of_item(item, parent_key, { sites = #(entry.fromRanges or {}), expandable = true })
+      )
+    else
+      require("epicenter.log").warn("hierarchy: %s entry carried no '%s' - skipped", direction, key)
+    end
   end
   return nodes
 end

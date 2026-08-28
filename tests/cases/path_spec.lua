@@ -421,14 +421,21 @@ describe("path ambiguity on candidates that share a qualified name (F1)", functi
       sent = opts
     end
 
-    handle = require("epicenter").run("path", { "router", "M.start", "--qf" }, buf)
-    pick_first()
-    local ok = vim.wait(10000, function()
-      return sent ~= nil
-    end, 10)
+    -- L4: restored even if run()/pick_first() raises - an unrestored stub
+    -- here silently disables every later test's real quickfix assertions.
+    local pcall_ok, waited = pcall(function()
+      handle = require("epicenter").run("path", { "router", "M.start", "--qf" }, buf)
+      pick_first()
+      return vim.wait(10000, function()
+        return sent ~= nil
+      end, 10)
+    end)
     qf.send_and_notify = original_send
+    if not pcall_ok then
+      error(waited, 0)
+    end
 
-    expect.truthy(ok, "the flag survived the picker and reached the re-run's rows")
+    expect.truthy(waited, "the flag survived the picker and reached the re-run's rows")
     expect.eq(sent.list, "quickfix")
     expect.eq(#sent.rows, 1, "the resolved path's one step")
   end)

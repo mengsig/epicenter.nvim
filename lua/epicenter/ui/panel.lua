@@ -104,9 +104,12 @@ local function flush_layout()
   for filetype, box in pairs(pending_layout) do
     stored[filetype] = { width = box.width, height = box.height, row = box.row, col = box.col }
   end
-  pending_layout = {}
   local ok, err = store.write("panel_layout", LAYOUT_ROOT, stored)
-  if not ok then
+  if ok then
+    -- Cleared only on success (L7): a failed write must leave the nudges
+    -- for the next flush to retry, or they and `remembered_box` lose them.
+    pending_layout = {}
+  else
     require("epicenter.log").warn("could not remember panel geometry: %s", err)
   end
 end

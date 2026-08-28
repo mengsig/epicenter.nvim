@@ -488,6 +488,23 @@ describe("a direction flip while a call request is in flight", function()
     expect.matches(vim.api.nvim_win_get_config(panel.win.win).title[1][1], "outgoing calls")
     expect.falsy(body(panel):find("caller", 1, true), "the stale answer never appears")
   end)
+
+  it("skips a malformed entry instead of crashing on it (L5)", function()
+    register()
+    panel = epicenter.run("hierarchy", {}, buf)
+    wait(function()
+      return #held > 0
+    end, 5000, "the incoming request")
+
+    -- A hostile/older server answers an entry with no `.from` at all.
+    expect.truthy(
+      release("callHierarchy/incomingCalls", { { fromRanges = {} }, { from = item("caller", 4) } })
+    )
+    wait(function()
+      return body(panel):find("caller", 1, true) ~= nil
+    end, 5000, "the well-formed row")
+    expect.truthy(panel:valid(), "the malformed entry must not take the panel down")
+  end)
 end)
 
 describe("the types panel's implementors group", function()
