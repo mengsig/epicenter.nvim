@@ -62,6 +62,12 @@ local BASE = {
   },
   --- Overrides for derived `Epicenter*` groups, e.g. `{ EpicenterAccent = { fg = "#7aa2f7" } }`.
   highlights = {},
+  theme = {
+    --- "auto" derives the accent from the colourscheme; "mono" drops the
+    --- extra hue for one flat palette; else a literal `#rrggbb` or a
+    --- highlight group name to borrow `fg` from.
+    accent = "auto",
+  },
   --- `false` installs no keymaps.
   keymaps = {
     prefix = "<leader>e",
@@ -94,6 +100,7 @@ local DOCS = {
   ["navgraph.install_ref"] = "git ref to build from, on the source route",
   ["navgraph.path"] = "explicit path; else $PATH, then the managed install",
   ["navgraph.repo"] = "source for :Epicenter install",
+  ["theme.accent"] = '"auto" | "mono" | "#rrggbb" | a highlight group name',
   ["ui.height"] = "fraction of the editor when <= 1, else cells",
   ["ui.icons"] = '"auto" | "nerd" | "ascii"',
   ["ui.width"] = "fraction of the editor when <= 1, else cells",

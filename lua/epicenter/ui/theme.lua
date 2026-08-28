@@ -58,11 +58,36 @@ local function pick(...)
   return nil
 end
 
+--- `config.theme.accent`: "auto" derives it from the colourscheme (today's
+--- behaviour); "mono" drops the extra hue entirely - one palette, the
+--- calmest option; anything else is a literal `#rrggbb` or the name of a
+--- highlight group to borrow `fg` from.
+--- @param accent string|nil
+--- @param attr fun(group: string, key: string): any
+--- @param fg integer|nil
+--- @param muted integer|nil
+--- @return integer|nil
+local function resolve_accent(accent, attr, fg, muted)
+  if accent == nil or accent == "auto" then
+    return pick(attr("Function", "fg"), attr("Title", "fg"), fg)
+  end
+  if accent == "mono" then
+    return muted
+  end
+  local hex = accent:match("^#(%x%x%x%x%x%x)$")
+  if hex then
+    return tonumber(hex, 16)
+  end
+  local hl = vim.api.nvim_get_hl(0, { name = accent, link = false })
+  return pick(hl.fg, fg)
+end
+
 --- Pure derivation, so the colour maths is testable without a UI.
 --- @param src table<string, table> attrs keyed by the names in M.SOURCES
 --- @param overrides? table<string, table>
+--- @param accent? string see `resolve_accent`
 --- @return table<string, table> attrs keyed by the names in M.GROUPS
-function M.derive(src, overrides)
+function M.derive(src, overrides, accent)
   src = src or {}
   local function attr(group, key)
     local hl = src[group]
@@ -72,21 +97,21 @@ function M.derive(src, overrides)
   local bg = pick(attr("NormalFloat", "bg"), attr("Normal", "bg"))
   local fg = pick(attr("NormalFloat", "fg"), attr("Normal", "fg"))
   local muted = pick(attr("Comment", "fg"), fg)
-  local accent = pick(attr("Function", "fg"), attr("Title", "fg"), fg)
+  local resolved_accent = resolve_accent(accent, attr, fg, muted)
 
   local out = {
     EpicenterNormal = { fg = fg, bg = bg },
     EpicenterBorder = { fg = pick(attr("FloatBorder", "fg"), muted), bg = bg },
     EpicenterTitle = { fg = pick(attr("Title", "fg"), fg), bg = bg, bold = true },
-    EpicenterAccent = { fg = accent, bg = bg },
-    EpicenterMatch = { fg = accent, bg = bg, bold = true },
+    EpicenterAccent = { fg = resolved_accent, bg = bg },
+    EpicenterMatch = { fg = resolved_accent, bg = bg, bold = true },
     EpicenterMuted = { fg = muted, bg = bg },
     EpicenterCount = { fg = pick(attr("Special", "fg"), muted), bg = bg },
     EpicenterInfo = { fg = pick(attr("DiagnosticInfo", "fg"), muted), bg = bg },
-    EpicenterSelection = { fg = fg, bg = M.blend(accent, bg, 0.16), bold = true },
-    EpicenterPrompt = { fg = accent, bg = bg },
+    EpicenterSelection = { fg = fg, bg = M.blend(resolved_accent, bg, 0.16), bold = true },
+    EpicenterPrompt = { fg = resolved_accent, bg = bg },
     EpicenterHint = { fg = muted, bg = bg, italic = true },
-    EpicenterRange = { bg = M.blend(accent, bg, 0.22) },
+    EpicenterRange = { bg = M.blend(resolved_accent, bg, 0.22) },
   }
 
   for group, override in pairs(overrides or {}) do
@@ -105,8 +130,8 @@ end
 
 --- Derives from the live colourscheme and defines the groups.
 function M.apply()
-  local overrides = require("epicenter.config").get().highlights
-  for group, attrs in pairs(M.derive(read_sources(), overrides)) do
+  local cfg = require("epicenter.config").get()
+  for group, attrs in pairs(M.derive(read_sources(), cfg.highlights, cfg.theme.accent)) do
     vim.api.nvim_set_hl(0, group, attrs)
   end
 end

@@ -28,13 +28,17 @@ local CALL_METHOD = {
   outgoing = { helper = "outgoing_calls", key = "to" },
 }
 
---- The three groups a type hierarchy shows, in the order they are drawn, and
---- how a node inside each expands.
+--- The four groups a type hierarchy shows, in the order they are drawn, and
+--- how a node inside each expands. `users` ("who uses this type" - param,
+--- return, field, local, extends, implements, annotation, generic) comes
+--- from the custom `navgraph/types`, not a standard LSP method, so it is
+--- fetched only when the server announces that method (see `load_type_root`).
 local TYPE_GROUPS = {
   { key = "supertypes", label = "supertypes", helper = "supertypes" },
   { key = "subtypes", label = "subtypes", helper = "subtypes" },
-  -- Implementors are locations, not hierarchy items: nothing to expand.
+  -- Implementors and users are locations, not hierarchy items: leaves.
   { key = "implementors", label = "implementors", helper = nil },
+  { key = "users", label = "users", helper = nil },
 }
 
 --- The notice line a panel shows when this buffer's server predates the
@@ -71,6 +75,10 @@ local function node_of_item(item, parent_key, opts)
     exact = item.data.exact ~= false,
     children = {},
     loaded = not opts.expandable,
+    -- Overrides `KIND_NAME[item.kind]`: a synthesized item (implementor,
+    -- type-use) does not carry a real LSP `SymbolKind`, so its icon comes
+    -- from the contract's own kind string instead.
+    icon_kind = opts.icon_kind,
   }
   if opts.expandable then
     -- A hierarchy item carries no degree, so every node keeps a chevron until
@@ -131,7 +139,11 @@ function M.render_row(row)
   end
 
   local item = node.item
-  local text = indent .. chevron .. icons.kind(KIND_NAME[item.kind]) .. " " .. node.name
+  local text = indent
+    .. chevron
+    .. icons.kind(node.icon_kind or KIND_NAME[item.kind])
+    .. " "
+    .. node.name
   text =
     append(text, ("  %s:%d"):format(item.data.file, item.range.start.line + 1), "EpicenterMuted")
   if node.sites > 1 then
@@ -139,6 +151,9 @@ function M.render_row(row)
   end
   if not node.exact then
     text = append(text, "  ?", "EpicenterInfo")
+  end
+  if node.use_kind then
+    text = append(text, ("  as %s"):format(node.use_kind), "EpicenterMuted")
   end
   if row.recursive then
     text = append(text, "  recursive", "EpicenterMuted")
@@ -370,11 +385,53 @@ local function implementor_nodes(locations, parent_key)
   return nodes
 end
 
---- Asks for all three groups and paints once they have all answered, so the
---- panel never grows a group at a time under the cursor.
+--- `navgraph/types.users` come back as `{ symbol: Symbol, kind: string }` -
+--- who uses this type, and how (param/return/field/local/extends/implements/
+--- annotation/generic). Leaves, like implementors, but the symbol carries its
+--- own icon and the use kind is worth a tag `render_row` cannot get from an
+--- LSP `Location` alone.
+local function user_nodes(users, parent_key)
+  local nodes = {}
+  for _, entry in ipairs(users or {}) do
+    local symbol = entry.symbol
+    local item = {
+      name = symbol.qualified or symbol.name,
+      uri = symbol.uri,
+      range = {
+        start = { line = (symbol.line or 1) - 1 },
+        ["end"] = { line = (symbol.endLine or symbol.line or 1) - 1 },
+      },
+      data = {
+        id = symbol.id or 0,
+        qualified = symbol.qualified or symbol.name,
+        file = symbol.file,
+      },
+    }
+    local node = node_of_item(item, parent_key, { expandable = false, icon_kind = symbol.kind })
+    node.use_kind = entry.kind
+    table.insert(nodes, node)
+  end
+  return nodes
+end
+
+--- `navgraph/types`'s Target form: the type item's own disambiguated name,
+--- not the cursor - the item is already resolved, so a later cursor move
+--- must not change what this asks about.
+local function type_target(item)
+  local client = require("epicenter.client")
+  return { symbol = client.symbol_ref({ qualified = item.data.qualified, file = item.data.file }) }
+end
+
+--- Asks for every group and paints once they have all answered, so the panel
+--- never grows a group at a time under the cursor. `users` is the one custom
+--- (non-LSP) group - only asked for when the server announces
+--- `navgraph/types`, so a server that predates it just shows the other three.
 local function load_type_root(view, item)
   local client = require("epicenter.client")
-  local answers, pending = {}, 3
+  local users_supported = client.supports("navgraph/types", { bufnr = view.bufnr })
+  local groups = users_supported and TYPE_GROUPS
+    or { TYPE_GROUPS[1], TYPE_GROUPS[2], TYPE_GROUPS[3] }
+  local answers, pending = {}, #groups
 
   local function settle()
     pending = pending - 1
@@ -382,11 +439,14 @@ local function load_type_root(view, item)
       return
     end
     local root = node_of_item(item, "", { expandable = false })
-    for _, group in ipairs(TYPE_GROUPS) do
+    for _, group in ipairs(groups) do
       local items = answers[group.key] or {}
-      local children = group.key == "implementors"
-          and implementor_nodes(items, root.key .. "/~" .. group.label)
-        or nil
+      local children
+      if group.key == "implementors" then
+        children = implementor_nodes(items, root.key .. "/~" .. group.label)
+      elseif group.key == "users" then
+        children = user_nodes(items, root.key .. "/~" .. group.label)
+      end
       local node = children
           and {
             type = "group",
@@ -400,8 +460,8 @@ local function load_type_root(view, item)
       table.insert(root.children, node)
     end
     view.root = root
-    -- A group that has an answer opens with it: three closed folders would
-    -- hide the whole point of the panel.
+    -- A group that has an answer opens with it: closed folders would hide
+    -- the whole point of the panel.
     for _, node in ipairs(root.children) do
       view.tree:set_expanded(node.key, #node.children > 0)
     end
@@ -420,6 +480,12 @@ local function load_type_root(view, item)
   ask("supertypes", "supertypes", { item = item }, "supertypes")
   ask("subtypes", "subtypes", { item = item }, "subtypes")
   ask("implementation", "implementors", prepare_params(view.bufnr), "implementors")
+  if users_supported then
+    client.types(type_target(item), function(err, result)
+      answers.users = (not err) and result and result.users or {}
+      settle()
+    end, { bufnr = view.bufnr, channel = "types:users" })
+  end
 end
 
 local function open_type_hierarchy(ctx)

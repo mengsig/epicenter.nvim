@@ -201,6 +201,118 @@ describe("type hierarchy against the fake navgraph server", function()
   end)
 end)
 
+describe("the types panel's users group", function()
+  local root, buf, panel
+
+  -- Its own workspace: a stand-in session controls exactly what
+  -- `navgraph/types` answers, since the shared fake server's `users` is
+  -- always empty (it extracts no type-use edges for this fixture).
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(root, ".navgraph"), "p")
+    local path = vim.fs.joinpath(root, "shape.lua")
+    vim.fn.writefile({ "local Shape = {}", "return Shape" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  local function register(announce_types)
+    local sent = {}
+    local methods = announce_types and { "navgraph/types" } or {}
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        table.insert(sent, method)
+        local answer
+        if method == "textDocument/prepareTypeHierarchy" then
+          answer = {
+            {
+              name = "Shape",
+              kind = 5,
+              uri = vim.uri_from_fname(vim.fs.joinpath(root, "shape.lua")),
+              range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 5 } },
+              selectionRange = {
+                start = { line = 0, character = 0 },
+                ["end"] = { line = 0, character = 5 },
+              },
+              data = { id = 1, qualified = "Shape", file = "shape.lua" },
+            },
+          }
+        elseif method == "navgraph/types" then
+          answer = {
+            symbol = {
+              qualified = "Shape",
+              file = "shape.lua",
+              line = 1,
+              uri = vim.uri_from_fname(vim.fs.joinpath(root, "shape.lua")),
+            },
+            supertypes = {},
+            subtypes = {},
+            implementors = {},
+            users = {
+              {
+                symbol = {
+                  qualified = "Circle.shape",
+                  file = "circle.lua",
+                  line = 3,
+                  uri = "file:///circle.lua",
+                  kind = "field",
+                },
+                kind = "field",
+              },
+            },
+          }
+        else
+          answer = {}
+        end
+        vim.schedule(function()
+          cb(nil, answer)
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, {
+      typeHierarchyProvider = true,
+      experimental = { navgraph = { protocolVersion = 1, protocolMinor = 1, methods = methods } },
+    })
+    return sent
+  end
+
+  it("asks navgraph/types and lists who uses it once the server announces it", function()
+    register(true)
+    panel = epicenter.run("types", {}, buf)
+    wait(function()
+      return body(panel):find("users", 1, true) ~= nil
+    end, 5000, "the users group")
+    local text = body(panel)
+    expect.matches(text, "users %(1%)")
+    expect.matches(text, "Circle%.shape")
+    expect.matches(text, "as field")
+  end)
+
+  it("never sends navgraph/types against a server that has not announced it", function()
+    local sent = register(false)
+    panel = epicenter.run("types", {}, buf)
+    wait(function()
+      return body(panel):find("supertypes", 1, true) ~= nil
+    end, 5000, "the type groups")
+    expect.falsy(body(panel):find("users", 1, true), "no users group without the method")
+    expect.falsy(vim.tbl_contains(sent, "navgraph/types"))
+  end)
+end)
+
 describe("the protocol 1.1 gate", function()
   local root, buf, panel
 

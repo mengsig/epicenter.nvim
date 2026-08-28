@@ -673,6 +673,7 @@ require("epicenter").setup({
       zig = "zig test %f",
     },
   },
+  theme = { accent = "auto" },
   tour = { offer = true },
   ui = {
     border = "rounded",
