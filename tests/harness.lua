@@ -270,6 +270,31 @@ function M.run(files)
   return passed, failed, state.results
 end
 
+--- Prints the failures and the one-line tally, and returns the exit code.
+--- Shared by both lanes' runners so their output is identical.
+--- @return integer exit_code
+function M.report(passed, failed, results, file_count, elapsed_ms)
+  local out = {}
+  local function w(fmt, ...)
+    table.insert(out, select("#", ...) > 0 and fmt:format(...) or fmt)
+  end
+
+  for _, case in ipairs(results) do
+    if not case.ok then
+      w("FAIL  %s", case.name)
+      for _, line in ipairs(vim.split(tostring(case.err), "\n", { plain = true })) do
+        w("      %s", line)
+      end
+      w("")
+    end
+  end
+
+  w("%d passed, %d failed  (%d files, %.0fms)", passed, failed, file_count, elapsed_ms)
+  io.write(table.concat(out, "\n"), "\n")
+  io.stdout:flush()
+  return failed == 0 and 0 or 1
+end
+
 --- Installs the DSL as globals for spec files.
 function M.install_globals()
   _G.describe = M.describe

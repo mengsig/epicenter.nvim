@@ -1,4 +1,5 @@
---- Shared helpers for specs: fixture paths and the fake-server lifecycle.
+--- Shared helpers for specs: fixture paths and the server lifecycle, for both
+--- lanes - the fake server (`make test`) and the real binary (`make test-real`).
 local M = {}
 
 -- Self-locating: the smoke script loads this without the test init.
@@ -6,6 +7,22 @@ local repo = vim.fn.fnamemodify(vim.fn.resolve(debug.getinfo(1, "S").source:sub(
 
 function M.fixture_root()
   return vim.fs.normalize(repo .. "/tests/fixtures/proj")
+end
+
+--- The multi-language tree the real lane indexes. Separate from the fake
+--- lane's fixture: this one must survive a real parser, the other is shaped
+--- around the fake's own scanner.
+function M.real_root()
+  return vim.fs.normalize(repo .. "/tests/fixtures/real")
+end
+
+--- The binary under test in the real lane. `navgraph` on `$PATH` by default.
+function M.real_bin()
+  local bin = os.getenv("NAVGRAPH_BIN")
+  if bin == nil or bin == "" then
+    return "navgraph"
+  end
+  return bin
 end
 
 --- Command line that runs the fake navgraph server over stdio.
@@ -22,34 +39,68 @@ function M.fake_cmd(root)
   }
 end
 
---- Starts the fake server for the fixture tree and waits until it is usable.
---- @return string root
-function M.start_fake()
+--- Command line that runs the REAL navgraph server over stdio.
+function M.real_cmd(root)
+  return { M.real_bin(), "lsp", "--root", root }
+end
+
+--- Starts `cmd` for `root` and waits until the session is usable.
+--- @param what string names the lane in an assertion message
+local function start(root, cmd, what)
   local client = require("epicenter.client")
-  local root = M.fixture_root()
-  local cmd = M.fake_cmd(root)
   local id, err = client.start({ root = root, cmd = cmd })
   assert(id, err)
-  local ok = vim.wait(15000, function()
+  local ok = vim.wait(30000, function()
     local c = vim.lsp.get_client_by_id(id)
     return c ~= nil and c.initialized == true and client.session_for_root(root) ~= nil
   end, 10)
-  assert(ok, "fake navgraph server did not initialize")
-  -- Hermeticity guard: if a real navgraph on $PATH ever won the race to
-  -- attach first, client.start would otherwise adopt it instead of the fake.
+  assert(ok, what .. " navgraph server did not initialize")
+  -- Hermeticity guard: if another navgraph on $PATH ever won the race to
+  -- attach first, client.start would otherwise adopt it instead of ours.
   local adopted = vim.lsp.get_client_by_id(id)
   assert(
     adopted and vim.deep_equal(adopted.config.cmd, cmd),
-    "start_fake() adopted a non-fake client - the suite is not hermetic"
+    "start_" .. what .. "() adopted a different client - the suite is not hermetic"
   )
   return root
+end
+
+--- Starts the fake server for the fixture tree and waits until it is usable.
+--- @return string root
+function M.start_fake()
+  local root = M.fixture_root()
+  return start(root, M.fake_cmd(root), "fake")
+end
+
+--- Starts the REAL navgraph binary over the real fixture tree.
+--- @return string root
+function M.start_real()
+  local root = M.real_root()
+  return start(root, M.real_cmd(root), "real")
+end
+
+--- Attaches a buffer to the server already running for `root`, so its text
+--- reaches the server as an overlay. Explicit, because both lanes run with
+--- `lsp.auto_start = false`: an automatic attach would resolve a binary of its
+--- own for any buffer outside the fixture, and adopt whatever is on $PATH.
+--- @param root string
+--- @param bufnr integer
+function M.attach(root, bufnr)
+  local client = require("epicenter.client")
+  assert(client.session_for_root(root), "no server running for " .. root)
+  local id, err = client.start({ root = root, bufnr = bufnr })
+  assert(id, err)
+  local ok = vim.wait(10000, function()
+    return #vim.lsp.get_clients({ bufnr = bufnr, name = "navgraph" }) > 0
+  end, 10)
+  assert(ok, "buffer did not attach to navgraph")
 end
 
 function M.stop_fake(root)
   require("epicenter.client").stop(root)
 end
 
---- Issues a request against the fake server and blocks for its response.
+--- Issues a request against the running server and blocks for its response.
 --- @return table|nil err, any result
 function M.request(root, method, params, timeout_ms)
   local client = require("epicenter.client")

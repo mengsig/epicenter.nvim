@@ -9,4 +9,12 @@ doc/tags
 # under the fixture's .navgraph/ on every test run; the marker itself stays.
 tests/fixtures/proj/.navgraph/graph-*.html
 
+# The real lane's server owns everything under its fixture's .navgraph/ (its
+# parse cache and its graph renders); only the root marker is committed.
+tests/fixtures/real/.navgraph/*
+!tests/fixtures/real/.navgraph/.gitkeep
+
+# CI clones NavGraph here to build the binary the real lane tests against.
+/navgraph-src/
+
 *.log

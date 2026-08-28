@@ -46,6 +46,55 @@ jobs:
       - name: luacheck
         run: luacheck lua plugin tests --exclude-files 'tests/fixtures/**'
 
+  real:
+    name: real navgraph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `secrets` is not available in a job-level `if`, so the gate is a step.
+      - name: navgraph source availability
+        id: gate
+        env:
+          NAVGRAPH_TOKEN: ${{ secrets.NAVGRAPH_TOKEN }}
+        run: |
+          if [ -n "$NAVGRAPH_TOKEN" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=real-server lane SKIPPED::NAVGRAPH_TOKEN is not set, so NavGraph could not be cloned and built. make test-real did NOT run - the plugin was proven against the fake server only."
+            echo "::warning title=real-server lane SKIPPED::Set the NAVGRAPH_TOKEN secret to run make test-real against the real navgraph binary."
+          fi
+
+      - name: checkout navgraph
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: mengsig/NavGraph
+          token: ${{ secrets.NAVGRAPH_TOKEN }}
+          path: navgraph-src
+
+      - name: zig
+        if: steps.gate.outputs.build == 'true'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: build navgraph
+        if: steps.gate.outputs.build == 'true'
+        working-directory: navgraph-src
+        run: zig build -Doptimize=ReleaseFast
+
+      - if: steps.gate.outputs.build == 'true'
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: test-real
+        if: steps.gate.outputs.build == 'true'
+        run: make test-real NAVGRAPH_BIN="$PWD/navgraph-src/zig-out/bin/navgraph"
+
   docs:
     name: docs in sync
     runs-on: ubuntu-latest

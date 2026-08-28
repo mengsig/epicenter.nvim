@@ -126,12 +126,23 @@ end
 --- root -> { client_id, cmd, restarts, stopping, session }
 local servers = {}
 
+--- Nothing here consumes `$/progress` - the dashboard reports index state
+--- from `navgraph/indexed` - and Neovim's default capabilities ask for it
+--- anyway, which navgraph answers with a `window/workDoneProgress/create`
+--- carrying a STRING id. It then answers the client's reply to that as if the
+--- reply were a fresh request, and Neovim raises on a response id it never
+--- issued. Decline it: `make_client_capabilities()` says true, so overriding
+--- is what turns the handshake off.
 local function capabilities()
   local caps = vim.lsp.protocol.make_client_capabilities()
   caps.general = caps.general or {}
   caps.general.positionEncodings = { "utf-8", "utf-16" }
+  caps.window = caps.window or {}
+  caps.window.workDoneProgress = false
   return caps
 end
+
+M.capabilities = capabilities
 
 local function lsp_rpc(client_id)
   return {

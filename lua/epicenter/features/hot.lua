@@ -46,6 +46,19 @@ function M.render_unused(symbol)
   }
 end
 
+--- Widest bar in a hot-spots list. The contract carries no max/total and
+--- ranks by connectivity - NOT by `fanIn` alone - so `items[1]` is not
+--- reliably the largest; scaling to it flattens every row above it to full.
+--- @param items { fanIn: integer }[]
+--- @return integer
+function M.bar_scale(items)
+  local max = 0
+  for _, item in ipairs(items or {}) do
+    max = math.max(max, item.fanIn or 0)
+  end
+  return max
+end
+
 local function open_hot(ctx)
   local cfg = require("epicenter.config").get()
   local client = require("epicenter.client")
@@ -70,9 +83,7 @@ local function open_hot(ctx)
         return
       end
       local items = result.items or {}
-      -- The contract carries no max/total: the busiest item is items[1],
-      -- already fan-in sorted (F5).
-      view.max = items[1] and items[1].fanIn or 0
+      view.max = M.bar_scale(items)
       view.panel:set_items(items, { stagger = true })
       view.panel:set_footer((" %d · %s "):format(#items, view.scope))
     end, { bufnr = ctx.bufnr, channel = "hot" })

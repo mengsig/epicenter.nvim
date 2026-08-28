@@ -1,12 +1,19 @@
 NVIM ?= nvim
 LUA_FILES := $(shell find lua plugin tests -name '*.lua' -not -path 'tests/fixtures/*')
 
-.PHONY: test smoke lint fmt doc all
+NAVGRAPH_BIN ?= navgraph
+
+.PHONY: test test-real smoke lint fmt doc all
 
 all: lint test
 
 test:
 	$(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/run.lua
+
+# The same features against the REAL `navgraph lsp`. Point NAVGRAPH_BIN at a
+# build when the one on $$PATH is not the one you mean to test.
+test-real:
+	NAVGRAPH_BIN=$(NAVGRAPH_BIN) $(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/run_real.lua
 
 smoke:
 	$(NVIM) --headless --clean --cmd 'set runtimepath^=.' -l tests/smoke.lua

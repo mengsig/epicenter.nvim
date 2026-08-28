@@ -185,6 +185,14 @@ describe("hot spots against the fake navgraph server", function()
   end)
 end)
 
+describe("hot bar scale", function()
+  it("scales to the widest fan-in, not to the first row", function()
+    -- The server ranks by connectivity, so a later row can out-fan the first.
+    expect.eq(hot.bar_scale({ { fanIn = 3 }, { fanIn = 9 }, { fanIn = 1 } }), 9)
+    expect.eq(hot.bar_scale({}), 0)
+  end)
+end)
+
 --- Exercises `tests/fake/explore.lua`'s `navgraph/unused` handler directly
 --- against a synthetic index: no fixture file on disk has "test" in its name,
 --- so the shared fixture tree cannot exercise `tests = "only"` on its own.
