@@ -174,6 +174,17 @@ local function create(level, lines, opts)
   return toast
 end
 
+--- An error toast is the summary; the log has the cause. Naming the file on
+--- every one of them is the difference between a bug report that says "it
+--- failed" and one that carries the reason.
+local function with_log_path(msg)
+  local path = require("epicenter.log").path()
+  if msg:find(path, 1, true) then
+    return msg
+  end
+  return msg .. "\n" .. path
+end
+
 --- @param msg string
 --- @param opts? { level?: "info"|"warn"|"error", timeout?: integer, title?: string }
 function M.notify(msg, opts)
@@ -186,7 +197,11 @@ function M.notify(msg, opts)
     return
   end
 
-  local toast = create(level, wrap(tostring(msg), WIDTH - 2), opts)
+  msg = tostring(msg)
+  if level == "error" then
+    msg = with_log_path(msg)
+  end
+  local toast = create(level, wrap(msg, WIDTH - 2), opts)
   toast.timer = uv.new_timer()
   toast.timer:start(
     opts.timeout or DEFAULT_TIMEOUT,

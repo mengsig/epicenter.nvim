@@ -68,6 +68,225 @@ Then `:Epicenter install` once, and `:checkhealth epicenter` to confirm.
 Calling `setup()` is optional — the defaults apply on their own. Call it to
 change them.
 
+## The panels
+
+Every mock below is this plugin's own output against `tests/fixtures/real` with
+`ui.icons = "ascii"`, trimmed to fit the page. With a nerd font the two-letter
+kind tags (`fn`, `me`, `cl`, `va`) are glyphs instead.
+
+### Search palette — `:Epicenter search`, `<leader>es`
+
+Fuzzy search over every definition in the project. Type and the list narrows on
+each keystroke; the preview follows the selection. The trailing number is
+fan-in — how many places reach that symbol.
+
+```
+╭─ search ───────────────────────────────╮ ╭─ py_fastapi/app/models.py ──────╮
+│ > user                                 │ │ class User:                     │
+╰────────────────────────────────────────╯ │     """A single user record."""  │
+╭────────────────────────────────────────╮ │                                 │
+│ cl User            models.py:10    <-6  │ │     def __init__(self, id: int,│
+│ cl UserService     user_service.py:8 <-8│ │         self.id = id            │
+│ me UserService.fetch  ...py:11     <-3  │ │         self.name = name        │
+│ me UserService.create ...py:22     <-2  │ │         self.email = email      │
+│ va _USERS          user_service.py:5 <-6│ │                                 │
+│ fn get_user        routes/users.py:18<-1│ │     def __repr__(self) -> str:  │
+╰────────────────────────────────────────╯ ╰─────────────────────────────────╯
+```
+
+In search only, `<C-k>` cycles the kind filter. `<C-r>` flips to reference mode
+(where a hit is a use rather than a definition), and `<C-y>` yanks `file:line`.
+
+### Grep — `:Epicenter grep`, `<leader>eg`
+
+The same widget over raw text instead of symbol names, across the whole repo,
+including the edits you have not saved.
+
+```
+╭─ grep ─────────────────────────────────────────────────────────────────────╮
+│ > normalize_email                                                          │
+╰────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────╮
+│  py_fastapi/app/services/auth_service.py:6   from app.models import norma… │
+│  py_fastapi/app/services/auth_service.py:18  who = normalize_email(email)  │
+│  py_fastapi/app/services/user_service.py:24  clean = normalize_email(email)│
+│  py_fastapi/app/services/user_service.py:44  clean = normalize_email(email)│
+│  py_fastapi/app/models.py:28                 def normalize_email(email: st…│
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+`<C-r>` switches the query to a regex.
+
+### Blast radius — `:Epicenter blast`, `<leader>ee`
+
+What breaks if you change this. The panel is a live query: it stays open, and
+it re-runs as you edit. `+`/`-` change the depth, `d` flips callers ↔ callees,
+`t` cycles the test scope, `s` drops the heuristic edges.
+
+```
+╭─ blast ────────────────────────────────────────────────────────────────────╮
+│  fn create_user  py_fastapi/app/routes/users.py:25                         │
+│  2 symbols · 1 file · 0 tests · depth 1        <- callers · tests with      │
+│                                                                            │
+│  ring 1  2                                                                 │
+│    py_fastapi/app/routes/users.py                                          │
+│      ? POST /api/users  py_fastapi/app/routes/users.py:24                  │
+│      fn create_user     py_fastapi/app/routes/users.py:25                  │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+While it is open, the impacted lines are marked in the source windows —
+three shades by ring distance. A `?` in front of a row means the edge was
+resolved by name, not by a certain reference; `s` hides those.
+
+`:Epicenter diff [ref]` is the same panel with every symbol changed since a git
+ref as its roots.
+
+### Hover card — `:Epicenter hover`, `<leader>ek` (or `K`)
+
+The signature, the counts, the doc comment, and who calls it — without leaving
+the line. It does not take focus; press the key again to step in, then `<CR>`
+to jump.
+
+```
+╭────────────────────────────────────────────────────────────╮
+│  me UserService.create                                     │
+│  def create(self, name: str, email: str) -> User:          │
+│                                                            │
+│  <- 2 callers   -> 3 callees    user_service.py:22-27      │
+│                                                            │
+│  Persist and return a freshly created user.                │
+│                                                            │
+│  top callers                                               │
+│    fn create_user   py_fastapi/app/routes/users.py:25      │
+│    fn test_get_user py_fastapi/tests/test_users.py:6       │
+╰────────────────────────────────────────────────────────────╯
+```
+
+### Callers and callees — `:Epicenter callers` / `callees`, `<leader>ec` / `<leader>eC`
+
+A tree that fetches one level at a time: `l` expands the row under the cursor
+and asks the server only for that level, `h` collapses it.
+
+```
+╭─ callers of create_user ───────────────────────────────────────────────────╮
+│ v fn create_user      py_fastapi/app/routes/users.py:25                    │
+│     ? POST /api/users py_fastapi/app/routes/users.py:24                    │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Call path — `:Epicenter path`, `<leader>ep`
+
+The chain between two symbols, drawn one rung at a time.
+
+```
+╭─ path ─────────────────────────────────────────────────────────────────────╮
+│                                                                            │
+│  fn create_user        py_fastapi/app/routes/users.py:25                   │
+│  │                                                                         │
+│  v                                                                         │
+│  me UserService.create py_fastapi/app/services/user_service.py:22          │
+│  │                                                                         │
+│  v                                                                         │
+│  fn normalize_email    py_fastapi/app/models.py:28                         │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+When there is no path it says so, rather than showing an empty panel.
+
+### Outline — `:Epicenter outline`, `<leader>eo`
+
+A sidebar down the left edge, live: it follows the cursor and re-renders when
+the buffer is reindexed. `<C-k>` cycles the outline's kind filter.
+
+```
+╭─ outline ───────────────╮
+│  va _USERS            5 │
+│  cl UserService       8 │
+│    me fetch          11 │
+│    me _query         18 │
+│    me create         22 │
+│    me remove         29 │
+│    me list_all       36 │
+│    me replace        40 │
+│    me update_email   48 │
+│  fn _seed_demo_data  57 │
+╰─────────────────────────╯
+```
+
+### Hot spots — `:Epicenter hot`, `<leader>eh`
+
+What the rest of the code leans on, ranked by fan-in, with a bar scaled to the
+widest one. `b` toggles between this buffer and the whole repo.
+
+```
+╭─ hot ──────────────────────────────────────────────────────────────────────╮
+│ me UserService.fetch        user_service.py:11  ############ 3             │
+│ me UserService.create       user_service.py:22  ########---- 2             │
+│ me UserService._query       user_service.py:18  ########---- 2             │
+│ me UserService.replace      user_service.py:40  ####-------- 1             │
+│ me UserService.update_email user_service.py:48  ####-------- 1             │
+│ fn _seed_demo_data          user_service.py:57  ------------ 0             │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Unused — `:Epicenter unused`
+
+Definitions nothing in the index reaches. `p` hides the exported ones, which
+are the usual false positives for a library.
+
+```
+╭─ unused ───────────────────────────────────────────────────────────────────╮
+│ me Status.String    go_service/models/models.go:66                         │
+│ fn normalizeName    go_service/models/models.go:79                         │
+│ st LegacyWidget     go_service/models/models.go:88                         │
+│ fn NewClient        go_service/client/client.go:20                         │
+│ cl LegacyToken      py_fastapi/app/models.py:123                           │
+│ me Vec.lensq        lua_game/vec.lua:20                                    │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Status dashboard — `:Epicenter status`, `<leader>ex`, or bare `:Epicenter`
+
+What the server knows, and the three keys that change it: `r` rescan,
+`R` restart, `l` open the log.
+
+```
+╭─ · navgraph ───────────────────────────────────────────────────╮
+│                                                                │
+│  epicenter   1.0.0                                             │
+│  root        ~/src/myproject                                   │
+│  server      running · pid 41207 · navgraph 0.1.0 · protocol 1 │
+│  index       31 files · 321 symbols · 254 edges                │
+│  overlays    1 unsaved                                         │
+│  last index  13ms  2026-08-28T01:52:44Z                        │
+│                                                                │
+│  languages                                                     │
+│    py        ########## 20                                     │
+│    go        ###------- 6                                      │
+│    lua       ###------- 5                                      │
+│                                                                │
+│  log         ~/.local/state/nvim/epicenter.log                 │
+│                                                                │
+╰────────────────── r rescan · R restart · l log · q close ──────╯
+```
+
+### Graph — `:Epicenter graph`
+
+Writes the call graph to an HTML file under the project's `.navgraph/` and
+opens it.
+
+### Badges
+
+Not a panel: `badges` puts a definition's fan-in and fan-out at the end of its
+line as virtual text — `"cursor"` for the one you are inside (the default),
+`"all"` for every definition in the buffer, `false` for none.
+
+```
+    def create(self, name: str, email: str) -> User:      <- 2  -> 3
+```
+
 ## Keymaps
 
 One prefix, `<leader>e` by default (`keymaps = false` installs none).
@@ -147,18 +366,9 @@ Every subcommand ships today; none are pending.
 | `?`            | Toggle the key help                                      |
 | `q` / `<Esc>`  | Close                                                    |
 
-The hover card does not take focus; press `<leader>ek` again (or `K`) to step
-into it, then `j`/`k` through the callers and `<CR>` to jump. On a buffer where
-navgraph is the hover provider — which under `lsp.fallback_only` means no
-other language server offers one — `K` opens the card too.
-
-`:Epicenter diff [ref]` reuses the panel with every changed symbol as a root
-(`changes vs HEAD` in the header). Your open buffers reach navgraph as
-overlays, so an unsaved edit is already in the answer.
-
-`badges` puts a definition's fan-in and fan-out at the end of its line as muted
-virtual text — `"cursor"` for the definition you are inside, `"all"` for every
-definition in the buffer, `false` for none.
+On a buffer where navgraph is the hover provider — which under
+`lsp.fallback_only` means no other language server offers one — `K` opens the
+hover card too.
 
 ### Inside the callers/callees tree
 
@@ -352,6 +562,63 @@ The UI kit is the public contract for features:
 carries a list or a tree plus the shared jump/peek/yank keys.
 Server access goes through `epicenter.client`, which already has a helper for
 every `navgraph/*` method.
+
+## FAQ
+
+**I already run a language server for this file. Do I get two of everything?**
+
+No. With `lsp.fallback_only` (the default) navgraph hides its `definition`,
+`references`, `hover` and `documentSymbol` providers on any buffer where
+another server offers them, so `gd`, `gr` and `K` keep going to your real
+language server. The graph queries — every `:Epicenter` panel — are unaffected;
+they never go through the standard LSP methods. In the many files no language
+server covers, navgraph's providers are still there. Set
+`lsp = { fallback_only = false }` if you want it to answer everywhere.
+
+**NavGraph is a private repo for me. How does `:Epicenter install` get it?**
+
+Through `gh`. When `gh` is installed *and* authenticated (`gh auth status`
+exits 0), the installer runs `gh release download` against `navgraph.repo`,
+which uses your existing GitHub credentials — so a private repo works with no
+extra configuration. Without an authenticated `gh` it falls back to
+`git clone` + `zig build`, which needs `git` and `zig` on `$PATH` and public
+read access. `:checkhealth epicenter` tells you which route is available.
+Point `navgraph.repo` at your fork, and `navgraph.install_ref` at a branch or
+tag, to build something other than the default `main`.
+
+**I do not use a nerd font and the icons are boxes.**
+
+Set `ui = { icons = "ascii" }` for the two-letter kind tags and `<-`/`->`
+arrows. The default is `"auto"`, which picks glyphs only when
+`vim.g.have_nerd_font` is set — so boxes mean something else set that flag.
+`:checkhealth epicenter` reports which mode is live.
+
+**Animations. I do not want them.**
+
+`vim.g.epicenter_reduce_motion = true` turns off every tween globally and wins
+over any config; `animate = false` in `setup()` does the same for this plugin's
+own config. Nothing is skipped — every widget lands on exactly the same final
+state, immediately. Individual timings live under `animation` if you only want
+them faster.
+
+**What actually differs between Neovim 0.10 and 0.11+?**
+
+Everything the plugin does works on both; 0.10 is the floor. Two things are
+0.11+ only, and neither is required:
+
+- `vim.lsp.enable("navgraph")`. On 0.11+ the repo ships `lsp/navgraph.lua`, so
+  you can start the server through Neovim's own mechanism instead of this
+  plugin's. On 0.10 the plugin's `vim.lsp.start` path is the only route — which
+  is also the default on 0.11+, so most users never touch this.
+- `'winborder'`. It does not exist on 0.10; on 0.11+ it is ignored here, since
+  every epicenter float names its own border (`ui.border`).
+
+`:checkhealth epicenter` names your version and which of the two you have.
+
+**Where do errors go?**
+
+`:Epicenter log` (or `l` on the status dashboard). Every error toast names the
+file, and `log = { level = "debug" }` turns up the detail.
 
 ## Development
 

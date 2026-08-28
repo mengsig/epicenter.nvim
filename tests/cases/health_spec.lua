@@ -33,6 +33,8 @@ describe("checkhealth epicenter", function()
   after_each(function()
     install.resolve = original_resolve
     vim.system = original_system
+    -- setup() in a case installs real mappings; reset takes them back down.
+    require("epicenter").reset()
   end)
 
   -- Every recorded vim.system call must have gone through the fake, never a
@@ -70,6 +72,66 @@ describe("checkhealth epicenter", function()
     local report = run_checkhealth()
     expect.matches(report, "no navgraph server running yet")
     expect_hermetic()
+  end)
+
+  it("takes the version out of navgraph's capabilities document (F20)", function()
+    vim.system = function(cmd, _)
+      table.insert(system_calls, cmd)
+      return {
+        wait = function()
+          return {
+            code = 0,
+            stdout = vim.json.encode({
+              schema = "navgraph.capabilities.v1",
+              build = { version = "0.1.0", buildVersion = "0.1.0+src.9794ccad" },
+              languages = { { name = "zig" }, { name = "python" } },
+            }),
+            stderr = "",
+          }
+        end,
+      }
+    end
+    local report = run_checkhealth()
+    expect.matches(report, "navgraph version: 0%.1%.0%+src%.9794ccad")
+    expect.falsy(
+      report:find("capabilities.v1", 1, true),
+      "the whole document must not be pasted in"
+    )
+    expect_hermetic()
+  end)
+
+  it("names the plugin version and the log file", function()
+    local report = run_checkhealth()
+    expect.matches(report, "epicenter%.nvim " .. vim.pesc(require("epicenter.version")))
+    expect.matches(report, "log: " .. vim.pesc(require("epicenter.log").path()))
+    expect_hermetic()
+  end)
+
+  it("confirms every keymap it installed is still its own", function()
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    expect.matches(run_checkhealth(), "all installed")
+  end)
+
+  it("warns when the prefix itself is mapped, which delays every epicenter key", function()
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    vim.keymap.set("n", "<leader>e", function() end, { desc = "user: file explorer" })
+    local report = run_checkhealth()
+    vim.keymap.del("n", "<leader>e")
+    expect.matches(report, "timeoutlen")
+    expect.matches(report, "user: file explorer")
+  end)
+
+  it("warns when something else took one of its keys", function()
+    require("epicenter").setup({ lsp = { auto_start = false } })
+    local stolen = "<leader>e" .. require("epicenter.registry").keymaps()[1].suffix
+    vim.keymap.set("n", stolen, function() end, { desc = "user: something else" })
+    local report = run_checkhealth()
+    expect.matches(report, "user: something else")
+  end)
+
+  it("says plainly when keymaps are turned off", function()
+    require("epicenter").setup({ keymaps = false, lsp = { auto_start = false } })
+    expect.matches(run_checkhealth(), "keymaps: none installed")
   end)
 
   it(

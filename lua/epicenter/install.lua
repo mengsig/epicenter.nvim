@@ -52,6 +52,33 @@ function M.resolve(opts)
     )
 end
 
+--- Said at most once per session. Without it a first run with no binary is a
+--- plugin that silently does nothing: every panel reports "not running" only
+--- once you open one, and nothing points at the fix.
+local announced_missing = false
+
+--- Called when a buffer that navgraph indexes could not start a server. Speaks
+--- only when the reason is that there is no binary to run.
+function M.first_run_notice()
+  if announced_missing then
+    return
+  end
+  local path, err = M.resolve()
+  if path then
+    return
+  end
+  announced_missing = true
+  require("epicenter.ui.toast").notify(
+    err .. "\n`:Epicenter install` fetches a release, or builds one from source.",
+    { level = "warn", timeout = 10000 }
+  )
+end
+
+--- Test seam: forgets that the notice was shown.
+function M.forget_first_run_notice()
+  announced_missing = false
+end
+
 --- How to install, given what is available. Pure.
 ---
 --- @param tools { gh: boolean, gh_auth: boolean, git: boolean, zig: boolean }

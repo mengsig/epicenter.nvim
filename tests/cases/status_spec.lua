@@ -33,6 +33,7 @@ describe("status dashboard", function()
 
   it("reports the root, the server and what the index holds", function()
     local body = text()
+    expect.matches(body, "epicenter%s+" .. vim.pesc(require("epicenter.version")))
     expect.matches(body, "root%s+/proj")
     expect.matches(body, "running")
     expect.matches(body, "pid 4321")

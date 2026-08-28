@@ -205,3 +205,63 @@ describe("install orchestration", function()
     expect.matches(err, "stubbed failure")
   end)
 end)
+
+describe("the first-run notice", function()
+  local toast = require("epicenter.ui.toast")
+
+  local function toast_text()
+    local out = {}
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "epicenter-toast" then
+        table.insert(out, table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
+      end
+    end
+    return table.concat(out, "\n")
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+    install.forget_first_run_notice()
+    toast.clear()
+  end)
+
+  after_each(function()
+    toast.clear()
+    install.forget_first_run_notice()
+  end)
+
+  it("stays quiet when a binary is there", function()
+    local original = install.resolve
+    install.resolve = function()
+      return "/opt/navgraph", nil
+    end
+    install.first_run_notice()
+    install.resolve = original
+    expect.eq(toast.count(), 0, "nothing to say when navgraph resolves")
+  end)
+
+  it("points at :Epicenter install when there is no binary", function()
+    local original = install.resolve
+    install.resolve = function()
+      return nil, "epicenter: navgraph not found (not on $PATH)"
+    end
+    install.first_run_notice()
+    install.resolve = original
+    expect.eq(toast.count(), 1)
+    expect.matches(toast_text(), ":Epicenter install")
+  end)
+
+  it("says it once, not once per buffer", function()
+    local original = install.resolve
+    install.resolve = function()
+      return nil, "epicenter: navgraph not found (not on $PATH)"
+    end
+    for _ = 1, 5 do
+      install.first_run_notice()
+    end
+    install.resolve = original
+    expect.eq(toast.count(), 1, "a repeat on every indexed buffer would be noise")
+  end)
+end)

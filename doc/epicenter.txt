@@ -291,10 +291,22 @@ Groups are derived at runtime from the active colourscheme (`Normal`,
 ==============================================================================
 7. HEALTH                                                    *epicenter-health*
 
-`:checkhealth epicenter` reports the Neovim version, the resolved navgraph
-binary and its version, the negotiated protocol version of every running
-server (and any restarts it has needed), and whether nerd-font glyphs are in
-use.
+`:checkhealth epicenter` reports, in order: this plugin's version, the Neovim
+version (and whether it is 0.11+), the resolved navgraph binary and the
+version it reports, the negotiated protocol version of every running server
+(and any restarts it has needed), whether nerd-font glyphs are in use, the
+state of the keymaps, and the log file's path.
+
+The keymap check names two things it can see: `keymaps.prefix` mapped on its
+own - which makes every epicenter key wait out 'timeoutlen' before it fires -
+and any of its own mappings another mapping now owns. It cannot see a mapping
+`setup()` itself replaced: |vim.keymap.set()| overwrites silently.
+
+                                                       *epicenter-first-run*
+On the first buffer navgraph would index in a session where no binary can be
+resolved, one notice says so and points at `:Epicenter install`. It is said
+once per session, not once per buffer. Every error notice names the log file,
+which `:Epicenter log` opens.
 
 ==============================================================================
 8. EVENTS                                                    *epicenter-events*

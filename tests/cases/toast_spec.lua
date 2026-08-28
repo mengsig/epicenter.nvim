@@ -32,6 +32,19 @@ describe("toast maths", function()
   end)
 end)
 
+--- Every live toast's rendered text. Toasts are floats carrying their own
+--- filetype, which is the only handle a caller has on their content.
+local function toast_text()
+  local out = {}
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "epicenter-toast" then
+      table.insert(out, table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
+    end
+  end
+  return table.concat(out, "\n")
+end
+
 describe("toast stack", function()
   before_each(function()
     require("epicenter.config").reset()
@@ -62,6 +75,24 @@ describe("toast stack", function()
     wait(function()
       return toast.count() == 0
     end, 2000, "auto dismiss")
+  end)
+
+  it("names the log file on an error, so the cause is findable", function()
+    toast.notify("navgraph stopped after 3 restarts", { level = "error", timeout = 60000 })
+    expect.matches(toast_text(), vim.pesc(require("epicenter.log").path()))
+  end)
+
+  it("leaves an error that already names the log alone", function()
+    local path = require("epicenter.log").path()
+    toast.notify("cannot open log " .. path, { level = "error", timeout = 60000 })
+    local text = toast_text()
+    local _, occurrences = text:gsub(vim.pesc(path), "")
+    expect.eq(occurrences, 1, "the log path must not be repeated")
+  end)
+
+  it("does not name the log on an ordinary notice", function()
+    toast.notify("yanked app/server.lua:9", { timeout = 60000 })
+    expect.falsy(toast_text():find(require("epicenter.log").path(), 1, true))
   end)
 
   it("holds a progress toast open until it finishes", function()

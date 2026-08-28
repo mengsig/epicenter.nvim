@@ -174,19 +174,24 @@ describe("documentation stays in sync", function()
     expect.falsy(doc:lower():find("this release", 1, true), "vimdoc must not say 'this release'")
   end)
 
-  it("qualifies <C-k> as search-only in the README key table, like vimdoc does (F11)", function()
-    -- <C-k> is search's own key (cycle the kind filter); grep has no
-    -- binding for it. Substring presence alone would have passed with the
-    -- old unqualified row - require the mode word right there in the row.
-    local row
+  it("qualifies every <C-k> mention with the panel it belongs to (F11)", function()
+    -- <C-k> belongs to search (cycle the kind filter) and to outline; grep
+    -- and the other panels have no binding for it. Substring presence alone
+    -- would have passed with the old unqualified row - require the panel's
+    -- name right there in the line, on every line that mentions the key.
+    local rows = {}
     for _, line in ipairs(vim.split(readme, "\n", { plain = true })) do
       if line:find("<C-k>", 1, true) then
-        row = line
-        break
+        table.insert(rows, line)
       end
     end
-    expect.truthy(row ~= nil, "README must document <C-k>")
-    expect.matches(row:lower(), "search", "the <C-k> row must say it only applies to search")
+    expect.truthy(#rows > 0, "README must document <C-k>")
+    for _, row in ipairs(rows) do
+      expect.truthy(
+        row:lower():find("search", 1, true) or row:lower():find("outline", 1, true),
+        "a <C-k> line must name the panel it applies to: " .. row
+      )
+    end
   end)
 end)
 

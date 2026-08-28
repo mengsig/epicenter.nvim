@@ -217,7 +217,7 @@ local function schedule_restart(root, state)
   local cfg = config.get().lsp.restart
   if state.restarts >= cfg.max then
     require("epicenter.ui.toast").notify(
-      ("navgraph stopped after %d restarts - see %s"):format(state.restarts, log.path()),
+      ("navgraph stopped after %d restarts"):format(state.restarts),
       { level = "error", timeout = 8000 }
     )
     servers[root] = nil
@@ -373,6 +373,7 @@ function M.attach(bufnr)
   local _, err = M.start({ root = root, bufnr = bufnr })
   if err then
     log.warn("attach skipped for %s: %s", name, err)
+    require("epicenter.install").first_run_notice()
   end
 end
 

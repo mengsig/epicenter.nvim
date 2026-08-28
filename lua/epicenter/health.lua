@@ -17,6 +17,27 @@ local function check_neovim()
   end
 end
 
+--- `navgraph --version` answers with a capabilities document, not a version
+--- string, and pasting it whole turns the health report into 30KB of JSON.
+--- Anything that is not that document still reports its first line, capped.
+--- @return string
+local function version_from(output)
+  local text = vim.trim(output or "")
+  if text == "" then
+    return "no output"
+  end
+  local ok, decoded = pcall(vim.json.decode, text)
+  local build = ok and type(decoded) == "table" and decoded.build or nil
+  if type(build) == "table" then
+    local version = build.buildVersion or build.version
+    if type(version) == "string" then
+      return version
+    end
+  end
+  local first = vim.split(text, "\n", { plain = true })[1]
+  return #first > 120 and (first:sub(1, 117) .. "...") or first
+end
+
 local function check_binary()
   local install = require("epicenter.install")
   local path, err = install.resolve()
@@ -31,7 +52,7 @@ local function check_binary()
     vim.health.warn(("`%s --version` exited %d"):format(path, result.code))
     return
   end
-  vim.health.ok("navgraph version: " .. vim.trim(result.stdout or ""))
+  vim.health.ok("navgraph version: " .. version_from(result.stdout))
 end
 
 local function check_servers()
@@ -69,6 +90,53 @@ local function check_servers()
   end
 end
 
+--- Only mappings the plugin did NOT install can be seen from here: `setup()`
+--- has already run, and `vim.keymap.set` replaces silently. The prefix itself
+--- is the conflict worth naming - `<leader>e` mapped on its own makes every
+--- epicenter key wait out `timeoutlen` before it fires.
+local function check_keymaps()
+  local cfg = require("epicenter.config").get()
+  if cfg.keymaps == false then
+    vim.health.info("keymaps: none installed (keymaps = false)")
+    return
+  end
+  local prefix = cfg.keymaps.prefix
+  local direct = vim.fn.maparg(prefix, "n", false, true)
+  if not vim.tbl_isempty(direct) then
+    vim.health.warn(
+      ("`%s` is mapped on its own (%s), so every epicenter key waits for 'timeoutlen' first"):format(
+        prefix,
+        direct.desc or direct.rhs or "another mapping"
+      ),
+      { "Change `keymaps.prefix`, or drop the conflicting mapping." }
+    )
+  end
+
+  local taken = {}
+  for _, map in ipairs(require("epicenter.registry").keymaps()) do
+    local lhs = prefix .. map.suffix
+    local existing = vim.fn.maparg(lhs, "n", false, true)
+    if vim.tbl_isempty(existing) then
+      table.insert(taken, lhs .. " (not installed)")
+    elseif existing.desc ~= map.desc then
+      table.insert(taken, ("%s (%s)"):format(lhs, existing.desc or existing.rhs or "?"))
+    end
+  end
+  if #taken == 0 then
+    vim.health.ok(
+      ("keymaps: %s + %d keys, all installed"):format(
+        prefix,
+        #require("epicenter.registry").keymaps()
+      )
+    )
+  else
+    vim.health.warn(
+      "keymaps another mapping owns: " .. table.concat(taken, ", "),
+      { "epicenter did not install these, or something replaced them after setup()." }
+    )
+  end
+end
+
 local function check_icons()
   local cfg = require("epicenter.config").get()
   if cfg.ui.icons == "ascii" then
@@ -82,10 +150,13 @@ end
 
 function M.check()
   vim.health.start("epicenter.nvim")
+  vim.health.info("epicenter.nvim " .. require("epicenter.version"))
   check_neovim()
   check_binary()
   check_servers()
   check_icons()
+  check_keymaps()
+  vim.health.info("log: " .. require("epicenter.log").path())
 
   for _, spec in ipairs(require("epicenter.registry").specs()) do
     if spec.health then

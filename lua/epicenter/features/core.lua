@@ -46,6 +46,7 @@ function M.dashboard_lines(view)
   local status, server = view.status, view.server
   local lines, spans = { "" }, {}
 
+  row(lines, spans, "epicenter", require("epicenter.version"))
   row(lines, spans, "root", vim.fn.fnamemodify(view.root, ":~"))
 
   local server_parts = { server.running and "running" or "stopped" }
