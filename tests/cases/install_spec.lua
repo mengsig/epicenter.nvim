@@ -269,10 +269,7 @@ describe("checksum_error (disk half, F3/F7)", function()
 
   it("fails a tampered archive against its sibling SHA256SUMS", function()
     local archive = write("navgraph-x86_64-linux.tar.gz", "tampered bytes")
-    write(
-      "SHA256SUMS",
-      ("%s  navgraph-x86_64-linux.tar.gz\n"):format(vim.fn.sha256("real bytes"))
-    )
+    write("SHA256SUMS", ("%s  navgraph-x86_64-linux.tar.gz\n"):format(vim.fn.sha256("real bytes")))
     expect.matches(install.checksum_error(dir, archive), "failed SHA256 verification")
   end)
 
@@ -385,7 +382,9 @@ describe("install orchestration", function()
       return captured ~= "pending"
     end, 5000, "install to report")
     expect.matches(toast_text(), "release download unavailable")
-    expect.matches(toast_text(), "built from source instead")
+    -- The toast word-wraps long lines, so a longer underlying error can push
+    -- a line break between words - tolerate whitespace, not just a space.
+    expect.matches(toast_text(), "built%s+from%s+source%s+instead")
     toast.clear()
   end)
 
@@ -401,6 +400,104 @@ describe("install orchestration", function()
     expect.truthy(err ~= nil, "wait must return the error synchronously, not nil")
     expect.matches(err, "git clone")
     expect.matches(err, "stubbed failure")
+  end)
+
+  -- F2: `--pattern <asset> --pattern SHA256SUMS` in one call used to succeed
+  -- (SHA256SUMS matches) on a platform with no published binary, so
+  -- `find_binary` then reported the misleading "no navgraph binary".
+  it("names the platform, not a missing binary, when no asset matches it (F2)", function()
+    stub_system(ran)
+    local captured = "pending"
+    install.install({
+      tools = { gh = true, gh_auth = true, git = false, zig = false },
+      uname = { sysname = "Windows_NT", machine = "x86_64" },
+      on_done = function(err)
+        captured = err
+      end,
+    })
+    wait(function()
+      return captured ~= "pending"
+    end, 5000, "install to report")
+    expect.matches(captured, "no release asset for x86_64%-windows")
+    expect.falsy(captured:match("no `navgraph` binary"), "must not blame a phantom missing binary")
+    -- Only the asset download ran - SHA256SUMS is a second, later step (F2).
+    expect.eq(#ran, 1)
+    expect.matches(ran[1], "%-%-pattern %*x86_64%*windows%*")
+    expect.falsy(ran[1]:match("SHA256SUMS"), "the asset call must not also request SHA256SUMS")
+  end)
+
+  it("stops on a checksum mismatch instead of falling back to a source build (F4)", function()
+    local NAME = "navgraph-x86_64-linux.tar.gz"
+    vim.system = function(cmd, _, cb)
+      table.insert(ran, table.concat(cmd, " "))
+      if cmd[1] == "gh" then
+        local dir, pattern
+        for i, v in ipairs(cmd) do
+          if v == "--dir" then
+            dir = cmd[i + 1]
+          elseif v == "--pattern" then
+            pattern = cmd[i + 1]
+          end
+        end
+        local target = pattern == "SHA256SUMS" and vim.fs.joinpath(dir, "SHA256SUMS")
+          or vim.fs.joinpath(dir, NAME)
+        local content = pattern == "SHA256SUMS"
+            and ("%s  %s\n"):format(vim.fn.sha256("the real bytes"), NAME)
+          or "tampered bytes"
+        local fh = assert(io.open(target, "wb"))
+        fh:write(content)
+        fh:close()
+        vim.schedule(function()
+          cb({ code = 0, stdout = "", stderr = "" })
+        end)
+        return
+      end
+      -- A verified-and-rejected download must stop, never reach git/zig.
+      vim.schedule(function()
+        cb({ code = 1, stdout = "", stderr = "must not run after a checksum mismatch" })
+      end)
+    end
+
+    local captured = "pending"
+    install.install({
+      tools = { gh = true, gh_auth = true, git = true, zig = true },
+      uname = { sysname = "Linux", machine = "x86_64" },
+      on_done = function(err)
+        captured = err
+      end,
+    })
+    wait(function()
+      return captured ~= "pending"
+    end, 5000, "install to report")
+    expect.matches(captured, "failed SHA256 verification")
+    for _, cmd in ipairs(ran) do
+      expect.falsy(
+        cmd:match("^git clone"),
+        "a checksum mismatch must never fall back to a source build"
+      )
+      expect.falsy(
+        cmd:match("^zig build"),
+        "a checksum mismatch must never fall back to a source build"
+      )
+    end
+  end)
+
+  it("names the reason in the toast when gh is simply absent (F5)", function()
+    stub_system(ran)
+    local toast = require("epicenter.ui.toast")
+    toast.clear()
+    local captured = "pending"
+    install.install({
+      tools = { gh = false, gh_auth = false, git = true, zig = true },
+      on_done = function(err)
+        captured = err
+      end,
+    })
+    wait(function()
+      return captured ~= "pending"
+    end, 5000, "install to report")
+    expect.matches(toast_text(), "gh %(GitHub CLI%) not installed")
+    toast.clear()
   end)
 end)
 

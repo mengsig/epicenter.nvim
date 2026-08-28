@@ -231,15 +231,24 @@ function M.plan(tools)
   return nil, "epicenter: cannot install navgraph - " .. table.concat(missing, "; ")
 end
 
---- Release asset pattern for this machine. Real assets are named
---- `navgraph-<arch>-<os>.tar.gz` (arch before os) - a glob's literal
---- fragments must appear in that order to match.
-function M.asset_pattern(uname)
+--- This machine's arch/os as the release names them, e.g. `"x86_64", "linux"`.
+--- Split from `asset_pattern` so an error message can name the platform
+--- without re-deriving it from the glob.
+--- @param uname? table `vim.uv.os_uname()`'s shape - injectable for tests
+local function platform_label(uname)
   uname = uname or uv.os_uname()
   local os_name = ({ Linux = "linux", Darwin = "macos", Windows_NT = "windows" })[uname.sysname]
     or uname.sysname:lower()
   local arch = ({ x86_64 = "x86_64", arm64 = "aarch64", aarch64 = "aarch64" })[uname.machine]
     or uname.machine
+  return arch, os_name
+end
+
+--- Release asset pattern for this machine. Real assets are named
+--- `navgraph-<arch>-<os>.tar.gz` (arch before os) - a glob's literal
+--- fragments must appear in that order to match.
+function M.asset_pattern(uname)
+  local arch, os_name = platform_label(uname)
   return ("*%s*%s*"):format(arch, os_name)
 end
 
@@ -364,9 +373,19 @@ function M.checksum_error(dir, archive)
   return err
 end
 
-local function install_from_release(cfg, tmp, progress, cb)
+--- Downloads the release asset and its SHA256SUMS as two separate `gh`
+--- calls (F2): a single call with two `--pattern` flags succeeds whenever
+--- EITHER matches, so a platform with no published binary silently "passes"
+--- by downloading only SHA256SUMS - `finish()` then reports the wrong
+--- reason ("no navgraph binary" instead of "no asset for this platform").
+--- @param cb fun(err: string|nil, path: string|nil, fatal: true|nil)
+---   `fatal` on error means: do not fall back to a source build (F4) - the
+---   downloaded bytes were verified and rejected, not merely unobtainable.
+local function install_from_release(cfg, tmp, progress, uname, cb)
   progress.update(0.3, "downloading the latest release")
-  local cmd = {
+  local arch, os_name = platform_label(uname)
+  local pattern = ("*%s*%s*"):format(arch, os_name)
+  local asset_cmd = {
     "gh",
     "release",
     "download",
@@ -375,14 +394,12 @@ local function install_from_release(cfg, tmp, progress, cb)
     "--dir",
     tmp,
     "--pattern",
-    M.asset_pattern(),
-    "--pattern",
-    "SHA256SUMS",
+    pattern,
     "--clobber",
   }
-  run(cmd, {}, function(err)
-    if err then
-      return cb(err)
+  run(asset_cmd, {}, function(asset_err)
+    if asset_err then
+      return cb(("no release asset for %s-%s (%s)"):format(arch, os_name, asset_err))
     end
     local archive = vim.fs.find(function(name)
       return name:match("%.tar%.gz$") or name:match("%.tgz$") or name:match("%.zip$")
@@ -400,20 +417,37 @@ local function install_from_release(cfg, tmp, progress, cb)
       return finish()
     end
 
-    progress.update(0.5, "verifying checksum")
-    local checksum_err = M.checksum_error(tmp, archive)
-    if checksum_err then
-      return cb(checksum_err)
-    end
-
-    progress.update(0.6, "unpacking")
-    local extract = archive:match("%.zip$") and { "unzip", "-o", archive, "-d", tmp }
-      or { "tar", "-xzf", archive, "-C", tmp }
-    run(extract, { cwd = tmp }, function(extract_err)
-      if extract_err then
-        return cb(extract_err)
+    -- Best-effort: a repo that publishes no SHA256SUMS at all fails this
+    -- download too, and that is not itself a failure (M.verify_checksum
+    -- treats a nil sums_text as nothing to verify against).
+    local sums_cmd = {
+      "gh",
+      "release",
+      "download",
+      "--repo",
+      cfg.navgraph.repo,
+      "--dir",
+      tmp,
+      "--pattern",
+      "SHA256SUMS",
+      "--clobber",
+    }
+    run(sums_cmd, {}, function()
+      progress.update(0.5, "verifying checksum")
+      local checksum_err = M.checksum_error(tmp, archive)
+      if checksum_err then
+        return cb(checksum_err, nil, true)
       end
-      finish()
+
+      progress.update(0.6, "unpacking")
+      local extract = archive:match("%.zip$") and { "unzip", "-o", archive, "-d", tmp }
+        or { "tar", "-xzf", archive, "-C", tmp }
+      run(extract, { cwd = tmp }, function(extract_err)
+        if extract_err then
+          return cb(extract_err)
+        end
+        finish()
+      end)
     end)
   end)
 end
@@ -450,9 +484,10 @@ end
 --- A plugin manager's `build =` hook treats the function *returning* as the
 --- step being done, but this is normally fully async - pass `wait` for a
 --- build hook so it blocks until installation actually finishes.
---- @param opts? { tools?: table, on_done?: fun(err: string|nil, path: string|nil),
+--- @param opts? { tools?: table, uname?: table, on_done?: fun(err: string|nil, path: string|nil),
 ---   wait?: boolean|integer }
 ---   `tools` skips detection when the caller already probed the machine.
+---   `uname` is a test seam for the release asset pattern/platform label.
 ---   `wait`: block until done and return `ok, err_or_path`; `true` waits up
 ---   to 120s, or pass a custom timeout in ms.
 --- @return boolean|nil ok, string|nil err_or_path only set when `wait` is given
@@ -505,12 +540,15 @@ function M.install(opts)
     end
 
     if kind == "release" then
-      install_from_release(cfg, tmp, progress, function(err, path)
+      install_from_release(cfg, tmp, progress, opts.uname, function(err, path, fatal)
         if not err then
           return cleanup_then(nil, path)
         end
-        -- No usable release: fall back to a source build rather than stopping.
-        if not (tools.git and tools.zig) then
+        -- A verified-and-rejected download (checksum mismatch) stops here:
+        -- silently substituting a source build of `main` for bytes that
+        -- failed integrity verification would hide the tamper/corruption
+        -- signal, not recover from it (F4).
+        if fatal or not (tools.git and tools.zig) then
           return cleanup_then(err)
         end
         local note = ("release download unavailable (%s); built from source instead"):format(err)
@@ -522,7 +560,17 @@ function M.install(opts)
         end)
       end)
     else
-      install_from_source(cfg, tmp, progress, cleanup_then)
+      -- The release route was never attempted - say why so "why did this
+      -- take two minutes?" has an answer even outside the fallback case (F5).
+      local note
+      if not tools.gh then
+        note = "gh (GitHub CLI) not installed; building from source"
+      elseif not tools.gh_auth then
+        note = "gh is installed but not authenticated; building from source"
+      end
+      install_from_source(cfg, tmp, progress, function(err, path)
+        cleanup_then(err, path, note)
+      end)
     end
   end
 

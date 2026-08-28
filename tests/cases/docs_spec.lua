@@ -208,7 +208,10 @@ describe("documentation stays in sync", function()
     -- `install_from_release` verifies SHA256 against the release's
     -- SHA256SUMS; the vimdoc once said the opposite, and `make docs-check`
     -- cannot catch stale prose (it only diffs generated tables).
-    expect.falsy(doc:lower():find("no checksum", 1, true), "vimdoc must not claim there is no checksum check")
+    expect.falsy(
+      doc:lower():find("no checksum", 1, true),
+      "vimdoc must not claim there is no checksum check"
+    )
     expect.falsy(
       readme:lower():find("no checksum", 1, true),
       "README must not claim there is no checksum check"
