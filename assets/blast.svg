@@ -3,7 +3,7 @@
 <rect x="0" y="0" width="207" height="20" fill="#3a3a3a"/>
 <text x="18 27 36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171 180 189 198" y="15" fill="#87afaf">me&#160;UserService.create</text>
 <rect x="207" y="0" width="225" height="20" fill="#3a3a3a"/>
-<text x="225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423" y="15" fill="#767676">py_fastapi/app/services</text>
+<text x="207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423" y="15" fill="#767676">…vices/user_service.py:22</text>
 <rect x="432" y="0" width="9" height="20" fill="#767676"/>
 <text x="432" y="15" fill="#767676">│</text>
 <text x="459" y="15" fill="#585858">5</text>
@@ -11,7 +11,6 @@
 <rect x="0" y="20" width="360" height="20" fill="#3a3a3a"/>
 <text x="18 27 36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351" y="35" fill="#5f8787">6&#160;symbols&#160;·&#160;4&#160;files&#160;·&#160;1&#160;test&#160;·&#160;depth&#160;2</text>
 <rect x="360" y="20" width="72" height="20" fill="#3a3a3a"/>
-<text x="396 405 414 423" y="35" fill="#767676" font-style="italic">&lt;-&#160;c</text>
 <rect x="432" y="20" width="9" height="20" fill="#767676"/>
 <text x="432" y="35" fill="#767676">│</text>
 <text x="459" y="35" fill="#585858">6</text>

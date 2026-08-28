@@ -1,110 +1,102 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 720" width="1080" height="720" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15">
 <rect width="1080" height="720" fill="#1c1c1c"/>
-<rect x="0" y="0" width="45" height="20" fill="#3a3a3a"/>
-<text x="0 9 18 27 36" y="15" fill="#767676">╭────</text>
-<rect x="45" y="0" width="234" height="20" fill="#3a3a3a"/>
-<text x="54 63 72 81 90 99 108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261" y="15" fill="#c7c7c7" font-weight="bold">outline:&#160;user_service.py</text>
-<rect x="279" y="0" width="45" height="20" fill="#3a3a3a"/>
-<text x="279 288 297 306 315" y="15" fill="#767676">────╮</text>
-<rect x="0" y="20" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="35" fill="#767676">│</text>
-<rect x="9" y="20" width="99" height="20" fill="#3a3a3a"/>
-<text x="27 36 45 54 63 72 81 90 99" y="35" fill="#c7c7c7">va&#160;_USERS</text>
-<rect x="108" y="20" width="27" height="20" fill="#3a3a3a"/>
-<text x="126" y="35" fill="#767676">5</text>
-<rect x="135" y="20" width="180" height="20" fill="#3a3a3a"/>
-<rect x="315" y="20" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="35" fill="#767676">│</text>
-<rect x="0" y="40" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="55" fill="#767676">│</text>
-<rect x="9" y="40" width="144" height="20" fill="#3a3a3a"/>
-<text x="27 36 45 54 63 72 81 90 99 108 117 126 135 144" y="55" fill="#c7c7c7">cl&#160;UserService</text>
-<rect x="153" y="40" width="27" height="20" fill="#3a3a3a"/>
-<text x="171" y="55" fill="#767676">8</text>
-<rect x="180" y="40" width="135" height="20" fill="#3a3a3a"/>
-<rect x="315" y="40" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="55" fill="#767676">│</text>
-<rect x="0" y="60" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="75" fill="#767676">│</text>
-<rect x="9" y="60" width="108" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108" y="75" fill="#c7c7c7">me&#160;fetch</text>
-<rect x="117" y="60" width="36" height="20" fill="#3a3a3a"/>
-<text x="135 144" y="75" fill="#767676">11</text>
-<rect x="153" y="60" width="162" height="20" fill="#3a3a3a"/>
-<rect x="315" y="60" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="75" fill="#767676">│</text>
-<rect x="0" y="80" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="95" fill="#767676">│</text>
-<rect x="9" y="80" width="117" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108 117" y="95" fill="#c7c7c7">me&#160;_query</text>
-<rect x="126" y="80" width="36" height="20" fill="#3a3a3a"/>
-<text x="144 153" y="95" fill="#767676">18</text>
-<rect x="162" y="80" width="153" height="20" fill="#3a3a3a"/>
-<rect x="315" y="80" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="95" fill="#767676">│</text>
-<text x="333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531" y="95" fill="#c7c7c7">by&#160;the&#160;routes&#160;layer."""</text>
-<rect x="0" y="100" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="115" fill="#767676">│</text>
-<rect x="9" y="100" width="306" height="20" fill="#464d4d"/>
-<text x="45 54 63 72 81 90 99 108 117 126 135 144 153" y="115" fill="#c7c7c7" font-weight="bold">me&#160;create&#160;&#160;22</text>
-<rect x="315" y="100" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="115" fill="#767676">│</text>
-<rect x="0" y="120" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="135" fill="#767676">│</text>
-<rect x="9" y="120" width="117" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108 117" y="135" fill="#c7c7c7">me&#160;remove</text>
-<rect x="126" y="120" width="36" height="20" fill="#3a3a3a"/>
-<text x="144 153" y="135" fill="#767676">29</text>
-<rect x="162" y="120" width="153" height="20" fill="#3a3a3a"/>
-<rect x="315" y="120" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="135" fill="#767676">│</text>
-<rect x="0" y="140" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="155" fill="#767676">│</text>
-<rect x="9" y="140" width="135" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108 117 126 135" y="155" fill="#c7c7c7">me&#160;list_all</text>
-<rect x="144" y="140" width="36" height="20" fill="#3a3a3a"/>
-<text x="162 171" y="155" fill="#767676">36</text>
-<rect x="180" y="140" width="135" height="20" fill="#3a3a3a"/>
-<rect x="315" y="140" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="155" fill="#767676">│</text>
-<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576" y="155" fill="#c7c7c7">`id`,&#160;or&#160;None&#160;when&#160;absent."""</text>
-<rect x="0" y="160" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="175" fill="#767676">│</text>
-<rect x="9" y="160" width="126" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108 117 126" y="175" fill="#c7c7c7">me&#160;replace</text>
-<rect x="135" y="160" width="36" height="20" fill="#3a3a3a"/>
-<text x="153 162" y="175" fill="#767676">40</text>
-<rect x="171" y="160" width="144" height="20" fill="#3a3a3a"/>
-<rect x="315" y="160" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="175" fill="#767676">│</text>
-<rect x="0" y="180" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="195" fill="#767676">│</text>
-<rect x="9" y="180" width="171" height="20" fill="#3a3a3a"/>
-<text x="45 54 63 72 81 90 99 108 117 126 135 144 153 162 171" y="195" fill="#c7c7c7">me&#160;update_email</text>
-<rect x="180" y="180" width="36" height="20" fill="#3a3a3a"/>
-<text x="198 207" y="195" fill="#767676">48</text>
-<rect x="216" y="180" width="27" height="20" fill="#3a3a3a"/>
+<rect x="0" y="0" width="234" height="20" fill="#3a3a3a"/>
+<text x="9 18 27 36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171 180 189 198 207 216" y="15" fill="#c7c7c7" font-weight="bold">outline:&#160;user_service.py</text>
+<rect x="234" y="0" width="36" height="20" fill="#3a3a3a"/>
+<rect x="270" y="0" width="36" height="20" fill="#3a3a3a"/>
+<text x="279 288" y="15" fill="#767676" font-style="italic">10</text>
+<rect x="306" y="0" width="9" height="20" fill="#767676"/>
+<text x="306" y="15" fill="#767676">│</text>
+<text x="333" y="15" fill="#585858">5</text>
+<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495" y="15" fill="#c7c7c7">_USERS:&#160;dict&#160;=&#160;{}</text>
+<rect x="0" y="20" width="99" height="20" fill="#3a3a3a"/>
+<text x="18 27 36 45 54 63 72 81 90" y="35" fill="#c7c7c7">va&#160;_USERS</text>
+<rect x="99" y="20" width="27" height="20" fill="#3a3a3a"/>
+<text x="117" y="35" fill="#767676">5</text>
+<rect x="126" y="20" width="180" height="20" fill="#3a3a3a"/>
+<rect x="306" y="20" width="9" height="20" fill="#767676"/>
+<text x="306" y="35" fill="#767676">│</text>
+<text x="333" y="35" fill="#585858">6</text>
+<rect x="0" y="40" width="144" height="20" fill="#3a3a3a"/>
+<text x="18 27 36 45 54 63 72 81 90 99 108 117 126 135" y="55" fill="#c7c7c7">cl&#160;UserService</text>
+<rect x="144" y="40" width="27" height="20" fill="#3a3a3a"/>
+<text x="162" y="55" fill="#767676">8</text>
+<rect x="171" y="40" width="135" height="20" fill="#3a3a3a"/>
+<rect x="306" y="40" width="9" height="20" fill="#767676"/>
+<text x="306" y="55" fill="#767676">│</text>
+<text x="333" y="55" fill="#585858">7</text>
+<rect x="0" y="60" width="108" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99" y="75" fill="#c7c7c7">me&#160;fetch</text>
+<rect x="108" y="60" width="36" height="20" fill="#3a3a3a"/>
+<text x="126 135" y="75" fill="#767676">11</text>
+<rect x="144" y="60" width="162" height="20" fill="#3a3a3a"/>
+<rect x="306" y="60" width="9" height="20" fill="#767676"/>
+<text x="306" y="75" fill="#767676">│</text>
+<text x="333" y="75" fill="#585858">8</text>
+<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504" y="75" fill="#c7c7c7">class&#160;UserService:</text>
+<rect x="0" y="80" width="117" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99 108" y="95" fill="#c7c7c7">me&#160;_query</text>
+<rect x="117" y="80" width="36" height="20" fill="#3a3a3a"/>
+<text x="135 144" y="95" fill="#767676">18</text>
+<rect x="153" y="80" width="153" height="20" fill="#3a3a3a"/>
+<rect x="306" y="80" width="9" height="20" fill="#767676"/>
+<text x="306" y="95" fill="#767676">│</text>
+<text x="333" y="95" fill="#585858">9</text>
+<text x="387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846" y="95" fill="#c7c7c7">"""In-memory&#160;user&#160;store&#160;used&#160;by&#160;the&#160;routes&#160;layer."""</text>
+<rect x="0" y="100" width="306" height="20" fill="#464d4d"/>
+<text x="36 45 54 63 72 81 90 99 108 117 126 135 144" y="115" fill="#c7c7c7" font-weight="bold">me&#160;create&#160;&#160;22</text>
+<rect x="306" y="100" width="9" height="20" fill="#767676"/>
+<text x="306" y="115" fill="#767676">│</text>
+<text x="324 333" y="115" fill="#585858">10</text>
+<rect x="0" y="120" width="117" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99 108" y="135" fill="#c7c7c7">me&#160;remove</text>
+<rect x="117" y="120" width="36" height="20" fill="#3a3a3a"/>
+<text x="135 144" y="135" fill="#767676">29</text>
+<rect x="153" y="120" width="153" height="20" fill="#3a3a3a"/>
+<rect x="306" y="120" width="9" height="20" fill="#767676"/>
+<text x="306" y="135" fill="#767676">│</text>
+<text x="324 333" y="135" fill="#585858">11</text>
+<text x="387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603" y="135" fill="#c7c7c7">def&#160;fetch(self,&#160;id:&#160;int):</text>
+<rect x="0" y="140" width="135" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99 108 117 126" y="155" fill="#c7c7c7">me&#160;list_all</text>
+<rect x="135" y="140" width="36" height="20" fill="#3a3a3a"/>
+<text x="153 162" y="155" fill="#767676">36</text>
+<rect x="171" y="140" width="135" height="20" fill="#3a3a3a"/>
+<rect x="306" y="140" width="9" height="20" fill="#767676"/>
+<text x="306" y="155" fill="#767676">│</text>
+<text x="324 333" y="155" fill="#585858">12</text>
+<text x="423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891" y="155" fill="#c7c7c7">"""Return&#160;the&#160;user&#160;with&#160;`id`,&#160;or&#160;None&#160;when&#160;absent."""</text>
+<rect x="0" y="160" width="126" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99 108 117" y="175" fill="#c7c7c7">me&#160;replace</text>
+<rect x="126" y="160" width="36" height="20" fill="#3a3a3a"/>
+<text x="144 153" y="175" fill="#767676">40</text>
+<rect x="162" y="160" width="144" height="20" fill="#3a3a3a"/>
+<rect x="306" y="160" width="9" height="20" fill="#767676"/>
+<text x="306" y="175" fill="#767676">│</text>
+<text x="324 333" y="175" fill="#585858">13</text>
+<text x="423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603" y="175" fill="#c7c7c7">row&#160;=&#160;self._query(id)</text>
+<rect x="0" y="180" width="171" height="20" fill="#3a3a3a"/>
+<text x="36 45 54 63 72 81 90 99 108 117 126 135 144 153 162" y="195" fill="#c7c7c7">me&#160;update_email</text>
+<rect x="171" y="180" width="36" height="20" fill="#3a3a3a"/>
+<text x="189 198" y="195" fill="#767676">48</text>
+<rect x="207" y="180" width="36" height="20" fill="#3a3a3a"/>
 <rect x="243" y="180" width="252" height="20" fill="#3a3a3a"/>
 <text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486" y="195" fill="#767676">╭───────────────────────────</text>
 <rect x="495" y="180" width="108" height="20" fill="#3a3a3a"/>
 <text x="504 513 522 531 540 549 558 567 576 585" y="195" fill="#c7c7c7" font-weight="bold">*&#160;navgraph</text>
 <rect x="603" y="180" width="252" height="20" fill="#3a3a3a"/>
 <text x="603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846" y="195" fill="#767676">───────────────────────────╮</text>
-<rect x="0" y="200" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="215" fill="#767676">│</text>
-<rect x="9" y="200" width="180" height="20" fill="#3a3a3a"/>
-<text x="27 36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171 180" y="215" fill="#c7c7c7">fn&#160;_seed_demo_data</text>
-<rect x="189" y="200" width="36" height="20" fill="#3a3a3a"/>
-<text x="207 216" y="215" fill="#767676">57</text>
-<rect x="225" y="200" width="18" height="20" fill="#3a3a3a"/>
+<rect x="0" y="200" width="180" height="20" fill="#3a3a3a"/>
+<text x="18 27 36 45 54 63 72 81 90 99 108 117 126 135 144 153 162 171" y="215" fill="#c7c7c7">fn&#160;_seed_demo_data</text>
+<rect x="180" y="200" width="36" height="20" fill="#3a3a3a"/>
+<text x="198 207" y="215" fill="#767676">57</text>
+<rect x="216" y="200" width="27" height="20" fill="#3a3a3a"/>
 <rect x="243" y="200" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="215" fill="#767676">│</text>
 <rect x="252" y="200" width="594" height="20" fill="#3a3a3a"/>
 <rect x="846" y="200" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="215" fill="#767676">│</text>
-<rect x="0" y="220" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="235" fill="#767676">│</text>
-<rect x="9" y="220" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="220" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="220" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="235" fill="#767676">│</text>
 <rect x="252" y="220" width="18" height="20" fill="#3a3a3a"/>
@@ -114,9 +106,7 @@
 <text x="378 387 396 405 414" y="235" fill="#c7c7c7">1.0.0</text>
 <rect x="846" y="220" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="235" fill="#767676">│</text>
-<rect x="0" y="240" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="255" fill="#767676">│</text>
-<rect x="9" y="240" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="240" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="240" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="255" fill="#767676">│</text>
 <rect x="252" y="240" width="18" height="20" fill="#3a3a3a"/>
@@ -126,9 +116,7 @@
 <text x="378 387 396 405 414 423" y="255" fill="#c7c7c7">~/demo</text>
 <rect x="846" y="240" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="255" fill="#767676">│</text>
-<rect x="0" y="260" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="275" fill="#767676">│</text>
-<rect x="9" y="260" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="260" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="260" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="275" fill="#767676">│</text>
 <rect x="252" y="260" width="18" height="20" fill="#3a3a3a"/>
@@ -138,33 +126,27 @@
 <text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801" y="275" fill="#c7c7c7">running&#160;·&#160;client&#160;1&#160;·&#160;navgraph&#160;1.0.0&#160;·&#160;protocol&#160;1</text>
 <rect x="846" y="260" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="275" fill="#767676">│</text>
-<rect x="0" y="280" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="295" fill="#767676">│</text>
-<rect x="9" y="280" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="280" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="280" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="295" fill="#767676">│</text>
 <rect x="252" y="280" width="18" height="20" fill="#3a3a3a"/>
 <rect x="270" y="280" width="45" height="20" fill="#3a3a3a"/>
 <text x="270 279 288 297 306" y="295" fill="#767676">index</text>
 <rect x="315" y="280" width="531" height="20" fill="#3a3a3a"/>
-<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675" y="295" fill="#c7c7c7">31&#160;files&#160;·&#160;321&#160;symbols&#160;·&#160;254&#160;edges</text>
+<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675" y="295" fill="#c7c7c7">32&#160;files&#160;·&#160;330&#160;symbols&#160;·&#160;258&#160;edges</text>
 <rect x="846" y="280" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="295" fill="#767676">│</text>
-<rect x="0" y="300" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="315" fill="#767676">│</text>
-<rect x="9" y="300" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="300" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="300" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="315" fill="#767676">│</text>
 <rect x="252" y="300" width="18" height="20" fill="#3a3a3a"/>
 <rect x="270" y="300" width="72" height="20" fill="#3a3a3a"/>
 <text x="270 279 288 297 306 315 324 333" y="315" fill="#767676">overlays</text>
 <rect x="342" y="300" width="504" height="20" fill="#3a3a3a"/>
-<text x="378 387 396 405 414 423 432 441 450" y="315" fill="#c7c7c7">1&#160;unsaved</text>
+<text x="378 387 396 405 414 423" y="315" fill="#c7c7c7">1&#160;open</text>
 <rect x="846" y="300" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="315" fill="#767676">│</text>
-<rect x="0" y="320" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="335" fill="#767676">│</text>
-<rect x="9" y="320" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="320" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="320" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="335" fill="#767676">│</text>
 <rect x="252" y="320" width="18" height="20" fill="#3a3a3a"/>
@@ -174,17 +156,13 @@
 <text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630" y="335" fill="#c7c7c7">1ms&#160;&#160;2026-01-01T00:00:00.000Z</text>
 <rect x="846" y="320" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="335" fill="#767676">│</text>
-<rect x="0" y="340" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="355" fill="#767676">│</text>
-<rect x="9" y="340" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="340" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="340" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="355" fill="#767676">│</text>
 <rect x="252" y="340" width="594" height="20" fill="#3a3a3a"/>
-<rect x="846" y="340" width="9" height="20" fill="#3a3a3a"/>
-<text x="846" y="355" fill="#767676">│</text>
-<rect x="0" y="360" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="375" fill="#767676">│</text>
-<rect x="9" y="360" width="234" height="20" fill="#3a3a3a"/>
+<rect x="846" y="340" width="90" height="20" fill="#3a3a3a"/>
+<text x="846 855 864 873 882 891 900 909 918 927" y="355" fill="#767676">│-&#160;3&#160;&#160;-&gt;&#160;3</text>
+<rect x="0" y="360" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="360" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="375" fill="#767676">│</text>
 <rect x="252" y="360" width="18" height="20" fill="#3a3a3a"/>
@@ -193,9 +171,7 @@
 <rect x="351" y="360" width="495" height="20" fill="#3a3a3a"/>
 <rect x="846" y="360" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="375" fill="#767676">│</text>
-<rect x="0" y="380" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="395" fill="#767676">│</text>
-<rect x="9" y="380" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="380" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="380" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="395" fill="#767676">│</text>
 <rect x="252" y="380" width="126" height="20" fill="#3a3a3a"/>
@@ -206,9 +182,7 @@
 <text x="477 486" y="395" fill="#c7c7c7">20</text>
 <rect x="846" y="380" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="395" fill="#767676">│</text>
-<rect x="0" y="400" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="415" fill="#767676">│</text>
-<rect x="9" y="400" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="400" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="400" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="415" fill="#767676">│</text>
 <rect x="252" y="400" width="126" height="20" fill="#3a3a3a"/>
@@ -219,9 +193,7 @@
 <text x="477" y="415" fill="#c7c7c7">6</text>
 <rect x="846" y="400" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="415" fill="#767676">│</text>
-<rect x="0" y="420" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="435" fill="#767676">│</text>
-<rect x="9" y="420" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="420" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="420" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="435" fill="#767676">│</text>
 <rect x="252" y="420" width="126" height="20" fill="#3a3a3a"/>
@@ -232,85 +204,83 @@
 <text x="477" y="435" fill="#c7c7c7">5</text>
 <rect x="846" y="420" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="435" fill="#767676">│</text>
-<rect x="0" y="440" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="455" fill="#767676">│</text>
-<rect x="9" y="440" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="440" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="440" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="455" fill="#767676">│</text>
-<rect x="252" y="440" width="594" height="20" fill="#3a3a3a"/>
+<rect x="252" y="440" width="126" height="20" fill="#3a3a3a"/>
+<text x="288 297 306" y="455" fill="#c7c7c7">zig</text>
+<rect x="378" y="440" width="90" height="20" fill="#3a3a3a"/>
+<text x="378 387 396 405 414 423 432 441 450 459" y="455" fill="#87afaf">#---------</text>
+<rect x="468" y="440" width="378" height="20" fill="#3a3a3a"/>
+<text x="477" y="455" fill="#c7c7c7">1</text>
 <rect x="846" y="440" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="455" fill="#767676">│</text>
-<rect x="0" y="460" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="475" fill="#767676">│</text>
-<rect x="9" y="460" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="460" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="460" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="475" fill="#767676">│</text>
-<rect x="252" y="460" width="18" height="20" fill="#3a3a3a"/>
-<rect x="270" y="460" width="27" height="20" fill="#3a3a3a"/>
-<text x="270 279 288" y="475" fill="#767676">log</text>
-<rect x="297" y="460" width="549" height="20" fill="#3a3a3a"/>
-<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666" y="475" fill="#c7c7c7">~/.local/state/nvim/epicenter.log</text>
+<rect x="252" y="460" width="594" height="20" fill="#3a3a3a"/>
 <rect x="846" y="460" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="475" fill="#767676">│</text>
-<rect x="0" y="480" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="495" fill="#767676">│</text>
-<rect x="9" y="480" width="234" height="20" fill="#3a3a3a"/>
+<rect x="0" y="480" width="243" height="20" fill="#3a3a3a"/>
 <rect x="243" y="480" width="9" height="20" fill="#3a3a3a"/>
 <text x="243" y="495" fill="#767676">│</text>
-<rect x="252" y="480" width="594" height="20" fill="#3a3a3a"/>
+<rect x="252" y="480" width="18" height="20" fill="#3a3a3a"/>
+<rect x="270" y="480" width="27" height="20" fill="#3a3a3a"/>
+<text x="270 279 288" y="495" fill="#767676">log</text>
+<rect x="297" y="480" width="549" height="20" fill="#3a3a3a"/>
+<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666" y="495" fill="#c7c7c7">~/.local/state/nvim/epicenter.log</text>
 <rect x="846" y="480" width="9" height="20" fill="#3a3a3a"/>
 <text x="846" y="495" fill="#767676">│</text>
-<rect x="0" y="500" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="515" fill="#767676">│</text>
-<rect x="9" y="500" width="234" height="20" fill="#3a3a3a"/>
-<rect x="243" y="500" width="126" height="20" fill="#3a3a3a"/>
-<text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360" y="515" fill="#767676">╰─────────────</text>
-<rect x="369" y="500" width="360" height="20" fill="#3a3a3a"/>
-<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711" y="515" fill="#767676" font-style="italic">r&#160;rescan&#160;·&#160;R&#160;restart&#160;·&#160;l&#160;log&#160;·&#160;q&#160;close</text>
-<rect x="729" y="500" width="126" height="20" fill="#3a3a3a"/>
-<text x="729 738 747 756 765 774 783 792 801 810 819 828 837 846" y="515" fill="#767676">─────────────╯</text>
-<rect x="0" y="520" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="535" fill="#767676">│</text>
-<rect x="9" y="520" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="520" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="535" fill="#767676">│</text>
-<rect x="0" y="540" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="555" fill="#767676">│</text>
-<rect x="9" y="540" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="540" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="555" fill="#767676">│</text>
-<rect x="0" y="560" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="575" fill="#767676">│</text>
-<rect x="9" y="560" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="560" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="575" fill="#767676">│</text>
-<rect x="0" y="580" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="595" fill="#767676">│</text>
-<rect x="9" y="580" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="580" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="595" fill="#767676">│</text>
-<rect x="0" y="600" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="615" fill="#767676">│</text>
-<rect x="9" y="600" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="600" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="615" fill="#767676">│</text>
-<rect x="0" y="620" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="635" fill="#767676">│</text>
-<rect x="9" y="620" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="620" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="635" fill="#767676">│</text>
-<rect x="0" y="640" width="9" height="20" fill="#3a3a3a"/>
-<text x="0" y="655" fill="#767676">│</text>
-<rect x="9" y="640" width="306" height="20" fill="#3a3a3a"/>
-<rect x="315" y="640" width="9" height="20" fill="#3a3a3a"/>
-<text x="315" y="655" fill="#767676">│</text>
-<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549" y="655" fill="#c7c7c7">ser&#160;as&#160;a&#160;domain&#160;object."""</text>
-<rect x="0" y="660" width="144" height="20" fill="#3a3a3a"/>
-<text x="0 9 18 27 36 45 54 63 72 81 90 99 108 117 126 135" y="675" fill="#767676">╰───────────────</text>
-<rect x="144" y="660" width="36" height="20" fill="#3a3a3a"/>
-<text x="153 162" y="675" fill="#767676" font-style="italic">10</text>
-<rect x="180" y="660" width="144" height="20" fill="#3a3a3a"/>
-<text x="180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315" y="675" fill="#767676">───────────────╯</text>
-<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783" y="675" fill="#c7c7c7">ame"],&#160;row["email"])&#160;for&#160;uid,&#160;row&#160;in&#160;_USERS.items()]</text>
-<text x="9 18" y="695" fill="#585858">39</text>
+<rect x="0" y="500" width="243" height="20" fill="#3a3a3a"/>
+<rect x="243" y="500" width="9" height="20" fill="#3a3a3a"/>
+<text x="243" y="515" fill="#767676">│</text>
+<rect x="252" y="500" width="594" height="20" fill="#3a3a3a"/>
+<rect x="846" y="500" width="9" height="20" fill="#3a3a3a"/>
+<text x="846" y="515" fill="#767676">│</text>
+<text x="855 864 873 882 891 900 909" y="515" fill="#c7c7c7">ved."""</text>
+<rect x="0" y="520" width="243" height="20" fill="#3a3a3a"/>
+<rect x="243" y="520" width="126" height="20" fill="#3a3a3a"/>
+<text x="243 252 261 270 279 288 297 306 315 324 333 342 351 360" y="535" fill="#767676">╰─────────────</text>
+<rect x="369" y="520" width="360" height="20" fill="#3a3a3a"/>
+<text x="378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711" y="535" fill="#767676" font-style="italic">r&#160;rescan&#160;·&#160;R&#160;restart&#160;·&#160;l&#160;log&#160;·&#160;q&#160;close</text>
+<rect x="729" y="520" width="126" height="20" fill="#3a3a3a"/>
+<text x="729 738 747 756 765 774 783 792 801 810 819 828 837 846" y="535" fill="#767676">─────────────╯</text>
+<rect x="0" y="540" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="540" width="9" height="20" fill="#767676"/>
+<text x="306" y="555" fill="#767676">│</text>
+<text x="324 333" y="555" fill="#585858">32</text>
+<text x="459 468 477 486 495 504 513 522 531 540 549 558 567 576" y="555" fill="#c7c7c7">del&#160;_USERS[id]</text>
+<rect x="0" y="560" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="560" width="9" height="20" fill="#767676"/>
+<text x="306" y="575" fill="#767676">│</text>
+<text x="324 333" y="575" fill="#585858">33</text>
+<text x="459 468 477 486 495 504 513 522 531 540 549" y="575" fill="#c7c7c7">return&#160;True</text>
+<rect x="0" y="580" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="580" width="9" height="20" fill="#767676"/>
+<text x="306" y="595" fill="#767676">│</text>
+<text x="324 333" y="595" fill="#585858">34</text>
+<text x="423 432 441 450 459 468 477 486 495 504 513 522" y="595" fill="#c7c7c7">return&#160;False</text>
+<rect x="0" y="600" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="600" width="9" height="20" fill="#767676"/>
+<text x="306" y="615" fill="#767676">│</text>
+<text x="324 333" y="615" fill="#585858">35</text>
+<rect x="0" y="620" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="620" width="9" height="20" fill="#767676"/>
+<text x="306" y="635" fill="#767676">│</text>
+<text x="324 333" y="635" fill="#585858">36</text>
+<text x="387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621" y="635" fill="#c7c7c7">def&#160;list_all(self)&#160;-&gt;&#160;list:</text>
+<rect x="0" y="640" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="640" width="9" height="20" fill="#767676"/>
+<text x="306" y="655" fill="#767676">│</text>
+<text x="324 333" y="655" fill="#585858">37</text>
+<text x="423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864" y="655" fill="#c7c7c7">"""Return&#160;every&#160;stored&#160;user&#160;as&#160;a&#160;domain&#160;object."""</text>
+<rect x="0" y="660" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="660" width="9" height="20" fill="#767676"/>
+<text x="306" y="675" fill="#767676">│</text>
+<text x="324 333" y="675" fill="#585858">38</text>
+<text x="423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981 990 999 1008 1017 1026 1035 1044 1053 1062 1071" y="675" fill="#c7c7c7">return&#160;[User(uid,&#160;row["name"],&#160;row["email"])&#160;for&#160;uid,&#160;row&#160;in&#160;_USERS.items</text>
+<rect x="0" y="680" width="306" height="20" fill="#3a3a3a"/>
+<rect x="306" y="680" width="9" height="20" fill="#767676"/>
+<text x="306" y="695" fill="#767676">│</text>
+<text x="324 333" y="695" fill="#585858">39</text>
 </svg>
