@@ -109,6 +109,33 @@ function M.require_method(root, method, what)
   )
 end
 
+--- Skips the running test when the server for `root` reports a `serverInfo`
+--- build older than `min`. For cases pinned to a RESOLVER ACCURACY fix rather
+--- than a new method - `M.require_method` has nothing to gate on since the
+--- method (e.g. `path`) already exists pre-1.1, only its answer changed.
+--- @param root string
+--- @param min string minimum build, e.g. "1.1.0"
+--- @param what string names the case under test, for the skip line
+function M.require_navgraph_version(root, min, what)
+  local client_id = require("epicenter.client").info(root).client_id
+  local client = client_id and vim.lsp.get_client_by_id(client_id)
+  local version = client and client.server_info and client.server_info.version
+  local function parts(v)
+    local a, b, c = v:match("^(%d+)%.(%d+)%.(%d+)")
+    return tonumber(a) or 0, tonumber(b) or 0, tonumber(c) or 0
+  end
+  if version then
+    local va, vb, vc = parts(version)
+    local ma, mb, mc = parts(min)
+    if va > ma or (va == ma and (vb > mb or (vb == mb and vc >= mc))) then
+      return
+    end
+  end
+  require("harness").skip(
+    ("%s: this navgraph (%s) is older than %s"):format(what, tostring(version), min)
+  )
+end
+
 function M.stop_fake(root)
   require("epicenter.client").stop(root)
 end

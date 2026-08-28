@@ -48,6 +48,9 @@ describe("real navgraph: the explorer", function()
   end)
 
   it("fetches a deeper level only when the row is expanded", function()
+    -- F4: the ItemService.get anchoring below is a 1.0->1.1 resolver
+    -- accuracy fix, not a new method - nothing for require_method to gate on.
+    support.require_navgraph_version(root, "1.1.0", "ItemService.get anchoring")
     panel = epicenter.run("callees", {}, buf)
     loaded(panel)
     local before = panel.list:count()
@@ -68,8 +71,10 @@ describe("real navgraph: the explorer", function()
 
     -- `l` opens the row against a placeholder child first; the real level
     -- replaces it when the request lands, so wait for the callee itself.
+    -- `_append_line` calls `self.items.get(item_id)`, i.e. `ItemService.get`
+    -- (self.items is an ItemService) - not OrderService's own `get`.
     wait(function()
-      return vim.tbl_contains(rows(panel), "OrderService.get")
+      return vim.tbl_contains(rows(panel), "ItemService.get")
     end, 20000, "the fetched level under the expanded row")
     expect.truthy(panel.list:count() > before, "the level added rows")
   end)
