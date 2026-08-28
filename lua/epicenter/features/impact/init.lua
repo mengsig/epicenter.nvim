@@ -191,25 +191,25 @@ function M.statusline()
   )
 end
 
---- The blast panel, rooted at the working change's hunks.
+--- The blast panel, rooted at the working change's hunks. A gated buffer
+--- still opens the panel - it just shows the gate line where the rows would
+--- be, rather than a request the server would only refuse.
 local function open_impact(ctx)
   local reason =
     require("epicenter.client").unsupported_reason(ctx.bufnr, "navgraph/impact", "impact")
-  if reason then
-    require("epicenter").notify(reason, "warn")
-    return nil
-  end
   return require("epicenter.features.blast.panel").open({
     kind = "impact",
     target = {},
     bufnr = ctx.bufnr,
+    gate_reason = reason,
   })
 end
 
 --- @param session table the live `current` table, mutated by a fresh answer
-local function open_review(session)
+--- @param gate_reason? string forwarded to `review.open` - see there
+local function open_review(session, gate_reason)
   session.on_change = approval_changed
-  panel = review.open(session)
+  panel = review.open(session, gate_reason)
   return panel
 end
 
@@ -218,7 +218,7 @@ local function run_review(ctx)
   local reason =
     require("epicenter.client").unsupported_reason(ctx.bufnr, "navgraph/impact", "impact review")
   if reason then
-    return epicenter.notify(reason, "warn")
+    return open_review(current, reason)
   end
   if not current.answered then
     return epicenter.notify("no working change to review", "info")

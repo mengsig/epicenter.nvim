@@ -601,6 +601,29 @@ function M.unsupported_reason(bufnr, method, what)
   )
 end
 
+--- Presents the protocol-1.1 gate for a feature in whichever channel fits
+--- its surface, so every gated feature reads the same way instead of five
+--- hand-rolled checks: a persistent line in `panel` when one is already open
+--- (a toast that vanishes leaves it blank with no explanation), a toast when
+--- there is no panel to write into.
+--- @param bufnr integer
+--- @param method string
+--- @param what string
+--- @param panel? { notice: fun(self, text: string) } an already-open panel
+--- @return string|nil reason nil means not gated - the caller proceeds
+function M.gate(bufnr, method, what, panel)
+  local reason = M.unsupported_reason(bufnr, method, what)
+  if not reason then
+    return nil
+  end
+  if panel then
+    panel:notice("  " .. reason)
+  else
+    require("epicenter").notify(reason, "warn")
+  end
+  return reason
+end
+
 --- @param root string
 --- @return epicenter.Session|nil
 function M.session_for_root(root)

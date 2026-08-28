@@ -221,12 +221,12 @@ local function initial_state(cfg)
   }
 end
 
---- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer }
+--- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer, gate_reason?: string }
 --- @return epicenter.blast.Panel
 function M.open(opts)
   local existing = M.current()
   if existing then
-    existing:set_query(opts.kind, opts.target, opts.bufnr)
+    existing:set_query(opts.kind, opts.target, opts.bufnr, opts.gate_reason)
     existing:focus()
     return existing
   end
@@ -271,7 +271,7 @@ function M.open(opts)
   end
 
   current = self
-  self:query({ first = true })
+  self:query({ first = true, gate_reason = opts.gate_reason })
   return self
 end
 
@@ -340,7 +340,9 @@ end
 
 --- Points the panel at a new target (a new cursor position, a named symbol, a
 --- diff ref) and re-queries.
-function Panel:set_query(kind, target, bufnr)
+--- @param gate_reason? string set when the buffer's server predates the
+---   protocol `kind` needs - queries the panel with that instead of asking
+function Panel:set_query(kind, target, bufnr, gate_reason)
   self.kind = kind
   self.target = target
   self.meta = { kind = kind, ref = target.ref, root = self.meta and self.meta.root or nil }
@@ -352,10 +354,10 @@ function Panel:set_query(kind, target, bufnr)
   else
     self:_clear_anchor()
   end
-  self:query({})
+  self:query({ gate_reason = gate_reason })
 end
 
---- @param opts? { first?: boolean, realtime?: boolean }
+--- @param opts? { first?: boolean, realtime?: boolean, gate_reason?: string }
 function Panel:query(opts)
   opts = opts or {}
   if not self:valid() then
@@ -364,6 +366,12 @@ function Panel:query(opts)
   self:_cancel_pending()
   self.generation = self.generation + 1
   local generation = self.generation
+
+  -- A superseding generation bump above stops any in-flight request's
+  -- callback from overwriting this notice once it lands (F3-style race).
+  if opts.gate_reason then
+    return self:notice("  " .. opts.gate_reason)
+  end
 
   if self.kind == "diff" then
     local params = model.params(self.state, { ref = self.target.ref or "HEAD" })
@@ -480,8 +488,16 @@ function Panel:_on_result(err, result, opts)
 end
 
 function Panel:_show_message(message)
+  self:notice("  " .. message)
+end
+
+--- Public notice channel: replaces the rows with a calm one-line message, the
+--- same one a failed query shows - used directly by a caller presenting the
+--- protocol gate before any query has run.
+--- @param text string already carries the convention's two-space indent
+function Panel:notice(text)
   self.answered = self.answered + 1
-  self.message = "  " .. message
+  self.message = text
   -- The header names `self.meta.root`. Leaving the PREVIOUS answer's root
   -- there renders a title naming a symbol, a chip line of zeros, and a body
   -- saying there is none - three lines contradicting each other (F3).

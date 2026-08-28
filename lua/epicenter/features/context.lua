@@ -175,9 +175,7 @@ local function run_context(ctx)
     return handle
   end
 
-  local reason = client.unsupported_reason(ctx.bufnr, "navgraph/context", "context")
-  if reason then
-    epicenter.notify(reason, "warn")
+  if client.gate(ctx.bufnr, "navgraph/context", "context") then
     return handle
   end
 
@@ -274,9 +272,8 @@ local function run_where(ctx)
   local epicenter = require("epicenter")
   local client = require("epicenter.client")
 
-  local reason = client.unsupported_reason(ctx.bufnr, "navgraph/where", "where")
-  if reason then
-    return epicenter.notify(reason, "warn")
+  if client.gate(ctx.bufnr, "navgraph/where", "where") then
+    return
   end
 
   local path, line = M.split_location(ctx.args[1])

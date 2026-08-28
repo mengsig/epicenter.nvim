@@ -646,3 +646,73 @@ describe("impact against the fake navgraph server", function()
     expect.matches(body(panel), "the working change")
   end)
 end)
+
+--- Both panels are gated on the same v1.1-only method, and both used to say
+--- so with a toast that left the freshly opened panel blank and unexplained.
+--- The gate now writes into the panel itself, the same channel a query error
+--- uses - a stand-in v1.0 session proves the request is never even sent.
+describe("the protocol 1.1 gate on impact/review", function()
+  local root, buf, panel
+
+  local function body(target)
+    local target_buf = target.surface and target.surface.buf or target.win.buf
+    return table.concat(vim.api.nvim_buf_get_lines(target_buf, 0, -1, false), "\n")
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(root, ".navgraph"), "p")
+    local path = vim.fs.joinpath(root, "old.lua")
+    vim.fn.writefile({ "local function handle() end", "return handle" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  --- A v1.0 server: `navgraph/impact` is not in `methods`, so `supports`
+  --- answers false and the panel must not even ask.
+  local function register_v10()
+    local sent = {}
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        table.insert(sent, method)
+        vim.schedule(function()
+          cb({ code = -32601, message = "method not found" }, nil)
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 1, methods = {} } } })
+    return sent
+  end
+
+  it("shows the gate as a persistent line in the blast panel, not a toast", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
+  end)
+
+  it("shows the gate as a persistent line in the review panel, not a toast", function()
+    local sent = register_v10()
+    panel = epicenter.run("review", {}, buf)
+    wait(function()
+      return panel ~= nil and panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
+  end)
+end)
