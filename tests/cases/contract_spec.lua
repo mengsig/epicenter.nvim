@@ -95,11 +95,16 @@ local ANSWERS = {
       recursion = false,
     },
   },
-  ["navgraph/path"] = { path = {} },
+  ["navgraph/path"] = { path = {}, ambiguousFrom = {}, ambiguousTo = {} },
   ["navgraph/outline"] = { files = {} },
   ["navgraph/hot"] = { items = {} },
   ["navgraph/unused"] = { items = {} },
-  ["navgraph/graph"] = { path = ".navgraph/graph-0.html" },
+  ["navgraph/graph"] = {
+    path = ".navgraph/graph-0.html",
+    nodes = 0,
+    nodesTotal = 0,
+    truncated = false,
+  },
 }
 ANSWERS["navgraph/rescan"] = ANSWERS["navgraph/status"]
 

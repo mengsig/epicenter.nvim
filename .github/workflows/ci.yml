@@ -108,3 +108,5 @@ jobs:
         run: nvim --headless --clean -c 'helptags doc' -c 'quit'
       - name: docs in sync with the registry
         run: make docs-check
+      - name: contract in sync with its pin
+        run: make contract-check

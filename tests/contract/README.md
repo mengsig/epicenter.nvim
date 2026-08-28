@@ -15,6 +15,17 @@ per `navgraph/*` method. Both lanes enforce it.
   promises must be present and well-typed; a field a newer server adds is
   ignored rather than rejected, so a server ahead of this plugin still works.
 
-To update: copy NavGraph's `docs/lsp.md` over `lsp.md`, then bring
-`schema.lua` in line with it. `tests/cases/contract_spec.lua` fails if a
-`navgraph/*` method reachable from `epicenter.client` has no schema.
+`UPSTREAM.lock` pins the NavGraph revision `lsp.md` was copied at and a
+sha256 of the vendored file; `make contract-check` fails when the vendored
+copy no longer matches that pin, so a hand-edit or a partial re-vendor is
+caught even without a NavGraph checkout to diff against.
+
+To update:
+
+1. From a NavGraph checkout, copy `docs/lsp.md` over this directory's
+   `lsp.md` and note `git rev-parse HEAD` there.
+2. Bring `schema.lua` in line with the new `lsp.md`, method by method.
+3. Update `UPSTREAM.lock`: `upstream_rev` to that revision, `sha256` to
+   `sha256sum tests/contract/lsp.md` (or `vim.fn.sha256(...)` on its bytes).
+4. `make contract-check` should pass; `tests/cases/contract_spec.lua` fails
+   if a `navgraph/*` method reachable from `epicenter.client` has no schema.

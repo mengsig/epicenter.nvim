@@ -318,19 +318,24 @@ return {
     return tree_for(ctx, params, "callees", "navgraph/calls")
   end,
 
+  -- `ambiguousFrom`/`ambiguousTo` are always empty here (F3: schema
+  -- conformance only) - F1 teaches this handler to actually detect a
+  -- bare-name collision instead of silently resolving to the first match.
   ["navgraph/path"] = function(ctx, params)
     local from, to = find_named(ctx.index, params.from), find_named(ctx.index, params.to)
     if not from or not to then
-      return { path = {} }
+      return { path = {}, ambiguousFrom = {}, ambiguousTo = {} }
     end
     local chain = shortest_path(graph_of(ctx.index), from, to)
     if not chain then
-      return { path = {} }
+      return { path = {}, ambiguousFrom = {}, ambiguousTo = {} }
     end
     return {
       path = vim.tbl_map(function(symbol)
         return symbol_of(ctx.index, symbol)
       end, chain),
+      ambiguousFrom = {},
+      ambiguousTo = {},
     }
   end,
 
@@ -451,15 +456,23 @@ return {
   --- Writes a standalone HTML file under `.navgraph/`, content-hashed so a
   --- repeated request for the same view reuses one file. `path` is a filter
   --- over which subgraph to draw - the server always chooses the output path.
+  --- `truncated` is always false here (F3: schema conformance only) - this
+  --- fake enforces no node cap yet, F2 adds one so truncation is testable.
   ["navgraph/graph"] = function(ctx, params)
     local graph = graph_of(ctx.index)
-    local edges = {}
+    local edges, touched = {}, {}
     for _, symbol in ipairs(ctx.index.symbols) do
       if not params.path or symbol.file:find(params.path, 1, true) ~= nil then
         for _, edge in ipairs(graph.callees[symbol.id] or {}) do
           table.insert(edges, edge)
+          touched[edge.from.id] = true
+          touched[edge.to.id] = true
         end
       end
+    end
+    local nodes_total = 0
+    for _ in pairs(touched) do
+      nodes_total = nodes_total + 1
     end
 
     local lines = { "<!doctype html><title>navgraph</title><pre>digraph navgraph {" }
@@ -477,6 +490,6 @@ return {
       assert(io.open(vim.fs.joinpath(ctx.root, rel), "w"), "fake server could not write graph file")
     fh:write(content)
     fh:close()
-    return { path = rel }
+    return { path = rel, nodes = nodes_total, nodesTotal = nodes_total, truncated = false }
   end,
 }

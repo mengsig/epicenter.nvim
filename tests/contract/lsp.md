@@ -1,15 +1,15 @@
 # NavGraph editor protocol — v1
 
 `navgraph lsp` runs NavGraph as a resident editor
-server: the whole code graph stays in memory, an edit re-indexes in single-digit
-milliseconds, and blast-radius / search / call-graph queries answer in under a
-millisecond.
+server: the whole code graph stays in memory, an edit re-indexes in tens of
+milliseconds or less, and blast-radius / search / call-graph queries answer in
+single-digit milliseconds. Measured figures are in the table below.
 
 It is a standard LSP server (a subset) **plus** custom `navgraph/*` methods.
 Neovim's built-in client (`vim.lsp.start`) is the reference client.
 
 ```
-navgraph lsp [--root <dir>] [--log <file>] [--log-level error|info|debug]
+navgraph lsp [-C|--root <dir>] [--log <file>] [--log-level error|info|debug]
 ```
 
 - **Transport** — JSON-RPC 2.0 over stdio with LSP framing
@@ -39,14 +39,14 @@ CLI prints them.
 | Method | Notes |
 | --- | --- |
 | `initialize` | Capabilities below. |
-| `initialized` (notif) | Builds the index (using `.navgraph/cache` like the CLI), reports `$/progress`, and always ends with `navgraph/indexed`. |
+| `initialized` (notif) | Builds the index (using `.navgraph/cache` like the CLI), reports `$/progress`, and ends with `navgraph/indexed` — or, if indexing failed, with `window/logMessage` and no index. |
 | `shutdown` → `null`, `exit` | `exit` after `shutdown` exits 0, without it exits 1. stdin EOF exits 0. |
 | `textDocument/didOpen` `didChange` `didSave` `didClose` | Overlay store; see below. |
 | `textDocument/definition` → `Location[]` | The identifier at the position, resolved with the same rules as `calls`. |
 | `textDocument/references` → `Location[]` | Every use site; the declaration is included when `context.includeDeclaration`. |
 | `textDocument/hover` | Markdown: `kind name`, the fenced signature, `file:line-endLine`, `← N callers → M callees`, then the doc comment. |
 | `textDocument/documentSymbol` → `DocumentSymbol[]` | Nested; `range` spans `line..endLine`, `selectionRange` covers the name. Reflects the overlay. |
-| `workspace/symbol` → `SymbolInformation[]` | Ranked like `navgraph/search`. |
+| `workspace/symbol` → `SymbolInformation[]` | Ranked like `navgraph/search`; `limit` defaults to 200. The test scope is the server's `initializationOptions` one; per-request `strict`/`tests` are not read. |
 | `workspace/didChangeWatchedFiles` (notif) | Re-stats the listed files and re-indexes. |
 | `$/cancelRequest`, `$/setTrace` (notif) | Accepted and ignored. |
 
@@ -58,7 +58,9 @@ CLI prints them.
   "textDocumentSync": {"openClose": true, "change": 1, "save": {"includeText": false}},
   "definitionProvider": true, "referencesProvider": true, "hoverProvider": true,
   "documentSymbolProvider": true, "workspaceSymbolProvider": true,
-  "experimental": {"navgraph": {"protocolVersion": 1, "methods": [ /* every implemented navgraph/* method */ ]}}
+  "experimental": {"navgraph": {"protocolVersion": 1,
+    "methods": [ /* every callable navgraph/* request */ ],
+    "notifications": [ /* every navgraph/* notification the server sends */ ]}}
 }, "serverInfo": {"name": "navgraph", "version": "…"}}
 ```
 
@@ -68,7 +70,7 @@ CLI prints them.
 | --- | --- | --- |
 | `tests` | `"with"` | `with` \| `without` \| `only` — the test-code scope. |
 | `strict` | `false` | Follow only high-confidence (type/self-bound) edges. |
-| `debounceMs` | `120` | How long an edit waits before re-indexing. |
+| `debounceMs` | `120` | How long an edit waits before re-indexing. `0` and negatives mean "use the default", not "no debounce". |
 | `watch` | `true` | Poll file mtimes for out-of-editor changes. |
 | `watchIntervalMs` | `2000` | Poll interval. |
 | `depth` | `3` | Default graph depth (max 10). |
@@ -91,13 +93,29 @@ disappears again when the buffer is closed.
 | `-32700` | A frame body that is not JSON, or a frame the server could not parse. The server resyncs and keeps serving. |
 | `-32600` | Not a JSON-RPC request, or a request before `initialized`. |
 | `-32601` | Unknown method. |
-| `-32602` | Bad params: a missing/ill-typed field, an unknown `direction`, an uncompilable grep pattern, an unindexed file. |
+| `-32602` | Bad params: a missing/ill-typed field, an unknown `direction` or `tests` scope, a grep pattern that will not compile or is too long or too deeply nested, an unindexed file. |
 | `-32603` | Internal failure (allocation, IO). |
-| `-32001` | A `Target` that resolves to nothing — `{"message": "…: symbol not found", …}`. |
-| `-32002` | The request could not be completed: a grep regex that exhausts the backtracking budget, or a `navgraph/diff`/`{ref}` target whose `git diff` failed (bad ref, no git tree, git unavailable). |
+| `-32001` | A `Target` that resolves to nothing — `{"code": -32001, "message": "…: symbol not found"}`. An error object never carries `data`. |
+| `-32002` | The request could not be completed: a grep regex that exhausts one of the bounds below, or a `navgraph/diff` / `{ref}` target whose `git diff` failed (bad ref, no git tree, git unavailable). |
 
-A malformed *notification* gets no reply, per JSON-RPC. Nothing a client can
-send kills the server.
+A malformed *notification* gets no reply, per JSON-RPC — with one exception: a
+body the server cannot parse at all has no id to identify it as a notification,
+so it is answered with `-32700` and `"id": null`. Nothing a client can send
+kills the server.
+
+### Resynchronizing
+
+A frame the server cannot parse costs exactly that frame. The reader does not
+resume at the offending header line — a malformed frame's body would then be
+read back as headers, and a JSON body has enough colons in it to look like
+headers forever — it hunts forward for the next `Content-Length:` instead,
+across as many reads as that takes. So the request behind a bad header is still
+answered, and `shutdown` / `exit` always land.
+
+One run of garbage produces one `-32700`, however many reads it spans, so a bad
+client cannot turn one bad header into a storm of replies. Limits that surface
+this way: a body over 32 MiB and a header block over 8 KiB are both refused
+without being buffered.
 
 ## Shared result shapes
 
@@ -204,12 +222,39 @@ one character.
 `regex: true` uses a small built-in engine: literals, `.`, character classes
 (`[a-z]`, `[^…]`, `\d \w \s` and their negations), groups with alternation,
 greedy and lazy `* + ? {n} {n,} {n,m}`, and the `^` `$` anchors. No
-backreferences, no lookaround, no captures. Backtracking is capped; a
-pathological pattern returns `-32002` rather than hanging.
+backreferences, no lookaround, no captures.
+
+**Bounds.** The pattern comes off the wire, so the engine is bounded in time,
+memory and stack, and neither half recurses. Worst case, per request:
+
+| Bound | Limit | Over it |
+| --- | --- | --- |
+| Pattern length | 4096 bytes | `-32602` |
+| Group nesting | 64 | `-32602` |
+| Node visits, per grep request | 200 000 + 32 × bytes searched | `-32002` |
+| Live backtrack alternatives | 16 384 | `-32002` |
+| Live continuation frames | 16 384 | `-32002` |
+| Matcher scratch | ≈ 2 MiB, allocated once per compiled pattern | — |
+| Machine stack | constant — the parser and the matcher both walk explicit stacks | — |
+
+The step allowance is **pooled across the whole request**, not granted per
+line: grep runs the pattern once per line, so a per-line bound would leave the
+request itself unbounded. It grows with the bytes actually searched, so an
+honest whole-tree grep stays well inside it — seven ordinary regex greps over a
+142 000-line tree answer in about a second, including the index — while a
+pathological pattern gives up in tens of milliseconds. A quantifier over a
+single-byte body (`.*`, `a+`, `[a-z]*`) holds its whole backtrack range as one
+alternative rather than one per byte, so an ordinary scan of a minified `.js`,
+`.css` or `.json` line stays linear. A pattern that is quadratic in the line
+length anyway — `a+b` across 300 000 `a` — gives up with `-32002`; it never
+hangs and never takes the server down.
 
 ### `navgraph/callers` / `navgraph/calls`
 
 Params: `Target & { depth?:int (1), refs?:bool } & Scope` → `{ root:Node }`.
+`{ file }` and `{ ref }` are accepted too, as for `navgraph/blast`, but a tree
+has one root: only the first definition they resolve to is walked. Send a
+`Target` unless you mean that.
 
 Mirrors the CLI's `callers`/`calls -j` tree. `lines` on a child is every
 call-site line of the edge to its parent; `ext` lists unresolved call targets;
@@ -219,8 +264,12 @@ call-site line of the edge to its parent; `ext` lists unresolved call targets;
 ### `navgraph/rescan` `{ full?:bool }` → the `navgraph/status` shape
 
 Re-walks the tree, so files created or deleted outside the editor are picked up
-(a git checkout, a formatter). `full: true` ignores the on-disk cache. Open
-documents are re-applied afterwards, so unsaved edits survive a rescan.
+(a git checkout, a formatter). `full: true` ignores the on-disk cache (and then
+does not write one back). Open documents are re-applied afterwards, so unsaved
+edits survive a rescan. The `navgraph/indexed` that follows carries the disk
+delta in `changedFiles`: files created, deleted, or re-read with new content.
+An open document is not listed — the index holds its buffer, which a rescan
+does not touch.
 
 ### `navgraph/neighbors`
 
@@ -239,11 +288,19 @@ param here, matching the CLI's `-j` output).
 
 ### `navgraph/path`
 
-Params: `{ from:string, to:string }` → `{ path:Symbol[] }`.
+Params: `{ from:string, to:string }` →
+`{ path:Symbol[], ambiguousFrom:Symbol[], ambiguousTo:Symbol[] }`.
 
 The shortest call path from `from` to `to` (BFS over resolved call/use edges),
-source-first; empty when either name is unknown or no path exists. Names accept
-the same `Parent.name` / `name@path` forms as every CLI name argument.
+source-first; `path` is empty when either name is unknown or no path exists.
+Names accept the same `Parent.name` / `name@path` forms as every CLI name
+argument.
+
+A path is authoritative only between unique endpoints. When a name matches
+several definitions the walk is not run and its candidates come back in
+`ambiguousFrom` / `ambiguousTo`, so an ambiguous question is never answered as
+"no path" — re-ask with `Parent.name` or `name@path`. Both arrays are empty on
+an ordinary answer.
 
 ### `navgraph/outline`
 
@@ -262,10 +319,7 @@ Params: `{ path?:string, limit?:int (25) } & Scope` →
 Functions/methods ranked by connectivity — the load-bearing symbols. `*Exact`
 counts exclude heuristic (name-collision) edges; `fanInTest` is the share of
 callers living in test files. `strict` drops entries whose connectivity is
-entirely heuristic. Unlike the CLI, an explicit `limit` is always honored —
-the CLI overloads its own default (300) as a sentinel meaning "unset", so
-`navgraph hot -l 300` is indistinguishable from no flag at all; this adapter
-has no such sentinel, so `{"limit":300}` returns up to 300 results.
+entirely heuristic. Ranking and ordering are the CLI's own, tie-break included.
 
 ### `navgraph/unused`
 
@@ -333,23 +387,36 @@ is required (a substring filter over the imported file's path).
 
 ### `navgraph/graph`
 
-Params: `{ path?:string } & Scope` → `{ path:string }`.
+Params: `{ path?:string } & Scope` →
+`{ path:string, nodes:int, nodesTotal:int, truncated:bool }`.
 
 Renders the same interactive HTML visualization as `navgraph graph` and writes
-it to `.navgraph/graph-<hash>.html` under the served root (`<hash>` identifies
-the view — the `path` filter and test scope — so re-requesting the same view
-overwrites its one file rather than leaving the previous render behind).
-`path` is returned root-relative; open it in a browser. `tests` selects
-whether test symbols appear in the graph (`strict` has no effect here).
+it to `.navgraph/graph-<hash>.html` under the served root. `<hash>` identifies
+the *view* (the path filter and test scope), so re-requesting it overwrites
+that one file in place instead of leaving one page per edit behind. The write
+is an atomic rename that refuses to follow a symlink planted at the path, and a
+write failure is reported rather than swallowed. `path` is returned
+root-relative; open it in a browser. `tests` selects whether test symbols
+appear in the graph (`strict` has no effect here).
+
+The page holds at most `nodes` of `nodesTotal` symbols — the renderer's own
+node cap, which the HTML has nowhere to report. `truncated` says the view is
+partial, so a client can say so rather than present a capped subgraph as the
+graph.
 
 ## Notifications (server → client)
 
 - **`navgraph/indexed`** `{ reason:"initial"|"change"|"save"|"rescan"|"watch",
   files:int, symbols:int, edges:int, ms:int, changedFiles:string[] }` — sent
-  after **every** (re)index. Clients refresh open views on it.
+  after every (re)index that produced a graph. Clients refresh open views on it.
+  `changedFiles` is the dirty set for an edit and the disk delta for a rescan;
+  it is empty for `"initial"`. A *failed* index sends `window/logMessage` (and
+  a `$/progress` end) instead, and leaves the server without an index — every
+  graph request then answers `-32600`.
 - **`$/progress`** for the initial index, after a
   `window/workDoneProgress/create` request, and only when the client advertised
-  `window.workDoneProgress`.
+  `window.workDoneProgress`. The client's answer to that request is accepted
+  and dropped — a response is never replied to.
 - **`window/logMessage`** for diagnostics.
 
 ## Watching
@@ -414,7 +481,8 @@ particular varies with page-cache warmth.
 
 Against the v1 targets: initial index of this repo < 1 s (36–46 ms), single-file
 re-index < 100 ms on a 50k-line tree (7–19 ms), search / grep / blast(3) each
-< 30 ms (≤ 3.4 ms), resident memory < 200 MB at 100k lines (≈ 35 MB).
+< 30 ms (≤ 6.6 ms, on the 59k-line tree), resident memory < 200 MB at 100k lines
+(≈ 35 MB).
 
 **Targeted re-resolution was measured and is not needed.** A re-index re-parses
 only the changed file and re-assembles the graph from the already-parsed rest;
@@ -427,6 +495,16 @@ re-assembly stands.
 Reproduce with a client that drives the binary over a pipe: `initialize` →
 `initialized`, read the `ms` from `navgraph/indexed`, then time
 `didChange` → `navgraph/status` round trips and the query methods.
+
+## Hostile input
+
+`zig build smoke` replays a hostile session into the built binary and checks
+what comes back: a 20 000-deep regex, an ordinary pattern over a 300 000
+character line, and a malformed header with a body — each followed by a request
+that must still be answered. It then walks stdout as an exact frame stream
+(every byte inside a frame, the last ending at EOF), requires a
+`navgraph/blast` result shape that only the `navgraph/*` handlers can produce,
+and requires the process to exit 0. CI runs it against the ReleaseFast build.
 
 ## Limitations
 
@@ -446,7 +524,8 @@ Reproduce with a client that drives the binary over a pipe: `initialize` →
 
 ```lua
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "zig", "python", "javascript", "typescript", "go", "rust", "ruby", "lua", "c", "cpp", "cs" },
+  pattern = { "zig", "python", "javascript", "javascriptreact", "typescript",
+              "typescriptreact", "go", "rust", "ruby", "lua", "c", "cpp", "cs" },
   callback = function(args)
     local root = vim.fs.root(args.buf, { ".git", "build.zig", "package.json", "go.mod", "Cargo.toml" })
     if not root then return end

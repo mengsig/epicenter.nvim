@@ -53,12 +53,14 @@ describe("the fake answers the real navgraph/* shapes", function()
     expect.eq(err.code, -32602)
   end)
 
-  it("navgraph/path returns only {path}, a flat Symbol[]", function()
+  it("navgraph/path returns {path,ambiguousFrom,ambiguousTo}, path a flat Symbol[]", function()
     local err, result =
       support.request(root, "navgraph/path", { from = "M.start", to = "log_request" })
     expect.eq(err, nil)
-    expect.eq(keys_of(result), { "path" })
+    expect.eq(keys_of(result), { "ambiguousFrom", "ambiguousTo", "path" })
     expect.truthy(#result.path > 0)
+    expect.eq(result.ambiguousFrom, {})
+    expect.eq(result.ambiguousTo, {})
     expect.eq(
       type(result.path[1].qualified),
       "string",
@@ -97,13 +99,18 @@ describe("the fake answers the real navgraph/* shapes", function()
     expect.eq(keys_of(result.items[1]), { "symbol", "testOnly" })
   end)
 
-  it("navgraph/graph returns only a server-chosen {path}, under .navgraph/", function()
-    local err, result = support.request(root, "navgraph/graph", {})
-    expect.eq(err, nil)
-    expect.eq(keys_of(result), { "path" })
-    expect.matches(result.path, "^%.navgraph/graph%-%x+%.html$")
-    expect.truthy((vim.uv or vim.loop).fs_stat(vim.fs.joinpath(root, result.path)))
-  end)
+  it(
+    "navgraph/graph returns a server-chosen {path,nodes,nodesTotal,truncated}, under .navgraph/",
+    function()
+      local err, result = support.request(root, "navgraph/graph", {})
+      expect.eq(err, nil)
+      expect.eq(keys_of(result), { "nodes", "nodesTotal", "path", "truncated" })
+      expect.matches(result.path, "^%.navgraph/graph%-%x+%.html$")
+      expect.truthy((vim.uv or vim.loop).fs_stat(vim.fs.joinpath(root, result.path)))
+      expect.eq(result.truncated, false, "this fixture is nowhere near the node cap")
+      expect.eq(result.nodes, result.nodesTotal)
+    end
+  )
 
   it("navgraph/status keys languages by language tag, not file extension", function()
     local err, result = support.request(root, "navgraph/status", {})

@@ -3,7 +3,7 @@ LUA_FILES := $(shell find lua lsp plugin scripts tests -name '*.lua' -not -path 
 
 NAVGRAPH_BIN ?= navgraph
 
-.PHONY: test test-real smoke lint fmt doc docs-check docs-fix screenshots all
+.PHONY: test test-real smoke lint fmt doc docs-check docs-fix contract-check screenshots all
 
 all: lint test
 
@@ -47,6 +47,11 @@ docs-fix:
 
 doc:
 	$(NVIM) --headless --clean -c 'helptags doc' -c 'quit'
+
+# Fails when tests/contract/lsp.md drifted from the sha256 pinned in
+# tests/contract/UPSTREAM.lock - see that file and tests/contract/README.md.
+contract-check:
+	$(NVIM) --headless --clean -u tests/minimal_init.lua -l tests/contract_check.lua
 
 # assets/*.svg: a real Neovim driving the real panels against a real
 # `navgraph lsp`, captured out of a 120x36 tmux pane. Needs tmux.

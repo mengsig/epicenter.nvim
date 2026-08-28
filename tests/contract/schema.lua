@@ -222,15 +222,17 @@ M.METHODS = {
     result = BLAST_RESULT,
   },
 
+  -- `{file}`/`{ref}` are accepted too, as for `navgraph/blast`, but a tree
+  -- has one root: only the first definition they resolve to is walked.
   ["navgraph/callers"] = {
-    target = "required",
-    params = params(SCOPE, TARGET, { depth = int(), refs = bool() }),
+    target = "blast",
+    params = params(SCOPE, TARGET, { file = str(), ref = str(), depth = int(), refs = bool() }),
     result = object({ root = required(NODE) }),
   },
 
   ["navgraph/calls"] = {
-    target = "required",
-    params = params(SCOPE, TARGET, { depth = int(), refs = bool() }),
+    target = "blast",
+    params = params(SCOPE, TARGET, { file = str(), ref = str(), depth = int(), refs = bool() }),
     result = object({ root = required(NODE) }),
   },
 
@@ -256,7 +258,14 @@ M.METHODS = {
 
   ["navgraph/path"] = {
     params = { from = required(str()), to = required(str()) },
-    result = object({ path = required(list_of(SYMBOL)) }),
+    -- `path` is empty when either name is unknown or no path exists; an
+    -- ambiguous endpoint (a name matching several definitions) instead
+    -- comes back in `ambiguousFrom`/`ambiguousTo` and the walk is not run.
+    result = object({
+      path = required(list_of(SYMBOL)),
+      ambiguousFrom = required(list_of(SYMBOL)),
+      ambiguousTo = required(list_of(SYMBOL)),
+    }),
   },
 
   ["navgraph/outline"] = {
@@ -370,7 +379,15 @@ M.METHODS = {
 
   ["navgraph/graph"] = {
     params = params(SCOPE, { path = str() }),
-    result = object({ path = required(str()) }),
+    -- `truncated` says the page holds only `nodes` of `nodesTotal` symbols
+    -- (the renderer's own node cap) - a client must say so rather than
+    -- present a capped subgraph as the whole graph.
+    result = object({
+      path = required(str()),
+      nodes = required(int()),
+      nodesTotal = required(int()),
+      truncated = required(bool()),
+    }),
   },
 }
 
