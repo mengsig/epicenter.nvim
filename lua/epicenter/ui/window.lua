@@ -215,9 +215,13 @@ function Window:content_width()
   return self.box.width
 end
 
+--- The window's LOGICAL geometry. Mid-reveal `self.box` holds the scaled box
+--- of the frame on screen; where the tween is going is what a caller asking
+--- "how big is this" means - a resize computed from a mid-tween box lands
+--- short, and panels persist that result.
 --- @return epicenter.Box
 function Window:geometry()
-  return vim.deepcopy(self.box)
+  return vim.deepcopy(self.reveal_target or self.box)
 end
 
 local function apply_geometry(self, box)

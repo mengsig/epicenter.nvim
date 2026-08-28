@@ -81,24 +81,56 @@ local LAYOUT_ROOT = "panel-layout"
 local MIN_WIDTH, MIN_HEIGHT = 20, 3
 local RESIZE_STEP, MOVE_STEP = 4, 1
 
---- @param filetype string
---- @return epicenter.Box|nil
-local function remembered_box(filetype)
-  local box = require("epicenter.store").read("panel_layout", LAYOUT_ROOT)[filetype]
-  return box and window.clamp(box) or nil
-end
+--- Remembering a geometry is a read-modify-write of a state file, and `+`
+--- held at typematic rate is ~30 keypresses a second. Nudges accumulate here
+--- and are written once the keys stop - or when the panel closes, or on the
+--- way out of Neovim, whichever comes first.
+local PERSIST_MS = 250
+local pending_layout = {}
+local persist_timer = nil
+local persist_group = nil
 
 --- A failure to save is a log line, not a toast: the panel still works, it
 --- just reopens at the default size next time.
---- @param filetype string
---- @param box epicenter.Box
-local function remember_box(filetype, box)
+local function flush_layout()
+  if persist_timer then
+    persist_timer:stop()
+  end
+  if next(pending_layout) == nil then
+    return
+  end
   local store = require("epicenter.store")
   local stored = store.read("panel_layout", LAYOUT_ROOT)
-  stored[filetype] = { width = box.width, height = box.height, row = box.row, col = box.col }
+  for filetype, box in pairs(pending_layout) do
+    stored[filetype] = { width = box.width, height = box.height, row = box.row, col = box.col }
+  end
+  pending_layout = {}
   local ok, err = store.write("panel_layout", LAYOUT_ROOT, stored)
   if not ok then
     require("epicenter.log").warn("could not remember panel geometry: %s", err)
+  end
+end
+
+--- The geometry this panel type reopens at: a nudge not yet written out is
+--- still the truth about it.
+--- @param filetype string
+--- @return epicenter.Box|nil
+local function remembered_box(filetype)
+  local box = pending_layout[filetype]
+    or require("epicenter.store").read("panel_layout", LAYOUT_ROOT)[filetype]
+  return box and window.clamp(box) or nil
+end
+
+--- @param filetype string
+--- @param box epicenter.Box
+local function remember_box(filetype, box)
+  pending_layout[filetype] = box
+  persist_timer = persist_timer or (vim.uv or vim.loop).new_timer()
+  persist_timer:stop()
+  persist_timer:start(PERSIST_MS, 0, vim.schedule_wrap(flush_layout))
+  if not persist_group then
+    persist_group = vim.api.nvim_create_augroup("EpicenterPanelLayout", { clear = true })
+    vim.api.nvim_create_autocmd("VimLeavePre", { group = persist_group, callback = flush_layout })
   end
 end
 
@@ -138,6 +170,7 @@ function M.open(spec)
 
   local function on_close()
     self.open = false
+    flush_layout()
     if spec.on_close then
       spec.on_close()
     end

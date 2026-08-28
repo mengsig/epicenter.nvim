@@ -338,6 +338,76 @@ describe("panel remembers its size and position", function()
     end
   )
 
+  it("resizes from the settled geometry while the open animation is still running", function()
+    -- The suite runs with motion off; this is the one case that needs a real
+    -- tween, so it turns motion on for itself and hands it back.
+    local reduce = vim.g.epicenter_reduce_motion
+    vim.g.epicenter_reduce_motion = false
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = true,
+      animation = { open_ms = 400 },
+    })
+
+    local ok, err = pcall(function()
+      panel = open_panel("epicenter-remember-f")
+      local items = {}
+      for i = 1, 30 do
+        items[i] = { name = "item" .. i }
+      end
+      panel:set_items(items)
+
+      -- The reveal owns the geometry: `box` is the frame on screen, and the
+      -- logical size is where the tween is going.
+      local settled = panel.win:geometry()
+      expect.truthy(panel.win.reveal_target ~= nil, "a tween is running")
+      wait(function()
+        return panel.win.box.height ~= settled.height
+      end, 2000, "a scaled frame on screen")
+
+      press(panel, "+")
+      wait(function()
+        return panel.win.reveal_target == nil
+      end, 4000, "the tween to settle")
+      expect.eq(
+        panel.win:geometry().height,
+        settled.height + 4,
+        "one step up from the settled box, not from the mid-tween one"
+      )
+    end)
+
+    vim.g.epicenter_reduce_motion = reduce
+    if not ok then
+      error(err, 0)
+    end
+  end)
+
+  it("writes the remembered geometry once for a burst of keypresses", function()
+    local store = require("epicenter.store")
+    local writes = 0
+    local original = store.write
+    store.write = function(...)
+      writes = writes + 1
+      return original(...)
+    end
+
+    panel = open_panel("epicenter-remember-g")
+    panel:set_items({ { name = "one" } })
+    for _ = 1, 10 do
+      press(panel, "+")
+    end
+    expect.eq(writes, 0, "nothing is written while the key is still going")
+
+    local resized = panel.win:geometry()
+    panel:close()
+    expect.eq(writes, 1, "one write, on the way out")
+    store.write = original
+
+    panel = open_panel("epicenter-remember-g")
+    expect.eq(panel.win:geometry().height, resized.height, "and the burst's result is what lands")
+  end)
+
   it("does not remember geometry for an explicit box or a vsplit panel", function()
     panel = panel_mod.open({
       title = " test ",
