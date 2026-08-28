@@ -203,20 +203,30 @@ end
 --- Per-file isolation: a spec file starts with no epicenter module loaded, no
 --- language server running and no floating window left over. Without this a
 --- leaked server from one file blocks the event loop in the next.
-local function isolate()
+--- Exported (F6) so a spec can exercise it directly and count stop() calls.
+function M.isolate()
   -- Route through epicenter.client first: a raw client:stop() below never
   -- sets its state.stopping, so its on_exit reads the stop as a crash and
   -- schedule_restart respawns a zombie server the next file never sees.
   local ok, client_mod = pcall(require, "epicenter.client")
+  local already_stopped = {}
   if ok then
+    for _, client in ipairs(vim.lsp.get_clients({ name = "navgraph" })) do
+      already_stopped[client.id] = true
+    end
     client_mod.stop_all()
   end
 
   -- Graceful stop, never force: the fake server blocks on a stdin read, so a
   -- SIGTERM only lands once it returns. shutdown/exit over stdio does land -
   -- and on 0.10 `client:stop()` would pass the client itself as `force`.
+  -- Skip whatever stop_all() above already asked to stop (F6): stopping an
+  -- already-shutting-down client races out a bare `exit` with no preceding
+  -- `shutdown`, which reads exactly like a real server crash.
   for _, client in ipairs(vim.lsp.get_clients()) do
-    require("epicenter.compat").lsp_stop(client)
+    if not already_stopped[client.id] then
+      require("epicenter.compat").lsp_stop(client)
+    end
   end
   vim.wait(5000, function()
     return #vim.lsp.get_clients() == 0
@@ -243,7 +253,7 @@ end
 --- Runs each spec file in module-isolation. Returns passed, failed, results.
 function M.run(files)
   for _, file in ipairs(files) do
-    isolate()
+    M.isolate()
     state.stack = {}
     state.file = file
     local chunk, load_err = loadfile(file)
