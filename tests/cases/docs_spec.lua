@@ -174,6 +174,16 @@ describe("documentation stays in sync", function()
     expect.falsy(doc:lower():find("this release", 1, true), "vimdoc must not say 'this release'")
   end)
 
+  it("keeps the changelog's newest entry on the version the code reports", function()
+    local changelog = read("CHANGELOG.md")
+    local newest = changelog:match("\n## ([%d%.]+)") or changelog:match("^## ([%d%.]+)")
+    expect.eq(
+      newest,
+      require("epicenter.version"),
+      "lua/epicenter/version.lua and the top CHANGELOG entry must name the same release"
+    )
+  end)
+
   it("links every committed screenshot, and links nothing that is missing", function()
     local linked = {}
     for asset in readme:gmatch("%(assets/([%w%-%.]+)%)") do

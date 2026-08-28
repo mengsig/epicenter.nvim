@@ -1,5 +1,9 @@
 # epicenter.nvim
 
+[![ci](https://github.com/mengsig/epicenter.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/mengsig/epicenter.nvim/actions/workflows/ci.yml)
+![neovim 0.10+](https://img.shields.io/badge/neovim-0.10%2B-57A143?logo=neovim&logoColor=white)
+[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+
 Your code graph, live in the editor.
 
 epicenter.nvim puts [NavGraph](https://github.com/mengsig/NavGraph) — a fast,
@@ -670,6 +674,10 @@ The keymap table, the command table and the config reference above are
 `<!-- registry:… -->` markers here and the `*epicenter-…-table*` tags in
 `doc/epicenter.txt` are written by `make docs-fix`, and CI fails if they drift.
 Edit the feature spec, not the table.
+
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

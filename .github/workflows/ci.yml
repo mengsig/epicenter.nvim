@@ -36,7 +36,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check lua lsp plugin tests
+          args: --check lua lsp plugin scripts tests
       - uses: leafo/gh-actions-lua@v10
         with:
           luaVersion: "luajit-openresty"
@@ -44,7 +44,7 @@ jobs:
       - name: install luacheck
         run: luarocks install luacheck
       - name: luacheck
-        run: luacheck lua lsp plugin tests --exclude-files 'tests/fixtures/**'
+        run: luacheck lua lsp plugin scripts tests --exclude-files 'tests/fixtures/**'
 
   real:
     name: real navgraph
