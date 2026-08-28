@@ -81,7 +81,9 @@ describe("keymap install and teardown", function()
   end)
 
   it("removes every installed keymap on reset(), not just the config", function()
-    epicenter.setup({ keymaps = { prefix = "<leader>Z" } })
+    -- F5: auto_start default true would sweep any stale buffer a prior spec
+    -- left loaded and resolve a real $PATH navgraph - irrelevant to this test.
+    epicenter.setup({ keymaps = { prefix = "<leader>Z" }, lsp = { auto_start = false } })
     expect.truthy(vim.fn.maparg("<leader>Zs", "n") ~= "", "setup() must have installed the keymap")
 
     epicenter.reset()

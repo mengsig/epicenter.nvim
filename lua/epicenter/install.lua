@@ -28,6 +28,15 @@ function M.resolve(opts)
   if configured == nil then
     configured = require("epicenter.config").get().navgraph.path
   end
+  -- F5 test seam: `tests/minimal_init.lua` pins this so the suite is
+  -- structurally incapable of resolving a real $PATH/managed navgraph, no
+  -- matter which spec forgets `lsp.auto_start = false`. Gated on the caller
+  -- using the real prober (`opts.probe` unset) so a unit test that injects
+  -- its OWN fake probe - `tests/cases/install_spec.lua`'s own coverage of
+  -- this fallback contract - is unaffected either way.
+  if configured == nil and opts.probe == nil and vim.g.epicenter_test_navgraph_path_pin then
+    configured = vim.g.epicenter_test_navgraph_path_pin
+  end
 
   if configured then
     if probe(configured) then
