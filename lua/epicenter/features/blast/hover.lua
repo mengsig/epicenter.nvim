@@ -39,6 +39,41 @@ function M.signature_spans(sig, path, offset)
   return ok and spans or {}
 end
 
+--- Dedents a multi-line doc comment as a unit (D3): a docstring's first line
+--- sits flush against the opening marker, but continuation lines still carry
+--- the source's own body indentation - which would otherwise stack on top
+--- of the card's 2-column margin. PEP 257's `cleandoc` shape: strip the
+--- common indent off lines 2+, then drop the blank lines that leaves at
+--- either end.
+--- @param doc string raw `symbol.doc`, one or more lines
+--- @return string[] dedented lines
+local function dedent_doc(doc)
+  local lines = vim.split(doc, "\n", { plain = true })
+
+  local min_indent
+  for i = 2, #lines do
+    lines[i] = (lines[i]:gsub("%s+$", ""))
+    if lines[i] ~= "" then
+      local indent = #(lines[i]:match("^[ \t]*") or "")
+      min_indent = min_indent and math.min(min_indent, indent) or indent
+    end
+  end
+  if min_indent and min_indent > 0 then
+    for i = 2, #lines do
+      lines[i] = lines[i]:sub(min_indent + 1)
+    end
+  end
+  lines[1] = vim.trim(lines[1])
+
+  while lines[1] == "" do
+    table.remove(lines, 1)
+  end
+  while lines[#lines] == "" do
+    table.remove(lines)
+  end
+  return lines
+end
+
 local function counts_line(symbol)
   local icons = require("epicenter.ui.icons")
   local spans, text = {}, ""
@@ -86,7 +121,7 @@ function M.render(root, limit)
 
   if symbol.doc and symbol.doc ~= "" then
     put({ text = "" })
-    for _, line in ipairs(vim.split(symbol.doc, "\n", { plain = true })) do
+    for _, line in ipairs(dedent_doc(symbol.doc)) do
       put({ text = "  " .. line, spans = { { hl = "EpicenterMuted", from = 0, to = #line + 2 } } })
     end
   end

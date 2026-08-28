@@ -67,6 +67,28 @@ describe("hover card contents", function()
     expect.matches(text, "M%.start  app/server%.lua:14")
   end)
 
+  -- D3: a docstring's first line sits flush against the source's opening
+  -- marker, but continuation lines carry the method body's own indentation
+  -- (8 columns here) - it must be stripped as a unit, not stacked on top of
+  -- the card's 2-column margin. `card.lines[6..9]` are the doc lines: 1 head
+  -- + 1 sig + 1 blank + 1 counts + 1 blank precede them (the internal blank
+  -- line between doc paragraphs survives, only the trailing one is dropped),
+  -- and no callers section follows (root_node with no callers).
+  it("dedents a multi-line doc as a unit, not line by line (#D3)", function()
+    local indented = vim.deepcopy(SYMBOL)
+    indented.doc = "Create an order for `user_id` from a cart.\n\n"
+      .. "        Async to exercise `async def` on a service method; awaits the user\n"
+      .. "        lookup as if it hit a remote identity service.\n"
+      .. "        "
+    local card = hover.render(root_node(indented, {}))
+
+    expect.eq(#card.lines, 9, vim.inspect(card.lines))
+    expect.eq(card.lines[6], "  Create an order for `user_id` from a cart.")
+    expect.eq(card.lines[7], "  ", "the doc's own paragraph break survives, dedented to blank")
+    expect.eq(card.lines[8], "  Async to exercise `async def` on a service method; awaits the user")
+    expect.eq(card.lines[9], "  lookup as if it hit a remote identity service.")
+  end)
+
   it("points <CR> on a caller row at that caller", function()
     local card = hover.render(root_node(SYMBOL, { CALLER }))
     expect.eq(#card.rows, 1)
