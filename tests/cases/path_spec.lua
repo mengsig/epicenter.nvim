@@ -411,17 +411,26 @@ describe("path ambiguity on candidates that share a qualified name (F1)", functi
         return { path = { candidates[1] }, ambiguousFrom = {}, ambiguousTo = {} }
       end)
     )
-    vim.fn.setqflist({}, "f")
+    -- The export itself is captured rather than run: a real quickfix window
+    -- (and the toast that follows it) left standing in a headless session
+    -- aborts the next test's first redraw.
+    local qf = require("epicenter.ui.qf")
+    local sent = nil
+    local original_send = qf.send_and_notify
+    qf.send_and_notify = function(opts)
+      sent = opts
+    end
 
     handle = require("epicenter").run("path", { "router", "M.start", "--qf" }, buf)
     pick_first()
+    local ok = vim.wait(10000, function()
+      return sent ~= nil
+    end, 10)
+    qf.send_and_notify = original_send
 
-    wait(function()
-      return #vim.fn.getqflist() > 0
-    end, 10000, "the quickfix list the flag asked for")
-    expect.eq(#vim.fn.getqflist(), 1, "the resolved path's one step")
-    vim.fn.setqflist({}, "f")
-    vim.cmd("silent! cclose")
+    expect.truthy(ok, "the flag survived the picker and reached the re-run's rows")
+    expect.eq(sent.list, "quickfix")
+    expect.eq(#sent.rows, 1, "the resolved path's one step")
   end)
 
   it("stops instead of reopening when even the file cannot separate them", function()
