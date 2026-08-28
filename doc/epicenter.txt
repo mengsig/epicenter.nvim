@@ -33,6 +33,7 @@ CONTENTS                                                   *epicenter-contents*
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
      - tour ................................... |epicenter-tour|
+     - telescope ............................... |epicenter-telescope|
      - core .................................... |epicenter-core|
      - planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
@@ -355,6 +356,10 @@ Groups are derived at runtime from the active colourscheme (`Normal`,
     EpicenterRipple2    ripple ring 2
     EpicenterRipple3    ripple ring 3 and deeper
 
+`theme.accent` decides where `EpicenterAccent` itself comes from: `"auto"`
+(default, `Function`/`Title`), `"mono"` (drops it - the flattest palette), or
+a literal `"#rrggbb"` / highlight group name to borrow `fg` from.
+
 ==============================================================================
 7. HEALTH                                                    *epicenter-health*
 
@@ -608,12 +613,24 @@ Keys inside the panel:
     s               toggle strict mode (drops the `?` edges)
     t               cycle the test scope (with -> without -> only)
     /               filter by name
+    +, -            grow / shrink
+    <, >            narrower / wider
+    <C-arrow>       move
     ?               toggle the key help (normal mode)
     q, <Esc>        close
 
 The open rows are re-fetched on |EpicenterIndexed|, debounced and repainted
 once as a batch, so a burst of edits does not flicker or fan out one request
 per row.
+
+`+`/`-`/`<`/`>`/`<C-arrow>` are shared by every panel built on this shared
+kit (a float, with no fixed `box` of its own - the dashboards excepted): a
+resize is remembered per PANEL TYPE (not per project) under
+`stdpath("state")`, so `:Epicenter callers` reopens at the size you last left
+it, across a restart. A vsplit panel (e.g. |epicenter-outline|) keeps its own
+window's height/width instead - there is nothing to remember, it is already
+whatever you left it at. |epicenter-blast| owns its window separately and
+already spends `+`/`-` on query depth, so it does not have this.
 
 Options: >lua
 
@@ -920,6 +937,19 @@ TOUR                                                           *epicenter-tour*
     Nothing starts on its own. The first time a project is indexed, one notice
     says the tour exists - once, ever. `tour = { offer = false }` turns even
     that off.
+
+==============================================================================
+TELESCOPE                                                 *epicenter-telescope*
+
+Optional: `require("telescope").load_extension("epicenter")` pulls in three
+pickers over the same server calls the palette and blast panel use - >
+
+    require("telescope").extensions.epicenter.symbols()  -- live, ranked
+    require("telescope").extensions.epicenter.grep()     -- live, repo-wide
+    require("telescope").extensions.epicenter.blast()    -- one fetch, filtered
+<
+Nothing here is required, or even touched, unless Telescope itself loads it -
+a session without Telescope never requires |epicenter.telescope|.
 
 ==============================================================================
 CORE                                                           *epicenter-core*

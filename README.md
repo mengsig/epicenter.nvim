@@ -428,6 +428,20 @@ off.
 Writes the call graph to an HTML file under the project's `.navgraph/` and
 opens it.
 
+### Telescope
+
+Optional: `require("telescope").load_extension("epicenter")`, then
+
+```lua
+require("telescope").extensions.epicenter.symbols()  -- live, server-ranked
+require("telescope").extensions.epicenter.grep()     -- live, repo-wide
+require("telescope").extensions.epicenter.blast()    -- one fetch at the cursor
+```
+
+Same server calls as the built-in palette and blast panel — Telescope's own
+picker UI, sorter and previewer instead. Nothing here loads unless Telescope
+does the loading; a session without it never touches this code.
+
 ### Badges
 
 Not a panel: `badges` puts a definition's fan-in and fan-out at the end of its
@@ -547,6 +561,16 @@ Inside the palette:
 <!-- /registry:commands -->
 
 Every subcommand ships today; none are pending.
+
+### Resizing and moving a panel
+
+`+`/`-` grow/shrink, `<`/`>` narrow/widen, `<C-arrow>` moves — shared by every
+float panel built on this plugin's panel kit. A resize is remembered per
+**panel type**, not per project, under `stdpath("state")`, so `:Epicenter
+callers` reopens at the size you last left it, across a restart, even in a
+different project. A vsplit (outline) keeps its own window's size instead —
+nothing to remember there. The blast panel owns its window separately and
+already spends `+`/`-` on query depth, so it does not have this.
 
 ### To the quickfix list
 
@@ -723,6 +747,15 @@ hierarchy. Every group is overridable through `highlights`:
 The blast panel adds `EpicenterRipple1`, `EpicenterRipple2` and
 `EpicenterRipple3` — the ring grades of the inline marks, derived from the
 accent over the *editor* background rather than the float background.
+
+`theme.accent` decides where that one accent comes from: `"auto"` (default)
+takes it from the colourscheme's `Function`/`Title`; `"mono"` drops it
+entirely, for the calmest, flattest palette; anything else is a literal
+`"#rrggbb"` or the name of a highlight group to borrow `fg` from.
+
+```lua
+require("epicenter").setup({ theme = { accent = "mono" } })
+```
 
 ## How it relates to NavGraph
 
