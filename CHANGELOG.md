@@ -23,7 +23,8 @@ saved.
 - **Callers and callees** (`:Epicenter callers` / `callees`) — a tree that
   fetches one level at a time.
 - **Call path** (`:Epicenter path`) — the chain between two symbols, drawn one
-  rung at a time; it says so plainly when there is no path.
+  rung at a time; it says so plainly when there is no path, and when a name is
+  ambiguous it offers a candidate picker rather than reporting no path.
 - **Outline** (`:Epicenter outline`) — a live sidebar that follows the cursor
   and re-renders on reindex.
 - **Hot spots**, **unused**, **graph export**, and a **status dashboard** that
@@ -57,10 +58,13 @@ the exact option.
 Every server call is asynchronous and cancellable, and an answer superseded by a
 newer keystroke is dropped rather than painted. With every panel closed and
 badges off, moving the cursor costs nothing: no request, no timer. With badges
-on it is bounded to one round trip per CursorHold and one per buffer entered.
-Animation is one `vim.uv` timer per tween, and a frame over budget drops the
-next one; `vim.g.epicenter_reduce_motion` or `animate = false` turns it off with
-every widget landing on the same final state.
+on, a `CursorHold` repaints from the cached outline and sends nothing; an edit
+costs at most one `navgraph/outline` request, and re-entering an already-open
+buffer costs nothing further. A badge repaint starts at most one tween, none
+when the badge did not change. Animation is one `vim.uv` timer per tween, and a
+frame over budget drops the next one; `vim.g.epicenter_reduce_motion` or
+`animate = false` turns it off with every widget landing on the same final
+state.
 
 ### Getting the binary
 

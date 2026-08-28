@@ -184,6 +184,26 @@ describe("documentation stays in sync", function()
     )
   end)
 
+  it("describes call path's ambiguity handling, not just the no-path case (F1, F12)", function()
+    local changelog = read("CHANGELOG.md")
+    local bullet = changelog:match("%*%*Call path%*%*.-\n%-")
+    expect.truthy(bullet, "the CHANGELOG must have a Call path bullet")
+    expect.matches(
+      bullet,
+      "ambiguous",
+      'must not undersell F1\'s candidate picker as just "no path"'
+    )
+  end)
+
+  it("describes the badges-on cost as what F4 actually measured (F12)", function()
+    local changelog = read("CHANGELOG.md")
+    expect.matches(
+      changelog,
+      "CursorHold`%srepaints from the cached outline and sends nothing",
+      "must not claim a round trip per CursorHold when F4 proved there is none"
+    )
+  end)
+
   it("links every committed screenshot, and links nothing that is missing", function()
     -- Shared with `make docs-check` (tests/docs_check_lib.lua, F9) so this
     -- exact check runs under the target named for it, not only `make test`.
