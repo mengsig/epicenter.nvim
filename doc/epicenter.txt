@@ -27,6 +27,8 @@ CONTENTS                                                   *epicenter-contents*
      - hierarchy .............................. |epicenter-hierarchy|
      - context ................................ |epicenter-context|
      - tests .................................. |epicenter-tests|
+     - impact ................................. |epicenter-impact|
+         review ............................... |epicenter-review|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -112,6 +114,8 @@ The binary is looked up in this order:
     context    |epicenter-context|    Yank a symbol's context bundle
     where      |epicenter-context|    What encloses this line
     tests      |epicenter-tests|      Tests that reach this symbol
+    impact     |epicenter-impact|     Blast radius of the working change
+    review     |epicenter-impact|     Review the working change's impact
     path       |epicenter-path|       Call chain between two symbols
     outline    |epicenter-outline|    Live symbol outline of this buffer
     hot        |epicenter-hot|        Most depended-on symbols, by fan-in
@@ -161,6 +165,8 @@ change `keymaps.prefix`.
     <leader>eT  :Epicenter types      Supertypes, subtypes and implementors
     <leader>ey  :Epicenter context    Yank a symbol's context bundle
     <leader>et  :Epicenter tests      Tests that reach this symbol
+    <leader>ei  :Epicenter impact     Blast radius of the working change
+    <leader>ea  :Epicenter review     Review the working change's impact
     <leader>ep  :Epicenter path       Call chain between two symbols
     <leader>eo  :Epicenter outline    Live symbol outline of this buffer
     <leader>eh  :Epicenter hot        Most depended-on symbols, by fan-in
@@ -206,6 +212,13 @@ Defaults: >lua
       highlights = {},
       hot = { bar_width = 12, limit = 30 },
       hover = { callers = 5, max_width = 80 },
+      impact = {
+        debounce_ms = 400,
+        depth = 2,
+        enabled = true,
+        inline = true,
+        marker = "affected",
+      },
       keymaps = { prefix = "<leader>e" },
       log = { file = nil, level = "warn" },
       lsp = {
@@ -733,6 +746,52 @@ file, `%s` its own name; the command runs in the project root through your
     })
 <
 A language with no template says so and runs nothing.
+
+==============================================================================
+IMPACT                                                       *epicenter-impact*
+
+What the working change reaches, without being asked. On every reindex - and
+only while something is actually unsaved - epicenter asks `navgraph/impact`
+and marks each impacted definition where it lives: a sign in the gutter and a
+calm note at the end of its line, graded by how many calls away it is.
+
+With nothing unsaved there is no working change, so no request is sent and
+every mark comes down. Needs protocol 1.1.
+
+                                                        *:Epicenter-impact*
+:Epicenter impact                                              *<leader>ei*
+    The blast panel, rooted at the changed hunks rather than at one symbol.
+    Every key the blast panel has (|epicenter-blast|) works here.
+
+                                                         *epicenter-review*
+                                                        *:Epicenter-review*
+:Epicenter review [export]                                     *<leader>ea*
+    The same impact as a review list: rows grouped by changed hunk, each
+    impacted definition with its `file:line`, how many calls away it is, and
+    `?` when the edge was resolved by name rather than exactly.
+
+    a               approve this row - it turns to a faint check, here and
+                    on the marker in the code
+    A               approve every impacted definition in this row's file
+    u               unapprove this row
+    <CR>, o         jump to it / peek at it without leaving the panel
+
+    `:Epicenter review export` copies the whole list to the clipboard as a
+    markdown checklist, for a pull-request description. `e` does the same
+    from inside the panel.
+
+    Approvals live under `stdpath("state")`, per project, and are keyed by the
+    definition AND the hash of its source: edit that definition and it comes
+    back unreviewed, while everything you already looked at stays ticked.
+
+                                                    *epicenter-impact-line*
+The progress fits a statusline: >
+
+    require("epicenter").impact()   -- "impact 3/12 reviewed", or ""
+<
+`impact = { inline = false }` keeps the panel and the statusline but marks
+nothing in the code; `impact = { enabled = false }` turns the whole ambient
+surface off, request included.
 
 ==============================================================================
 PATH                                                           *epicenter-path*

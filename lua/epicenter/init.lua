@@ -239,6 +239,14 @@ function M.statusline(bufnr)
   return require("epicenter.features.crumbs").statusline(bufnr)
 end
 
+--- The working change's review progress for a statusline, e.g.
+--- `⌁ impact 3/12 reviewed`. Empty while there is no working change. Reads a
+--- cached answer only - the request behind it is the debounced ambient one.
+--- @return string
+function M.impact()
+  return require("epicenter.features.impact").statusline()
+end
+
 --- Keys the last setup() silently replaced an existing mapping to install
 --- (F13) - `:checkhealth epicenter` surfaces this so a user whose own
 --- mapping got overwritten gets a signal from somewhere.

@@ -18,7 +18,6 @@ local UNCALLED = {
   ["navgraph/importers"] = true,
   -- v1.1 helpers whose panels land in the next wave.
   ["navgraph/types"] = true,
-  ["navgraph/impact"] = true,
 }
 
 local function symbol(over)
@@ -160,6 +159,11 @@ ANSWERS["navgraph/context"] = {
   truncated = false,
   tokensEstimate = 12,
 }
+ANSWERS["navgraph/impact"] = vim.tbl_extend("force", EMPTY_BLAST, {
+  hunks = {},
+  changeId = "deadbeefdeadbeef",
+  truncated = false,
+})
 ANSWERS["navgraph/tests"] = {
   symbol = symbol(),
   tests = {},
@@ -228,6 +232,8 @@ local DRIVEN = {
   { "where", {} },
   { "where", { "app/server.lua:4" } },
   { "tests", {} },
+  { "impact", {} },
+  { "review", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },

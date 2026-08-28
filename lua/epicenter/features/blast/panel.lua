@@ -221,7 +221,7 @@ local function initial_state(cfg)
   }
 end
 
---- @param opts { kind: "blast"|"diff", target: table, bufnr?: integer }
+--- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer }
 --- @return epicenter.blast.Panel
 function M.open(opts)
   local existing = M.current()
@@ -369,6 +369,10 @@ function Panel:query(opts)
     local params = model.params(self.state, { ref = self.target.ref or "HEAD" })
     return self:_request("diff", params, opts, generation)
   end
+  -- The working change has no target at all: the hunks ARE the roots.
+  if self.kind == "impact" then
+    return self:_request("impact", model.params(self.state, {}), opts, generation)
+  end
   if self.target.symbol then
     return self:_request("blast", model.params(self.state, self.target), opts, generation)
   end
@@ -423,6 +427,11 @@ end
 --- `navgraph/diff` wraps a blast result; `navgraph/blast` is one.
 --- @return table blast payload, integer|nil changed-symbol count
 local function unwrap(kind, result)
+  -- An impact answer IS a blast result (plus hunks); its roots are the
+  -- changed definitions, exactly as a diff's are.
+  if kind == "impact" then
+    return result, #(result.roots or {})
+  end
   if kind ~= "diff" then
     return result, nil
   end
@@ -449,7 +458,12 @@ function Panel:_on_result(err, result, opts)
   self.message = nil
   local blast, changed = unwrap(self.kind, result)
   local roots = blast.roots or {}
-  self.meta = { kind = self.kind, root = roots[1], ref = result.ref or self.target.ref }
+  self.meta = {
+    kind = self.kind,
+    root = roots[1],
+    ref = result.ref or self.target.ref,
+    hunks = result.hunks and #result.hunks or nil,
+  }
 
   local summary = vim.tbl_extend("force", model.empty_summary(), blast.summary or {})
   summary.changed = changed

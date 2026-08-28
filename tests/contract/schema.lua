@@ -445,8 +445,15 @@ M.METHODS = {
         depth = required(int()),
         via = required(list_of(int())),
       }))),
-      summary = required(object({ count = required(int()), maxDepth = required(int()) })),
-      truncated = required(bool()),
+      -- "Every list method reports `truncated`" - but the addendum does not
+      -- say where, and navgraph reports it inside the summary. Both spots
+      -- are accepted; a client reads whichever is there.
+      summary = required(object({
+        count = required(int()),
+        maxDepth = required(int()),
+        truncated = bool(),
+      })),
+      truncated = bool(),
     }),
   },
 
@@ -473,7 +480,7 @@ M.METHODS = {
           },
         })),
       }))),
-      truncated = required(bool()),
+      truncated = bool(),
     }),
   },
 
@@ -506,7 +513,9 @@ M.METHODS = {
         range = required(RANGE),
         roots = required(list_of(SYMBOL)),
       }))),
-      truncated = required(bool()),
+      -- The blast summary already carries the walk's own `truncated`; a
+      -- top-level copy is accepted but not demanded.
+      truncated = bool(),
     }),
   },
 

@@ -126,6 +126,12 @@ describe("the tests panel against the fake navgraph server", function()
     expect.matches(vim.api.nvim_win_get_config(panel.win.win).title[1][1], "dispatch")
   end)
 
+  it("says the list was capped rather than presenting it as the whole set", function()
+    expect.truthy(tests.truncated({ truncated = true, summary = {} }))
+    expect.truthy(tests.truncated({ summary = { truncated = true } }), "navgraph puts it here")
+    expect.falsy(tests.truncated({ summary = { truncated = false } }))
+  end)
+
   it("says so when nothing tests the symbol, instead of an empty box", function()
     panel = epicenter.run("tests", { "M.route" }, buf)
     wait(function()

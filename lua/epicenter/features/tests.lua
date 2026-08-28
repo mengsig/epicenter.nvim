@@ -96,6 +96,13 @@ function M.render_row(row)
   return { text = text, spans = spans }
 end
 
+--- Whether the server capped the list. The addendum promises the flag but
+--- not where it sits: navgraph reports it inside the summary. Pure.
+--- @return boolean
+function M.truncated(result)
+  return result.truncated == true or (result.summary or {}).truncated == true
+end
+
 -- The runner ---------------------------------------------------------------------
 
 --- The shell command for one test, or nil plus the reason there is none.
@@ -275,7 +282,11 @@ local function open_tests(ctx)
       view.panel:set_roots(files, { expand_roots = true })
       view.panel:set_title((" tests · %s "):format(result.symbol.qualified))
       view.panel:set_footer(
-        (" %d · max depth %d · r run "):format(result.summary.count, result.summary.maxDepth)
+        (" %d%s · max depth %d · r run "):format(
+          result.summary.count,
+          M.truncated(result) and "+" or "",
+          result.summary.maxDepth
+        )
       )
     end, { bufnr = ctx.bufnr, channel = "tests" })
   end

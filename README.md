@@ -267,6 +267,41 @@ split without blocking the editor.
 tests = { runner = { python = "pytest %f::%s", elixir = "mix test %f" } }
 ```
 
+### Impact — always on, `:Epicenter impact`, `<leader>ei`
+
+While anything is unsaved, every definition your change reaches carries a calm
+note at the end of its line and a graded mark in the gutter. Save, and it all
+goes away — with no working change there is nothing to ask about, so nothing is
+asked.
+
+```
+def render_invoice(order):        ⌁ affected · order_service.py:112
+    total = price_of(order)       ⌁ affected · order_service.py:112
+```
+
+`:Epicenter impact` opens the blast panel rooted at the changed hunks instead
+of at one symbol.
+
+### Impact review — `:Epicenter review`, `<leader>ea`
+
+The same impact as a list you can work through: grouped by changed hunk, each
+row showing where it is, how many calls away, and `?` for a heuristic edge.
+
+```
+╭─ impact review · 3/12 reviewed ────────────────────────────────────────────╮
+│ v app/services/order_service.py:112 (4)                                    │
+│   + fn render_invoice   app/routes/orders.py:44   d1                       │
+│     fn export_orders    app/routes/orders.py:88   d2  ?                    │
+╰─ a approve · A file · u undo · e export ───────────────────────────────────╯
+```
+
+`a` approves a row, `A` the whole file, `u` undoes one. Approvals survive a
+restart and are keyed to the definition's source, so editing that code brings
+it back unreviewed while everything else stays ticked. `e` (or
+`:Epicenter review export`) copies a markdown checklist for the PR
+description, and `require("epicenter").impact()` puts `impact 3/12 reviewed`
+in your statusline.
+
 ### Call path — `:Epicenter path`, `<leader>ep`
 
 The chain between two symbols, drawn one rung at a time.
@@ -422,6 +457,8 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>eT` | `:Epicenter types`     | Supertypes, subtypes and implementors    |
 | `<leader>ey` | `:Epicenter context`   | Yank a symbol's context bundle           |
 | `<leader>et` | `:Epicenter tests`     | Tests that reach this symbol             |
+| `<leader>ei` | `:Epicenter impact`    | Blast radius of the working change       |
+| `<leader>ea` | `:Epicenter review`    | Review the working change's impact       |
 | `<leader>ep` | `:Epicenter path`      | Call chain between two symbols           |
 | `<leader>eo` | `:Epicenter outline`   | Live symbol outline of this buffer       |
 | `<leader>eh` | `:Epicenter hot`       | Most depended-on symbols, by fan-in      |
@@ -463,6 +500,8 @@ Inside the palette:
 | `context`   | Yank a symbol's context bundle           |
 | `where`     | What encloses this line                  |
 | `tests`     | Tests that reach this symbol             |
+| `impact`    | Blast radius of the working change       |
+| `review`    | Review the working change's impact       |
 | `path`      | Call chain between two symbols           |
 | `outline`   | Live symbol outline of this buffer       |
 | `hot`       | Most depended-on symbols, by fan-in      |
@@ -574,6 +613,13 @@ require("epicenter").setup({
   highlights = {},                          -- e.g. { EpicenterAccent = { fg = "#7aa2f7" } }
   hot = { bar_width = 12, limit = 30 },
   hover = { callers = 5, max_width = 80 },
+  impact = {
+    debounce_ms = 400,
+    depth = 2,
+    enabled = true,                         -- the whole ambient surface, marks and all
+    inline = true,                          -- end-of-line markers on impacted definitions
+    marker = "affected",                    -- the word those markers carry
+  },
   keymaps = { prefix = "<leader>e" },       -- or false, to install none
   log = { file = nil, level = "warn" },     -- file defaults to stdpath("state")/epicenter.log
   lsp = {
