@@ -198,6 +198,44 @@ describe("status dashboard against the fake navgraph server", function()
   end)
 end)
 
+describe("two dashboards do not starve each other", function()
+  local root, buf, first, second
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    for _, win in ipairs({ first, second }) do
+      if win and win:valid() then
+        win:close({ motion = false })
+      end
+    end
+    first, second = nil, nil
+  end)
+
+  --- A stale-drop channel exists to drop ONE view's superseded answers. Shared
+  --- across panels, a second dashboard's request bumped the sequence and the
+  --- first one's answer was thrown away - it sat on "loading..." forever.
+  it("each paints its own content", function()
+    local epicenter = require("epicenter")
+    first = epicenter.run("status", {}, buf)
+    second = epicenter.run("status", {}, buf)
+
+    for name, win in pairs({ first = first, second = second }) do
+      wait(function()
+        local lines = table.concat(vim.api.nvim_buf_get_lines(win.buf, 0, -1, false), "\n")
+        return lines:find("files", 1, true) ~= nil
+      end, 10000, name .. " dashboard content")
+    end
+  end)
+end)
+
 describe("status dashboard geometry with animation on (F1)", function()
   -- Real animation: F1 is invisible under CI's default reduce-motion
   -- (tests/minimal_init.lua sets vim.g.epicenter_reduce_motion = true,
@@ -205,12 +243,20 @@ describe("status dashboard geometry with animation on (F1)", function()
   -- before the async `navgraph/status` answer has even landed). A content
   -- assertion cannot catch it either: `make smoke` runs with motion on and
   -- exercises this dashboard, but only checks buffer text, never geometry.
+  --
+  -- The bug only shows when the answer lands DURING the tween, so the tween
+  -- is stretched well past the sub-millisecond round trip; at the stock 120ms
+  -- the two race and the assertion below is a coin toss.
+  local OPEN_MS = 600
   local root, buf, win
 
   before_each(function()
     vim.g.epicenter_reduce_motion = false
     require("epicenter.config").reset()
-    require("epicenter.config").setup({ ui = { icons = "ascii" } })
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animation = { open_ms = OPEN_MS },
+    })
     require("epicenter.ui.theme").apply()
     root = root or support.start_fake()
     vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
@@ -230,7 +276,7 @@ describe("status dashboard geometry with animation on (F1)", function()
     local loading_height = vim.api.nvim_win_get_config(win.win).height
     wait(function()
       return win.tween == nil
-    end, 10000, "the open tween settled")
+    end, OPEN_MS * 5, "the open tween settled")
     local settled_height = vim.api.nvim_win_get_config(win.win).height
     expect.truthy(
       settled_height > loading_height,

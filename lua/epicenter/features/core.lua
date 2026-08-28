@@ -241,7 +241,11 @@ local function show_status(ctx)
         server = M.server_info(root),
         log = require("epicenter.log").path(),
       })
-    end, { root = root, channel = "status" })
+      -- Per panel, not per session: a channel is there to drop THIS view's
+      -- superseded answers. Shared, a closed dashboard's deferred reload
+      -- (after `R`) supersedes a freshly opened one's first request and
+      -- leaves it sitting on "loading...".
+    end, { root = root, channel = ("status:%d"):format(win.buf) })
   end
 
   local function map(lhs, fn)

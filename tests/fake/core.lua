@@ -46,35 +46,37 @@ local function symbol_at(ctx, params)
   }
 end
 
+local function status(ctx)
+  -- languages:{<lang>:files} per the contract, so key by the CLI's short
+  -- language tag (already on every symbol), not the file extension.
+  local lang_of_file = {}
+  for _, symbol in ipairs(ctx.index.symbols) do
+    lang_of_file[symbol.file] = lang_of_file[symbol.file] or symbol.language
+  end
+  local languages = {}
+  for _, file in ipairs(ctx.index.files) do
+    local lang = lang_of_file[file]
+    if lang then
+      languages[lang] = (languages[lang] or 0) + 1
+    end
+  end
+  return {
+    root = ctx.root,
+    protocolVersion = 1,
+    version = "fake-0.1.0",
+    files = #ctx.index.files,
+    symbols = #ctx.index.symbols,
+    edges = 0,
+    languages = languages,
+    overlays = vim.tbl_count(ctx.overlays),
+    indexedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    lastIndexMs = ctx.index.ms,
+    cache = false,
+  }
+end
+
 return {
-  ["navgraph/status"] = function(ctx)
-    -- languages:{<lang>:files} per the contract, so key by the CLI's short
-    -- language tag (already on every symbol), not the file extension.
-    local lang_of_file = {}
-    for _, symbol in ipairs(ctx.index.symbols) do
-      lang_of_file[symbol.file] = lang_of_file[symbol.file] or symbol.language
-    end
-    local languages = {}
-    for _, file in ipairs(ctx.index.files) do
-      local lang = lang_of_file[file]
-      if lang then
-        languages[lang] = (languages[lang] or 0) + 1
-      end
-    end
-    return {
-      root = ctx.root,
-      protocolVersion = 1,
-      version = "fake-0.1.0",
-      files = #ctx.index.files,
-      symbols = #ctx.index.symbols,
-      edges = 0,
-      languages = languages,
-      overlays = vim.tbl_count(ctx.overlays),
-      indexedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-      lastIndexMs = ctx.index.ms,
-      cache = false,
-    }
-  end,
+  ["navgraph/status"] = status,
 
   ["navgraph/symbolAt"] = symbol_at,
 
@@ -95,14 +97,10 @@ return {
     })
   end,
 
+  --- The contract answers a rescan with the `navgraph/status` shape, whole.
   ["navgraph/rescan"] = function(ctx)
     ctx.reindex("rescan")
-    return {
-      root = ctx.root,
-      protocolVersion = 1,
-      files = #ctx.index.files,
-      symbols = #ctx.index.symbols,
-    }
+    return status(ctx)
   end,
 
   ["textDocument/definition"] = function(ctx, params)

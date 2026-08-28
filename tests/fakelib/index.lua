@@ -258,7 +258,12 @@ function M.search_refs(index, opts)
   local by_referencer = {}
   for _, target in ipairs(index.symbols) do
     local allowed = not opts.kinds or #opts.kinds == 0 or vim.tbl_contains(opts.kinds, target.kind)
-    if allowed and M.fuzzy(target.qualified, query) then
+    local matches = allowed and M.fuzzy(target.qualified, query) or nil
+    if matches then
+      -- An item still carries the TARGET's rank, exactly as the real server
+      -- does: `symbol` becomes the referencing definition, but score and
+      -- matches stay the ones the query earned against the target.
+      local rank = score(target.qualified, query, matches)
       local pattern = "%f[%w_]" .. target.name .. "%s*%("
       for file, lines in pairs(index.sources) do
         for i, line in ipairs(lines) do
@@ -267,8 +272,10 @@ function M.search_refs(index, opts)
             if enclosing then
               local entry = by_referencer[enclosing.id]
               if not entry then
-                entry = { symbol = enclosing, lines = {} }
+                entry = { symbol = enclosing, lines = {}, score = rank, matches = matches }
                 by_referencer[enclosing.id] = entry
+              elseif rank > entry.score then
+                entry.score, entry.matches = rank, matches
               end
               if not vim.tbl_contains(entry.lines, i) then
                 table.insert(entry.lines, i)

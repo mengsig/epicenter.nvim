@@ -5,6 +5,7 @@ local M = {}
 
 local rpc = require("fakelib.rpc")
 local index = require("fakelib.index")
+local schema = require("contract.schema")
 
 local PROTOCOL_VERSION = 1
 
@@ -55,14 +56,17 @@ function M.serve(opts)
 
   function ctx.reindex(reason, changed)
     ctx.index = index.build(ctx.root, ctx.overlays)
-    rpc.notify(output, "navgraph/indexed", {
+    local payload = {
       reason = reason,
       files = #ctx.index.files,
       symbols = #ctx.index.symbols,
       edges = 0,
       ms = ctx.index.ms,
       changedFiles = changed or {},
-    })
+    }
+    local bad = schema.check_indexed(payload)
+    assert(not bad, bad)
+    rpc.notify(output, "navgraph/indexed", payload)
   end
 
   local function handle_request(msg)
@@ -96,6 +100,16 @@ function M.serve(opts)
       return
     end
 
+    -- The contract, enforced on the wire: a request the client should never
+    -- have been able to build is refused here, before any handler sees it.
+    if vim.startswith(method, "navgraph/") then
+      local bad = schema.check_params(method, params)
+      if bad then
+        rpc.respond_error(output, id, -32602, bad)
+        return
+      end
+    end
+
     local ok, result = pcall(handler, ctx, params)
     if not ok then
       -- A handler raises `{ code, message }` to answer with a protocol error
@@ -107,6 +121,15 @@ function M.serve(opts)
         rpc.respond_error(output, id, -32603, tostring(result))
       end
       return
+    end
+    -- ...and on the way back out, so a fake that drifts from the contract
+    -- fails here rather than teaching a feature the wrong shape.
+    if vim.startswith(method, "navgraph/") then
+      local bad = schema.check_result(method, result)
+      if bad then
+        rpc.respond_error(output, id, -32603, "fake server broke the contract: " .. bad)
+        return
+      end
     end
     rpc.respond(output, id, result)
   end

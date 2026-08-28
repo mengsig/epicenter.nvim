@@ -9,39 +9,16 @@
 --- on a definition's own line) is a strict superset of what a definition-line
 --- cursor needs, so one owner serves both waves correctly.
 ---
---- Params are checked against the contract; an unknown key is a `-32602`: a
---- client that drifts from the protocol must fail here, loudly, rather than
---- against a shape the fake invented to be friendly. The call graph is
---- derived from the fixture sources rather than hard-coded, so a fixture edit
---- cannot silently drift from what the specs assert.
+--- Params arrive already checked against `tests/contract/schema.lua` (the
+--- fake's dispatch loop refuses anything the contract does not name), so the
+--- handlers below only interpret them. The call graph is derived from the
+--- fixture sources rather than hard-coded, so a fixture edit cannot silently
+--- drift from what the specs assert.
 
 --- @param code integer JSON-RPC error code the server should answer with
 local function fail(code, fmt, ...)
   error({ code = code, message = fmt:format(...) }, 0)
 end
-
-local function check_params(method, params, allowed)
-  for key in pairs(params or {}) do
-    if not allowed[key] then
-      fail(-32602, "%s: unknown param %q", method, tostring(key))
-    end
-  end
-end
-
-local function merged(...)
-  return vim.tbl_extend("force", {}, ...)
-end
-
-local SCOPE = { strict = true, tests = true }
-local TARGET = { uri = true, position = true, symbol = true }
-
-local CALLERS_PARAMS = merged(TARGET, SCOPE, { depth = true, refs = true })
-local PATH_PARAMS = { from = true, to = true }
-local OUTLINE_PARAMS = merged(SCOPE, { path = true, kinds = true, limit = true })
-local HOT_PARAMS = merged(SCOPE, { path = true, limit = true })
-local UNUSED_PARAMS =
-  merged(SCOPE, { path = true, noPublic = true, followImports = true, limit = true })
-local GRAPH_PARAMS = merged(SCOPE, { path = true })
 
 -- Call graph -------------------------------------------------------------------
 
@@ -291,7 +268,6 @@ local function node_for(
 end
 
 local function tree_for(ctx, params, direction, method)
-  check_params(method, params, CALLERS_PARAMS)
   local root = root_symbol(ctx, params)
   if not root then
     fail(-32001, "%s: symbol not found", method)
@@ -343,7 +319,6 @@ return {
   end,
 
   ["navgraph/path"] = function(ctx, params)
-    check_params("navgraph/path", params, PATH_PARAMS)
     local from, to = find_named(ctx.index, params.from), find_named(ctx.index, params.to)
     if not from or not to then
       return { path = {} }
@@ -360,7 +335,6 @@ return {
   end,
 
   ["navgraph/outline"] = function(ctx, params)
-    check_params("navgraph/outline", params, OUTLINE_PARAMS)
     local limit = params.limit or 300
     local tests = params.tests or "with"
     local files, order, count = {}, {}, 0
@@ -388,7 +362,6 @@ return {
   end,
 
   ["navgraph/hot"] = function(ctx, params)
-    check_params("navgraph/hot", params, HOT_PARAMS)
     local graph = graph_of(ctx.index)
     local items = {}
     for _, symbol in ipairs(ctx.index.symbols) do
@@ -438,7 +411,6 @@ return {
   end,
 
   ["navgraph/unused"] = function(ctx, params)
-    check_params("navgraph/unused", params, UNUSED_PARAMS)
     local graph = graph_of(ctx.index)
     local tests = params.tests or "with"
     local items = {}
@@ -480,7 +452,6 @@ return {
   --- repeated request for the same view reuses one file. `path` is a filter
   --- over which subgraph to draw - the server always chooses the output path.
   ["navgraph/graph"] = function(ctx, params)
-    check_params("navgraph/graph", params, GRAPH_PARAMS)
     local graph = graph_of(ctx.index)
     local edges = {}
     for _, symbol in ipairs(ctx.index.symbols) do
