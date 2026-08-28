@@ -511,6 +511,31 @@ describe("impact against the fake navgraph server", function()
     expect.matches(impact.statusline(), "impact 1/%d+ reviewed")
   end)
 
+  it("M1: does not crash on a real `e` keypress once the working change is gone", function()
+    edit()
+    answered()
+
+    panel = epicenter.run("review", {}, edited)
+    wait(function()
+      return panel:valid() and panel.list:count() > 1
+    end, 10000, "the review rows")
+
+    -- Saved away: `reload` hands the panel a nil session, but the panel stays
+    -- open and keyed - the `e` key still calls `M.export(session)` directly.
+    vim.bo[edited].modified = false
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    wait(function()
+      return impact.current() == nil
+    end, 10000, "the cleared impact")
+
+    -- A keymap callback error is caught and reported by Neovim itself (it
+    -- never reaches pcall around nvim_feedkeys), so v:errmsg is the real
+    -- signal that the E5108 crash from the merge-gate report recurred.
+    vim.v.errmsg = ""
+    press(panel, "e")
+    expect.eq(vim.v.errmsg, "", "the `e` key must not crash the panel")
+  end)
+
   it("opens the blast panel rooted at the hunks", function()
     edit()
     panel = epicenter.run("impact", {}, edited)

@@ -335,7 +335,13 @@ function M.reload(panel, session)
 end
 
 --- Copies the checklist to the clipboard and says so.
+--- M1: reached directly from the panel's `e` key (not through `run_review`'s
+--- `current.answered` guard), so `session.groups` can be nil - the working
+--- change vanished (a save) while the panel was still open and keyed.
 function M.export(session)
+  if not session.groups then
+    return require("epicenter").notify("no working change to review", "info")
+  end
   local register = require("epicenter.features.context").target_register()
   vim.fn.setreg(register, M.checklist(session.groups, session.state))
   local reviewed, total = M.counts(session.groups, session.state)
