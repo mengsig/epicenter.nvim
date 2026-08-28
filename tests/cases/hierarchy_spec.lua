@@ -386,3 +386,225 @@ describe("the protocol 1.1 gate", function()
     expect.eq(sent[1], "textDocument/prepareCallHierarchy")
   end)
 end)
+
+describe("a direction flip while a call request is in flight", function()
+  local root, buf, panel, held
+
+  --- Its own workspace and a stand-in session whose call answers are held, so
+  --- the test controls exactly when a stale one lands.
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    require("epicenter.ui.theme").apply()
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(root, ".navgraph"), "p")
+    local path = vim.fs.joinpath(root, "a.lua")
+    vim.fn.writefile({ "local function f() end", "return f" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+    held = {}
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  local function item(name, line)
+    local uri = vim.uri_from_fname(vim.fs.joinpath(root, "a.lua"))
+    return {
+      name = name,
+      kind = 12,
+      uri = uri,
+      range = { start = { line = line, character = 0 }, ["end"] = { line = line, character = 9 } },
+      selectionRange = {
+        start = { line = line, character = 0 },
+        ["end"] = { line = line, character = 9 },
+      },
+      data = { id = line + 1, qualified = name, file = "a.lua" },
+    }
+  end
+
+  local function register()
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        if method == "textDocument/prepareCallHierarchy" then
+          vim.schedule(function()
+            cb(nil, { item("f", 0) })
+          end)
+        else
+          -- Held: released by the test, after the flip.
+          table.insert(held, { method = method, cb = cb })
+        end
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, {
+      callHierarchyProvider = true,
+      experimental = { navgraph = { protocolVersion = 1, protocolMinor = 1, methods = {} } },
+    })
+  end
+
+  local function release(method, entries)
+    for _, request in ipairs(held) do
+      if request.method == method and not request.done then
+        request.done = true
+        request.cb(nil, entries)
+        return true
+      end
+    end
+    return false
+  end
+
+  it("drops the stale answer instead of indexing it under the new direction", function()
+    register()
+    panel = epicenter.run("hierarchy", {}, buf)
+    wait(function()
+      return #held > 0
+    end, 5000, "the incoming request")
+    expect.eq(held[1].method, "callHierarchy/incomingCalls")
+
+    press(panel, "d")
+    wait(function()
+      return #held > 1
+    end, 5000, "the outgoing request after the flip")
+    expect.eq(held[2].method, "callHierarchy/outgoingCalls")
+
+    -- The stale incoming answer carries `.from`; the outgoing reader would
+    -- index it as `.to` and crash on a nil item.
+    expect.truthy(release("callHierarchy/incomingCalls", { { from = item("caller", 4) } }))
+    expect.falsy(body(panel):find("caller", 1, true), "the stale answer is not drawn")
+
+    expect.truthy(release("callHierarchy/outgoingCalls", { { to = item("callee", 7) } }))
+    wait(function()
+      return body(panel):find("callee", 1, true) ~= nil
+    end, 5000, "the outgoing rows")
+    expect.matches(vim.api.nvim_win_get_config(panel.win.win).title[1][1], "outgoing calls")
+    expect.falsy(body(panel):find("caller", 1, true), "the stale answer never appears")
+  end)
+end)
+
+describe("the types panel's implementors group", function()
+  local root, buf, panel
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    require("epicenter.ui.theme").apply()
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(root, ".navgraph"), "p")
+    local path = vim.fs.joinpath(root, "shape.lua")
+    vim.fn.writefile({ "local Shape = {}", "return Shape", "", "-- pad", "-- pad" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    vim.api.nvim_win_set_cursor(0, { 1, 6 })
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  local function shape_item()
+    return {
+      name = "Shape",
+      kind = 5,
+      uri = vim.uri_from_fname(vim.fs.joinpath(root, "shape.lua")),
+      range = { start = { line = 0, character = 6 }, ["end"] = { line = 0, character = 11 } },
+      selectionRange = {
+        start = { line = 0, character = 6 },
+        ["end"] = { line = 0, character = 11 },
+      },
+      data = { id = 1, qualified = "Shape", file = "shape.lua" },
+    }
+  end
+
+  --- @param announce_implementation boolean
+  --- @param supertypes_error boolean
+  local function register(announce_implementation, supertypes_error)
+    local seen = {}
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, params, cb)
+        table.insert(seen, { method = method, params = params })
+        vim.schedule(function()
+          if method == "textDocument/prepareTypeHierarchy" then
+            return cb(nil, { shape_item() })
+          end
+          if method == "typeHierarchy/supertypes" and supertypes_error then
+            return cb({ code = -32603, message = "index is rebuilding" }, nil)
+          end
+          cb(nil, {})
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, {
+      typeHierarchyProvider = true,
+      implementationProvider = announce_implementation,
+      experimental = { navgraph = { protocolVersion = 1, protocolMinor = 1, methods = {} } },
+    })
+    return seen
+  end
+
+  local function methods_of(seen)
+    return vim.tbl_map(function(entry)
+      return entry.method
+    end, seen)
+  end
+
+  it("never asks for implementations against a server that declines the capability", function()
+    local seen = register(false, false)
+    panel = epicenter.run("types", {}, buf)
+    wait(function()
+      return body(panel):find("supertypes", 1, true) ~= nil
+    end, 5000, "the type groups")
+    expect.falsy(
+      vim.tbl_contains(methods_of(seen), "textDocument/implementation"),
+      "implementationProvider=false declines the capability"
+    )
+    expect.falsy(body(panel):find("implementors", 1, true), "no group it could not ask for")
+  end)
+
+  it("asks at the resolved type, not wherever the cursor moved to meanwhile", function()
+    local seen = register(true, false)
+    local source_win = vim.api.nvim_get_current_win()
+    panel = epicenter.run("types", {}, buf)
+    -- The prepare answer is scheduled: move the cursor before it lands.
+    vim.api.nvim_win_set_cursor(source_win, { 4, 0 })
+    wait(function()
+      return body(panel):find("implementors", 1, true) ~= nil
+    end, 5000, "the implementors group")
+    local asked
+    for _, entry in ipairs(seen) do
+      if entry.method == "textDocument/implementation" then
+        asked = entry.params
+      end
+    end
+    expect.truthy(asked ~= nil, "the implementation request was sent")
+    expect.eq(asked.position.line, 0, "the resolved type's own line, not the moved cursor")
+  end)
+
+  it("says a group failed instead of drawing it as empty", function()
+    register(true, true)
+    panel = epicenter.run("types", {}, buf)
+    wait(function()
+      return body(panel):find("supertypes", 1, true) ~= nil
+    end, 5000, "the type groups")
+    local text = body(panel)
+    expect.matches(text, "supertypes %(failed%)")
+    expect.matches(text, "index is rebuilding")
+    expect.matches(text, "subtypes %(0%)", "a group that really is empty still says 0")
+  end)
+end)

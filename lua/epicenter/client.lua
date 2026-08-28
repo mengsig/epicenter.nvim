@@ -565,7 +565,11 @@ function M.supports(method, opts)
   end
   local capability = STANDARD_CAPABILITY[method]
   if capability then
-    return state.capabilities ~= nil and state.capabilities[capability] ~= nil
+    -- LSP declares these as `boolean | Options`: `false` (and a JSON null,
+    -- which decodes to `vim.NIL`) DECLINES the capability. Only presence of
+    -- something other than those two announces it.
+    local announced = (state.capabilities or {})[capability]
+    return announced ~= nil and announced ~= false and announced ~= vim.NIL
   end
   return (state.methods or {})[method] == true
 end

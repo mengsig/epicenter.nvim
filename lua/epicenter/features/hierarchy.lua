@@ -117,6 +117,11 @@ function M.render_row(row)
     return { text = text, spans = { { hl = "EpicenterMuted", from = 0, to = #text } } }
   end
 
+  if node.type == "notice" then
+    local text = indent .. "   " .. node.name
+    return { text = text, spans = { { hl = "EpicenterInfo", from = 0, to = #text } } }
+  end
+
   local chevron = "  "
   if row.expandable then
     chevron = icons.ui(row.expanded and "expanded" or "collapsed") .. " "
@@ -132,10 +137,9 @@ function M.render_row(row)
 
   if node.type == "group" then
     local text = indent .. chevron
-    return {
-      text = append(text, ("%s (%d)"):format(node.name, #node.children), "EpicenterTitle"),
-      spans = spans,
-    }
+    local label = node.failed and ("%s (failed)"):format(node.name)
+      or ("%s (%d)"):format(node.name, #node.children)
+    return { text = append(text, label, "EpicenterTitle"), spans = spans }
   end
 
   local item = node.item
@@ -196,16 +200,26 @@ end
 
 -- Call hierarchy -----------------------------------------------------------------
 
-local function fetch_calls(view, item, channel, cb)
-  local method = CALL_METHOD[view.direction]
+--- A `d` flip invalidates every call request issued before it. One channel per
+--- node key (not per direction) makes a flip supersede the request it repeats;
+--- the generation covers the rest, which nothing else can supersede.
+--- @param generation integer the `view.generation` the request was issued under
+local function current(view, generation)
+  return view.panel:valid() and view.generation == generation
+end
+
+local function fetch_calls(view, direction, item, channel, cb)
+  local method = CALL_METHOD[direction]
   require("epicenter.client")[method.helper]({ item = item }, cb, {
     bufnr = view.bufnr,
-    channel = ("hierarchy:%s:%s"):format(view.direction, channel),
+    channel = ("hierarchy:%s"):format(channel),
   })
 end
 
-local function calls_to_nodes(view, entries, parent_key)
-  local key = CALL_METHOD[view.direction].key
+--- Entries carry their item under the key of the direction the request was
+--- ISSUED with: an `incomingCalls` answer indexed as outgoing yields nil items.
+local function calls_to_nodes(direction, entries, parent_key)
+  local key = CALL_METHOD[direction].key
   local nodes = {}
   for _, entry in ipairs(entries or {}) do
     table.insert(
@@ -221,9 +235,10 @@ local function expand_call(view, node)
     return
   end
   node.pending = true
-  fetch_calls(view, node.item, node.key, function(err, entries)
+  local generation, direction = view.generation, view.direction
+  fetch_calls(view, direction, node.item, node.key, function(err, entries)
     node.pending = false
-    if not view.panel:valid() then
+    if not current(view, generation) then
       return
     end
     if err then
@@ -231,7 +246,7 @@ local function expand_call(view, node)
       return
     end
     node.loaded = true
-    node.children = calls_to_nodes(view, entries, node.key)
+    node.children = calls_to_nodes(direction, entries, node.key)
     view.tree:set_expanded(node.key, #node.children > 0)
     view.panel:refresh_tree()
     view.panel:set_footer(M.footer(view))
@@ -249,8 +264,9 @@ local function load_call_root(view)
     return view.panel:notice(reason)
   end
 
+  local generation, direction = view.generation, view.direction
   client.prepare_call_hierarchy(prepare_params(view.bufnr), function(err, items)
-    if not view.panel:valid() then
+    if not current(view, generation) then
       return
     end
     if err then
@@ -261,18 +277,18 @@ local function load_call_root(view)
       return view.panel:notice("  no symbol under the cursor")
     end
     view.item = item
-    fetch_calls(view, item, "root", function(call_err, entries)
-      if not view.panel:valid() then
+    fetch_calls(view, direction, item, "root", function(call_err, entries)
+      if not current(view, generation) then
         return
       end
       if call_err then
         return view.panel:notice("  " .. (call_err.message or "navgraph did not answer"))
       end
       local root = node_of_item(item, "", { expandable = false })
-      root.children = calls_to_nodes(view, entries, root.key)
+      root.children = calls_to_nodes(direction, entries, root.key)
       view.root = root
       view.panel:set_roots({ root }, { expand_roots = true })
-      view.panel:set_title((" %s calls · %s "):format(view.direction, item.data.qualified))
+      view.panel:set_title((" %s calls · %s "):format(direction, item.data.qualified))
       view.panel:set_footer(M.footer(view))
     end)
   end, { bufnr = view.bufnr, channel = "hierarchy:prepare" })
@@ -281,7 +297,7 @@ end
 local function open_call_hierarchy(ctx)
   local panel_mod = require("epicenter.ui.panel")
   local direction = ctx.args[1] == "outgoing" and "outgoing" or "incoming"
-  local view = { bufnr = ctx.bufnr, direction = direction }
+  local view = { bufnr = ctx.bufnr, direction = direction, generation = 0 }
 
   view.panel = panel_mod.open({
     title = " call hierarchy ",
@@ -313,6 +329,7 @@ local function open_call_hierarchy(ctx)
       end,
       d = function(self)
         view.direction = view.direction == "incoming" and "outgoing" or "incoming"
+        view.generation = view.generation + 1
         self:set_roots({})
         self:set_footer(" loading... ")
         load_call_root(view)
@@ -422,16 +439,35 @@ local function type_target(item)
   return { symbol = client.symbol_ref({ qualified = item.data.qualified, file = item.data.file }) }
 end
 
+--- `textDocument/implementation` at the RESOLVED type's own name position.
+--- The cursor may have moved during the prepare round-trip; the other three
+--- groups are asked about the item, and this one must match them.
+local function item_params(item)
+  local range = item.selectionRange or item.range
+  return { textDocument = { uri = item.uri }, position = range.start }
+end
+
 --- Asks for every group and paints once they have all answered, so the panel
 --- never grows a group at a time under the cursor. `users` is the one custom
 --- (non-LSP) group - only asked for when the server announces
 --- `navgraph/types`, so a server that predates it just shows the other three.
 local function load_type_root(view, item)
   local client = require("epicenter.client")
-  local users_supported = client.supports("navgraph/types", { bufnr = view.bufnr })
-  local groups = users_supported and TYPE_GROUPS
-    or { TYPE_GROUPS[1], TYPE_GROUPS[2], TYPE_GROUPS[3] }
-  local answers, pending = {}, #groups
+  --- A group whose method this server does not announce is not asked for at
+  --- all: `users` is custom, `implementors` is a capability of its own that a
+  --- type-hierarchy server need not also offer.
+  local method_of = {
+    users = "navgraph/types",
+    implementors = "textDocument/implementation",
+  }
+  local groups = {}
+  for _, group in ipairs(TYPE_GROUPS) do
+    local method = method_of[group.key]
+    if not method or client.supports(method, { bufnr = view.bufnr }) then
+      table.insert(groups, group)
+    end
+  end
+  local answers, failures, pending = {}, {}, #groups
 
   local function settle()
     pending = pending - 1
@@ -457,6 +493,12 @@ local function load_type_root(view, item)
             loaded = true,
           }
         or node_of_group(group.label, root.key, items, group.helper)
+      if failures[group.key] then
+        -- An errored group must never read as "there are none": it says so,
+        -- and carries the server's own message as its only row.
+        node.failed = true
+        node.children = { { type = "notice", key = node.key .. "/!", name = failures[group.key] } }
+      end
       table.insert(root.children, node)
     end
     view.root = root
@@ -470,20 +512,35 @@ local function load_type_root(view, item)
     view.panel:set_footer((" %d · l/h expand "):format(view.panel.list:count()))
   end
 
+  --- @param err table|nil
+  local function record(key, err, result)
+    if err then
+      failures[key] = err.message or "navgraph did not answer"
+    else
+      answers[key] = result
+    end
+    settle()
+  end
+
   local function ask(helper, key, params, channel)
     client[helper](params, function(err, result)
-      answers[key] = (not err) and result or {}
-      settle()
+      record(key, err, result)
     end, { bufnr = view.bufnr, channel = "types:" .. channel })
+  end
+
+  local asked = {}
+  for _, group in ipairs(groups) do
+    asked[group.key] = true
   end
 
   ask("supertypes", "supertypes", { item = item }, "supertypes")
   ask("subtypes", "subtypes", { item = item }, "subtypes")
-  ask("implementation", "implementors", prepare_params(view.bufnr), "implementors")
-  if users_supported then
+  if asked.implementors then
+    ask("implementation", "implementors", item_params(item), "implementors")
+  end
+  if asked.users then
     client.types(type_target(item), function(err, result)
-      answers.users = (not err) and result and result.users or {}
-      settle()
+      record("users", err, result and result.users or {})
     end, { bufnr = view.bufnr, channel = "types:users" })
   end
 end
