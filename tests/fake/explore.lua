@@ -168,22 +168,29 @@ end
 --- every bare-name match is a candidate, and the walk is only run between
 --- unique endpoints (F1). Unlike `find_named`, a bare-name collision is
 --- reported rather than silently resolved to the first definition.
+---
+--- Both name forms the contract defines are accepted, `Parent.name` and
+--- `name@path` - the second is the ONLY thing that separates definitions
+--- sharing a qualified name, so a fake that ignored it left the plugin's
+--- ambiguity picker untestable offline.
 --- @return table|nil, table[] the resolved symbol, or nil plus its candidates
-local function resolve_path_endpoint(index, name)
-  if type(name) ~= "string" or name == "" then
+local function resolve_path_endpoint(index, ref)
+  if type(ref) ~= "string" or ref == "" then
     return nil, {}
   end
+  local index_lib = require("fakelib.index")
+  local name, path = index_lib.split_ref(ref)
+  local qualified, bare = {}, {}
   for _, symbol in ipairs(index.symbols) do
-    if symbol.qualified == name then
-      return symbol, {}
+    if index_lib.in_path(symbol, path) then
+      if symbol.qualified == name then
+        table.insert(qualified, symbol)
+      elseif symbol.name == name then
+        table.insert(bare, symbol)
+      end
     end
   end
-  local candidates = {}
-  for _, symbol in ipairs(index.symbols) do
-    if symbol.name == name then
-      table.insert(candidates, symbol)
-    end
-  end
+  local candidates = #qualified > 0 and qualified or bare
   if #candidates == 1 then
     return candidates[1], {}
   end

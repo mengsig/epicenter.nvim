@@ -278,3 +278,158 @@ describe("path window against the fake navgraph server, with real animation", fu
     expect.eq(#logged, 0, "no tween-frame error after close: " .. table.concat(logged, " | "))
   end)
 end)
+
+--- F1 (merge gate): `qualified` is NOT unique - `router` is four definitions
+--- in this plugin's own real fixture, and `SymbolId` is sixteen in NavGraph's
+--- own source. Re-asking with the picked candidate's bare `qualified` sends
+--- the identical request, gets the identical ambiguity back, and reopens the
+--- identical picker, forever. These drive a scripted server because no fake
+--- fixture carries a same-`qualified` collision; `tests/real/navigate_spec.lua`
+--- covers the real four.
+describe("path ambiguity on candidates that share a qualified name (F1)", function()
+  local client = require("epicenter.client")
+  local root, buf, handle, asked
+
+  --- Four `router` definitions, one per route module - the real fixture's own
+  --- collision, shaped as the contract sends it back.
+  local function routers()
+    local files = {
+      "py_fastapi/app/routes/users.py",
+      "py_fastapi/app/routes/items.py",
+      "py_fastapi/app/routes/auth.py",
+      "py_fastapi/app/routes/orders.py",
+    }
+    return vim.tbl_map(function(file)
+      return {
+        qualified = "router",
+        name = "router",
+        kind = "var",
+        file = file,
+        uri = "file:///demo/" .. file,
+        line = 7,
+        endLine = 7,
+      }
+    end, files)
+  end
+
+  --- A session answering `navgraph/path` from `script(params)`, recording
+  --- every `from` it was asked for.
+  local function scripted(script)
+    return {
+      request = function(_, method, params, cb)
+        table.insert(asked, params.from)
+        local answer = script(params)
+        vim.schedule(function()
+          cb(nil, answer)
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }
+  end
+
+  local function pick_first()
+    wait(function()
+      return handle.win ~= nil and handle.win.list:count() > 0
+    end, 10000, "the ambiguity picker")
+    handle.win.list:select(1)
+    handle.win:accept("edit")
+  end
+
+  --- A synthetic root, with `root.find` pinned to it for the block: a
+  --- scripted session registered at whatever root the current buffer happens
+  --- to resolve to would displace the fixture server another spec file is
+  --- still using (`client_session_spec.lua` pins it the same way).
+  local ROOT = "/tmp/epicenter-path-ambiguity-root"
+  local original_find
+
+  before_each(function()
+    asked = {}
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    buf = vim.api.nvim_create_buf(false, true)
+    root = ROOT
+    original_find = require("epicenter.root").find
+    require("epicenter.root").find = function()
+      return ROOT
+    end
+  end)
+
+  after_each(function()
+    require("epicenter.root").find = original_find
+    client.stop(root)
+    handle = nil
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local candidate = vim.api.nvim_win_get_buf(win)
+      if
+        #vim.api.nvim_list_wins() > 1 and (vim.bo[candidate].filetype or ""):match("^epicenter")
+      then
+        pcall(vim.api.nvim_win_close, win, true)
+      end
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  end)
+
+  it("re-asks with the candidate's file, so a same-qualified pick resolves", function()
+    local candidates = routers()
+    client.register_session(
+      root,
+      scripted(function(params)
+        if params.from == "router" then
+          return { path = {}, ambiguousFrom = candidates, ambiguousTo = {} }
+        end
+        return { path = { candidates[1] }, ambiguousFrom = {}, ambiguousTo = {} }
+      end)
+    )
+
+    handle = require("epicenter").run("path", { "router", "router" }, buf)
+    pick_first()
+
+    wait(function()
+      return #asked == 2
+    end, 10000, "the re-query")
+    expect.eq(
+      asked[2],
+      "router@py_fastapi/app/routes/users.py",
+      "the re-query must name the file, the only thing that separates them"
+    )
+  end)
+
+  it("stops instead of reopening when even the file cannot separate them", function()
+    -- `main` is a package and a function on the same line range of one Go
+    -- file in the real fixture: `name@path` narrows to two, not one.
+    local twins = vim.list_slice(routers(), 1, 2)
+    twins[2] = vim.tbl_extend("force", {}, twins[1], { kind = "fn", line = 15 })
+    client.register_session(
+      root,
+      scripted(function()
+        return { path = {}, ambiguousFrom = twins, ambiguousTo = {} }
+      end)
+    )
+
+    handle = require("epicenter").run("path", { "router", "M.start" }, buf)
+    pick_first()
+
+    local ladder
+    wait(function()
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local candidate = vim.api.nvim_win_get_buf(win)
+        if vim.bo[candidate].filetype == "epicenter-path" then
+          ladder = candidate
+          return true
+        end
+      end
+      return false
+    end, 10000, "the honest answer, rather than the picker again")
+
+    local text = table.concat(vim.api.nvim_buf_get_lines(ladder, 0, -1, false), "\n")
+    expect.matches(text, "2 definitions of router share py_fastapi/app/routes/users%.py")
+    expect.matches(text, "cannot be told apart")
+    expect.eq(#asked, 2, "exactly one re-query, then it stopped")
+  end)
+end)

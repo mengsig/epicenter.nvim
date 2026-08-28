@@ -67,6 +67,93 @@ describe("real navgraph: navigation panels", function()
     expect.eq(qualified, { "ItemService.get", "OrderService.get" })
   end)
 
+  --- merge-gate F1: `qualified` is not unique. `get_item` is two definitions
+  --- of that exact qualified name in this fixture, `router` is four, and
+  --- `main` is two inside ONE file. Re-asking with the picked candidate's
+  --- bare `qualified` sends the identical request, gets the identical
+  --- ambiguity back, and reopens the identical picker, forever.
+  local function pick(handle, match)
+    local win = wait(function()
+      return handle.win
+    end, 20000, "the ambiguity candidate picker")
+    wait(function()
+      return win.list:count() > 0
+    end, 20000, "candidates listed")
+    local index
+    for i, item in ipairs(win.list:items()) do
+      if match(item.symbol) then
+        index = i
+      end
+    end
+    assert(index, "no candidate matched: " .. vim.inspect(win.list:items()))
+    win.list:select(index)
+    win:accept("edit")
+    return win
+  end
+
+  --- The `epicenter-path` window the pick produced - an answer, not another
+  --- picker. Consumes it, so a later case starts clean.
+  local function answer_text()
+    local found
+    wait(function()
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local candidate = vim.api.nvim_win_get_buf(win)
+        if vim.bo[candidate].filetype == "epicenter-path" then
+          found = candidate
+          return true
+        end
+      end
+      return false
+    end, 20000, "the answer, rather than the picker again")
+    local text = table.concat(vim.api.nvim_buf_get_lines(found, 0, -1, false), "\n")
+    vim.api.nvim_buf_delete(found, { force = true })
+    return text
+  end
+
+  it("F1: resolves a pick whose candidates all share one qualified name", function()
+    -- Both `get_item` definitions reach OrderService.get, so only the file on
+    -- the first rung says which one the pick actually resolved.
+    local handle = epicenter.run("path", { "get_item", "OrderService.get" }, buf)
+    local picker = pick(handle, function(symbol)
+      return symbol.file == "py_fastapi/app/db.py"
+    end)
+    expect.eq(#picker.list:items(), 2, "both same-qualified definitions were offered")
+
+    local text = answer_text()
+    expect.matches(text, "py_fastapi/app/db%.py:22", "the ladder starts at the PICKED get_item")
+    expect.matches(text, "OrderService%.get")
+  end)
+
+  it("F1: resolves the four-way `router` collision the fixture ships", function()
+    local handle = epicenter.run("path", { "router", "list_users" }, buf)
+    local picker = pick(handle, function(symbol)
+      return symbol.file == "py_fastapi/app/routes/users.py"
+    end)
+    expect.eq(#picker.list:items(), 4, "all four routers were offered")
+    -- Every row carries file:line - the only thing telling them apart.
+    for _, item in ipairs(picker.list:items()) do
+      expect.matches(
+        require("epicenter.features.search").render_symbol(item).text,
+        item.symbol.file:gsub("%p", "%%%0") .. ":%d"
+      )
+    end
+    -- `router` has no callees, so the honest answer is that there is no
+    -- chain - the point is that the question got ANSWERED, once.
+    expect.matches(answer_text(), "no call path from router to list_users")
+  end)
+
+  it("F1: says so when even the file cannot separate two candidates", function()
+    -- `main` is a package and a function in go_service/main.go, so `name@path`
+    -- narrows the four-way case to one and this one to two.
+    local handle = epicenter.run("path", { "main", "OrderService.get" }, buf)
+    pick(handle, function(symbol)
+      return symbol.kind == "fn"
+    end)
+    local text = answer_text()
+    expect.matches(text, "2 definitions of main share go_service/main%.go")
+    expect.matches(text, "cannot be told apart")
+  end)
+
   it("outlines the current buffer from the real index", function()
     local panel = epicenter.run("outline", {}, buf)
     opened = panel

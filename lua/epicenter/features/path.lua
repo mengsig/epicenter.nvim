@@ -134,6 +134,25 @@ local function open_window(lines, title, footer, on_close)
   return win
 end
 
+--- A one-message window in the ladder's own frame: an answer, not a toast.
+local function message_window(lines)
+  local win = open_window(lines, " path ", " q close ")
+  win:set_lines(lines)
+  win:reveal()
+  return win
+end
+
+--- @param candidates table[] Symbol[] the server sent back a second time
+local function stuck_lines(name, candidates)
+  local file = (candidates[1] or {}).file or "one file"
+  return {
+    "",
+    ("  %d definitions of %s share %s"):format(#candidates, name, file),
+    "  the path finder names its endpoints, so these two cannot be told apart",
+    "",
+  }
+end
+
 --- A palette listing `{ symbol = Symbol }` items, common ground between a
 --- live search (`pick`) and a fixed candidate list (`pick_candidate`).
 local function symbol_palette(bufnr, title, opts)
@@ -159,6 +178,7 @@ end
 --- every same-name definition back rather than running the walk, so this
 --- offers them the same way the rest of the plugin finds a symbol - from the
 --- fixed candidate list the server already resolved, not a live query.
+--- Hands back the chosen Symbol; the caller decides what to send for it.
 --- @param candidates table[] Symbol[]
 local function pick_candidate(bufnr, title, candidates, on_pick)
   local items = vim.tbl_map(function(symbol)
@@ -170,9 +190,30 @@ local function pick_candidate(bufnr, title, candidates, on_pick)
       cb(nil, items, #items)
     end,
     on_accept = function(item)
-      on_pick(item.symbol.qualified)
+      on_pick(item.symbol)
     end,
   })
+end
+
+--- The endpoint string for a picked candidate: `qualified@file`, the only
+--- form past `Parent.name` that `navgraph/path` disambiguates by (F1).
+--- Sending the bare `qualified` - which four definitions of `router` share in
+--- this plugin's own fixture - re-asks the identical question and reopens the
+--- identical picker, forever.
+local function endpoint(symbol)
+  return require("epicenter.client").symbol_ref(symbol)
+end
+
+--- True once an endpoint carries its file, so it is as specific as the
+--- protocol allows. A side sent this way and reported ambiguous ANYWAY cannot
+--- be narrowed further, and the picker must not reopen on it.
+local function narrowed(name)
+  return type(name) == "string" and name:find("@", 1, true) ~= nil
+end
+
+--- The `@file` half is for the server; a reader wants the name they typed.
+local function label(name)
+  return (tostring(name):gsub("@.*$", ""))
 end
 
 --- `from`/`to` are re-resolved through `find` (bottom of this file) once
@@ -182,30 +223,30 @@ local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
   if #ambiguous_from > 0 then
     return pick_candidate(
       bufnr,
-      (" %s is ambiguous - pick one "):format(from),
+      (" %s is ambiguous - pick one "):format(label(from)),
       ambiguous_from,
       function(picked_from)
         if #ambiguous_to > 0 then
           pick_candidate(
             bufnr,
-            (" %s is ambiguous - pick one "):format(to),
+            (" %s is ambiguous - pick one "):format(label(to)),
             ambiguous_to,
             function(picked_to)
-              find(bufnr, picked_from, picked_to)
+              find(bufnr, endpoint(picked_from), endpoint(picked_to))
             end
           )
         else
-          find(bufnr, picked_from, to)
+          find(bufnr, endpoint(picked_from), to)
         end
       end
     )
   end
   return pick_candidate(
     bufnr,
-    (" %s is ambiguous - pick one "):format(to),
+    (" %s is ambiguous - pick one "):format(label(to)),
     ambiguous_to,
     function(picked_to)
-      find(bufnr, from, picked_to)
+      find(bufnr, from, endpoint(picked_to))
     end
   )
 end
@@ -216,21 +257,31 @@ end
 local function show(result, from, to, previous_win, bufnr)
   local ambiguous_from = result.ambiguousFrom or {}
   local ambiguous_to = result.ambiguousTo or {}
+  -- An endpoint already sent as `name@file` that comes back ambiguous is one
+  -- the protocol cannot narrow: several definitions share both the name and
+  -- the file. Say so once (F1) - reopening the picker would loop forever on
+  -- a question the next answer cannot resolve either.
+  if #ambiguous_from > 0 and narrowed(from) then
+    return message_window(stuck_lines(label(from), ambiguous_from))
+  end
+  if #ambiguous_to > 0 and narrowed(to) then
+    return message_window(stuck_lines(label(to), ambiguous_to))
+  end
   if #ambiguous_from > 0 or #ambiguous_to > 0 then
     return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
   end
 
   local steps = result.path or {}
   if #steps == 0 then
-    local lines = { "", ("  no call path from %s to %s"):format(from, to), "" }
-    local win = open_window(lines, " path ", " q close ")
-    win:set_lines(lines)
-    win:reveal()
-    return win
+    return message_window({
+      "",
+      ("  no call path from %s to %s"):format(label(from), label(to)),
+      "",
+    })
   end
 
   local chain = M.chain_lines(steps)
-  local title = (" path: %s -> %s "):format(from, to)
+  local title = (" path: %s -> %s "):format(label(from), label(to))
   -- The ladder tween handle lives here so the window's own on_close (fired
   -- exactly when its buffer dies) can cancel it - not a moment sooner.
   local ladder = { handle = nil }
@@ -305,7 +356,9 @@ local function pick(bufnr, title, on_pick)
       end, { bufnr = state.bufnr, channel = "path-pick" })
     end,
     on_accept = function(item)
-      on_pick(item.symbol.qualified)
+      -- The user chose one definition out of the list; send the form that
+      -- says so, not the bare name several of them may share (F1).
+      on_pick(endpoint(item.symbol))
     end,
   })
 end
