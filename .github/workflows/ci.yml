@@ -53,20 +53,20 @@ jobs:
         run: |
           "$LUACHECK" lua lsp plugin scripts tests --exclude-files 'tests/fixtures/**'
 
-  real:
-    name: real navgraph (nvim ${{ matrix.nvim }})
+  # The gate is its OWN job so the lane's own checks can be SKIPPED rather
+  # than green: `secrets` is unavailable in a job-level `if`, but a job's
+  # steps can read one and publish the answer as an output. A check named
+  # "real navgraph" that reports success without having run asserts more than
+  # was verified - so when there is nothing to run against, it does not report
+  # at all.
+  real-gate:
+    name: real navgraph (source available?)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # The compat boundary (0.10) and the floor everything else builds on
-        # (stable) - the fake lane's matrix (nvim/, F10) already covers the
-        # rest; a real-binary build per extra version buys little more here.
-        nvim: [v0.10.4, stable]
+    outputs:
+      build: ${{ steps.gate.outputs.build }}
     steps:
       - uses: actions/checkout@v4
 
-      # `secrets` is not available in a job-level `if`, so the gate is a step.
       # A fork PR structurally never has repo secrets (GitHub withholds them),
       # so that skips with a warning; on `main` or a tag - this release's own
       # evidence - a missing secret is a real gap and must fail the run, not
@@ -92,8 +92,23 @@ jobs:
             echo "::warning title=real-server lane SKIPPED::Set the NAVGRAPH_TOKEN secret to run make test-real against the real navgraph binary."
           fi
 
+  real:
+    name: real navgraph (nvim ${{ matrix.nvim }})
+    needs: real-gate
+    # Skipped, not green: these checks appear only when they actually ran.
+    if: needs.real-gate.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The compat boundary (0.10) and the floor everything else builds on
+        # (stable) - the fake lane's matrix (nvim/, F10) already covers the
+        # rest; a real-binary build per extra version buys little more here.
+        nvim: [v0.10.4, stable]
+    steps:
+      - uses: actions/checkout@v4
+
       - name: checkout navgraph
-        if: steps.gate.outputs.build == 'true'
         uses: actions/checkout@v4
         with:
           repository: mengsig/NavGraph
@@ -101,25 +116,44 @@ jobs:
           path: navgraph-src
 
       - name: zig
-        if: steps.gate.outputs.build == 'true'
         uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
 
       - name: build navgraph
-        if: steps.gate.outputs.build == 'true'
         working-directory: navgraph-src
         run: zig build -Doptimize=ReleaseFast
 
-      - if: steps.gate.outputs.build == 'true'
-        uses: rhysd/action-setup-vim@v1
+      - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: ${{ matrix.nvim }}
 
+      # The binary has to exist and answer: a build that silently produced
+      # nothing must not let `make test-real` skip its way to a pass.
+      - name: navgraph binary answers
+        run: |
+          bin="$PWD/navgraph-src/zig-out/bin/navgraph"
+          test -x "$bin" || { echo "::error::no navgraph binary at $bin"; exit 1; }
+          "$bin" --version
+
       - name: test-real
-        if: steps.gate.outputs.build == 'true'
-        run: make test-real NAVGRAPH_BIN="$PWD/navgraph-src/zig-out/bin/navgraph"
+        run: |
+          # `tee` would otherwise be the pipeline's exit status, so a failing
+          # run would report green.
+          set -o pipefail
+          make test-real NAVGRAPH_BIN="$PWD/navgraph-src/zig-out/bin/navgraph" | tee real.log
+          # A run where everything skipped proves nothing; the lane exists to
+          # exercise the real server, so no case reaching it is a failure.
+          grep -Eq '^[0-9]+ passed' real.log || { echo "::error::make test-real printed no result line"; exit 1; }
+          passed=$(sed -n 's/^\([0-9]\+\) passed.*/\1/p' real.log | tail -1)
+          [ "${passed:-0}" -gt 0 ] || { echo "::error::make test-real ran no case against the real server"; exit 1; }
+          # A skip is not a pass either: say how much of the surface this
+          # build could not answer, so a green check is not read as "all of it".
+          skipped=$(sed -n 's/^[0-9]\+ passed, [0-9]\+ failed, \([0-9]\+\) skipped.*/\1/p' real.log | tail -1)
+          if [ "${skipped:-0}" -gt 0 ]; then
+            echo "::warning title=real-server lane PARTIAL::$skipped case(s) skipped - this navgraph build does not answer every method the release adds, so those paths are proven against the fake server only."
+          fi
 
   docs:
     name: docs in sync
