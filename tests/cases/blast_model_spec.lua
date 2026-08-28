@@ -155,12 +155,16 @@ describe("blast model", function()
       model.title_line({ kind = "diff", ref = "origin/main" }).text,
       "changes vs origin/main$"
     )
-    expect.matches(model.title_line({ kind = "blast" }).text, "no symbol under the cursor")
+    -- F3: with no root the title is the panel's own name. It must NOT guess a
+    -- reason - "still loading" and "nothing here" reach here alike, and the
+    -- body row is what says which.
+    expect.matches(model.title_line({ kind = "blast" }).text, "^  blast radius$")
   end)
 
   it("writes the server's summary as chips, with the query mode after them", function()
     local summary = { symbols = 1, files = 1, tests = 0, maxDepth = 1 }
-    local state = { direction = "callers", tests = "with", strict = false, follow = false }
+    local state =
+      { direction = "callers", tests = "with", strict = false, follow = false, depth = 1 }
     expect.matches(
       model.chips_line(summary, state).text,
       "^  1 symbol · 1 file · 0 tests · depth 1"
@@ -169,11 +173,31 @@ describe("blast model", function()
 
     local loud = model.chips_line(
       vim.tbl_extend("force", summary, { changed = 2, truncated = true }),
-      { direction = "callees", tests = "only", strict = true, follow = true }
+      { direction = "callees", tests = "only", strict = true, follow = true, depth = 1 }
     ).text
     expect.matches(loud, "^  2 changed · ")
     expect.matches(loud, "depth 1 · truncated")
     expect.matches(loud, "callees · tests only · strict · follow$")
+  end)
+
+  --- F2: `+` and `-` re-query and repaint. On a graph that is already
+  --- exhausted - most symbols bottom out in a ring or two - the answer is
+  --- identical, so nothing on screen changed and the keys read as dead. The
+  --- chip carries the depth ASKED FOR alongside the depth reached.
+  it("names the depth asked for whenever the answer fell short of it", function()
+    local state = { direction = "callers", tests = "with", strict = false, follow = false }
+    local function chip(reached, asked)
+      return model.chips_line(
+        { symbols = 1, files = 1, tests = 0, maxDepth = reached },
+        vim.tbl_extend("force", state, { depth = asked })
+      ).text
+    end
+    expect.matches(chip(2, 2), "depth 2 ", "no second number when the walk reached it")
+    expect.falsy(chip(2, 2):find("of", 1, true))
+    expect.matches(chip(2, 3), "depth 2 of 3", "the graph bottomed out short of the ask")
+    expect.matches(chip(2, 6), "depth 2 of 6")
+    -- A panel with no answer yet must not claim a depth it never asked for.
+    expect.matches(chip(0, 2), "depth 0 of 2")
   end)
 
   it("reports what arrived and what left, in a stable order", function()

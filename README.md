@@ -377,7 +377,7 @@ Every subcommand ships today; none are pending.
 | `<C-v>` / `<C-t>` | Open in a vertical split / a new tab                  |
 | `o`            | Toggle a peek at it without leaving the panel             |
 | `y`            | Yank `file:line`                                         |
-| `+` / `-`      | Deeper / shallower (re-queries)                          |
+| `+` / `-`      | Deeper / shallower (re-queries; the chip names the depth asked for when the graph fell short) |
 | `d`            | Flip callers ↔ callees                                   |
 | `t`            | Cycle the tests scope (with → without → only)            |
 | `s`            | Toggle strict resolution (drops heuristic edges)         |

@@ -309,8 +309,11 @@ function M.title_line(meta)
 
   local root = meta.root
   if not root then
+    -- The panel's own name, not a message: the body row carries whether this
+    -- is "still loading" or "nothing here", and a title that guesses one of
+    -- them contradicts the other two lines (F3).
     return {
-      text = append(text, spans, "  no symbol under the cursor", "EpicenterMuted"),
+      text = append(text, spans, "  blast radius", "EpicenterMuted"),
       spans = spans,
     }
   end
@@ -335,7 +338,15 @@ function M.chips_line(summary, state)
   table.insert(chips, plural(summary.symbols, "symbol"))
   table.insert(chips, plural(summary.files, "file"))
   table.insert(chips, plural(summary.tests, "test"))
-  table.insert(chips, ("depth %d"):format(summary.maxDepth))
+  -- The depth the answer REACHED, and - when they differ - the depth that was
+  -- asked for. Without the second number `+` on an exhausted graph repaints an
+  -- identical screen and reads as a dead key (F2).
+  local asked = state.depth
+  if asked and asked ~= summary.maxDepth then
+    table.insert(chips, ("depth %d of %d"):format(summary.maxDepth, asked))
+  else
+    table.insert(chips, ("depth %d"):format(summary.maxDepth))
+  end
   if summary.truncated then
     table.insert(chips, "truncated")
   end

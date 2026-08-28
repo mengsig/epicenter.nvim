@@ -325,6 +325,71 @@ describe("blast panel against the fake navgraph server", function()
     expect.matches(body(panel), "no symbol under the cursor")
   end)
 
+  --- F3: the title is built from `self.meta.root`, which the message path did
+  --- not clear - so the panel rendered a title naming a symbol, a chip line of
+  --- zeros, and a body saying there is none, all at once.
+  it("stops naming the previous symbol once the query finds none", function()
+    buf = open_fixture(root, "app/server.lua", 5)
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    expect.matches(lines_of(panel)[1], "log_request", "the header names the answered root")
+
+    settled(panel, function()
+      panel:set_query(
+        "blast",
+        { uri = vim.uri_from_bufnr(buf), position = { line = 7, character = 0 } },
+        buf
+      )
+    end)
+    expect.matches(body(panel), "no symbol under the cursor")
+    expect.falsy(
+      lines_of(panel)[1]:find("log_request", 1, true),
+      "the header still names a symbol the body says is not there: " .. lines_of(panel)[1]
+    )
+    expect.matches(lines_of(panel)[1], "blast radius")
+  end)
+
+  --- F2: `+`/`-` re-query and repaint. Where the value clamps they change
+  --- nothing at all, and silence there is indistinguishable from a dead key.
+  it("says so when + or - has nowhere left to go", function()
+    buf = open_fixture(root, "app/server.lua", 5)
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    local said = {}
+    local original = epicenter.notify
+    epicenter.notify = function(message)
+      table.insert(said, message)
+    end
+    local ok = pcall(function()
+      local max = require("epicenter.config").get().blast.max_depth
+      panel.state.depth = 1
+      panel:set_depth(-1)
+      expect.eq(panel.state.depth, 1, "clamped, so nothing was re-queried")
+      expect.matches(said[#said] or "", "already 1")
+
+      panel.state.depth = max
+      panel:set_depth(1)
+      expect.eq(panel.state.depth, max)
+      expect.matches(said[#said] or "", "already at its maximum")
+      expect.eq(#said, 2, "one line per clamped press, and none otherwise")
+    end)
+    epicenter.notify = original
+    assert(ok)
+  end)
+
+  it("shows the depth it asked for beside the depth it reached", function()
+    buf = open_fixture(root, "app/server.lua", 5)
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    -- log_request has one ring of callers, so any deeper ask falls short.
+    settled(panel, function()
+      panel:set_depth(2)
+    end)
+    expect.eq(panel.state.depth, 4)
+    expect.matches(lines_of(panel)[2], "depth %d of 4", lines_of(panel)[2])
+  end)
+
   it("ignores cursor movement inside the panel itself", function()
     panel = epicenter.run("blast", {}, buf)
     settled(panel)

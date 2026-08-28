@@ -391,7 +391,7 @@ since this one is a persistent, live-updating query rather than a picker.
     <C-v>, <C-t>    open in a vertical split / a new tab
     o               toggle a peek at it without leaving the panel
     y               yank `file:line`
-    +, -            deeper / shallower - re-queries
+    +, -            deeper / shallower - the chip names both depths
     d               flip callers <-> callees
     t               cycle the tests scope (with -> without -> only)
     s               toggle strict resolution (drops heuristic edges)

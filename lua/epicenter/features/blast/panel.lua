@@ -47,7 +47,7 @@ M.HELP = {
   "  <C-T>      open in a new tab",
   "  o          toggle a peek at it without leaving the panel",
   "  y          yank file:line",
-  "  +/-        deeper / shallower (re-queries)",
+  "  +/-        deeper / shallower (the chip names both depths)",
   "  d          flip callers <-> callees",
   "  t          cycle the tests scope (with/without/only)",
   "  s          toggle strict resolution",
@@ -455,6 +455,10 @@ end
 function Panel:_show_message(message)
   self.answered = self.answered + 1
   self.message = "  " .. message
+  -- The header names `self.meta.root`. Leaving the PREVIOUS answer's root
+  -- there renders a title naming a symbol, a chip line of zeros, and a body
+  -- saying there is none - three lines contradicting each other (F3).
+  self.meta = { kind = self.kind, ref = self.target.ref }
   self:_set_nodes({}, model.empty_summary())
   self:_paint()
   ripples.apply({})
@@ -788,7 +792,10 @@ function Panel:set_depth(delta)
   local max = require("epicenter.config").get().blast.max_depth
   local next_depth = model.clamp_depth(self.state.depth + delta, max)
   if next_depth == self.state.depth then
-    return
+    -- Silence here is indistinguishable from a dead key (F2).
+    return require("epicenter").notify(
+      delta > 0 and ("depth is already at its maximum, %d"):format(max) or "depth is already 1"
+    )
   end
   self.state.depth = next_depth
   self:query({})
