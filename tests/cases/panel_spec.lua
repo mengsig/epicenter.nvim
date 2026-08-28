@@ -15,6 +15,9 @@ describe("panel close-then-jump ordering", function()
     require("epicenter.config").setup({
       ui = { icons = "ascii" },
       animation = { close_ms = 60, open_ms = 10 },
+      -- This suite never starts a server; the jump edits a fixture file, and
+      -- without this the host's own navgraph attaches (merge-gate F8).
+      lsp = { auto_start = false },
     })
     -- Real animation: this is exactly the case CI's reduce-motion default hid.
     vim.g.epicenter_reduce_motion = false

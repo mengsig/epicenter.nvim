@@ -13,7 +13,9 @@ describe("jumping while a panel is animating", function()
     saved = vim.g.epicenter_reduce_motion
     vim.g.epicenter_reduce_motion = nil
     require("epicenter.config").reset()
-    epicenter.setup({ ui = { icons = "ascii" }, animate = true })
+    -- start_fake() below is the only server this suite needs; auto_start
+    -- makes its independence from the host's own navgraph explicit (F2).
+    epicenter.setup({ ui = { icons = "ascii" }, animate = true, lsp = { auto_start = false } })
     require("epicenter.ui.theme").apply()
     expect.truthy(require("epicenter.config").motion_enabled(), "motion is on for these")
 

@@ -7,6 +7,9 @@ describe("client against the fake navgraph server", function()
 
   before_each(function()
     require("epicenter.config").reset()
+    -- Every attach here is explicit (client.start); without this the host's
+    -- own navgraph races the fixture edits below (merge-gate F8).
+    require("epicenter.config").setup({ lsp = { auto_start = false } })
     if not root then
       root = support.start_fake()
     end
