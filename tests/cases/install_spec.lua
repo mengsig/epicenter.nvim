@@ -1,5 +1,18 @@
 local install = require("epicenter.install")
 
+--- Concatenated text of every live toast, newest-window-order. Shared by any
+--- describe block that needs to assert on what the user would actually see.
+local function toast_text()
+  local out = {}
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "epicenter-toast" then
+      table.insert(out, table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
+    end
+  end
+  return table.concat(out, "\n")
+end
+
 describe("binary resolution", function()
   before_each(function()
     require("epicenter.config").reset()
@@ -99,16 +112,108 @@ end)
 
 describe("release asset pattern", function()
   it("maps uname to the published asset names", function()
-    expect.eq(install.asset_pattern({ sysname = "Linux", machine = "x86_64" }), "*linux*x86_64*")
-    expect.eq(install.asset_pattern({ sysname = "Darwin", machine = "arm64" }), "*macos*aarch64*")
-    expect.eq(install.asset_pattern({ sysname = "Darwin", machine = "x86_64" }), "*macos*x86_64*")
+    expect.eq(install.asset_pattern({ sysname = "Linux", machine = "x86_64" }), "*x86_64*linux*")
+    expect.eq(install.asset_pattern({ sysname = "Darwin", machine = "arm64" }), "*aarch64*macos*")
+    expect.eq(install.asset_pattern({ sysname = "Darwin", machine = "x86_64" }), "*x86_64*macos*")
   end)
 
   it("passes an unknown platform through rather than guessing", function()
     expect.eq(
       install.asset_pattern({ sysname = "FreeBSD", machine = "riscv64" }),
-      "*freebsd*riscv64*"
+      "*riscv64*freebsd*"
     )
+  end)
+
+  --- Translates a `gh release download --pattern` glob into a Lua pattern:
+  --- `*` becomes `.-` and every other glob byte is escaped literally.
+  local function glob_matches(glob, name)
+    local escaped = glob:gsub("[%(%)%.%%%+%-%[%]%^%$%?]", "%%%1"):gsub("%*", ".-")
+    return name:match("^" .. escaped .. "$") ~= nil
+  end
+
+  -- Regression (F1): the v1.0.0 release names assets `navgraph-<arch>-<os>`,
+  -- arch first. The old `*<os>*<arch>*` order never matched any of them, so
+  -- `:Epicenter install` silently fell back to a ~100s source build even with
+  -- gh authenticated.
+  local REAL_V1_0_0_ASSETS = {
+    "navgraph-x86_64-linux.tar.gz",
+    "navgraph-aarch64-linux.tar.gz",
+    "navgraph-x86_64-macos.tar.gz",
+    "navgraph-aarch64-macos.tar.gz",
+  }
+  local UNAME_FOR = {
+    ["navgraph-x86_64-linux.tar.gz"] = { sysname = "Linux", machine = "x86_64" },
+    ["navgraph-aarch64-linux.tar.gz"] = { sysname = "Linux", machine = "aarch64" },
+    ["navgraph-x86_64-macos.tar.gz"] = { sysname = "Darwin", machine = "x86_64" },
+    ["navgraph-aarch64-macos.tar.gz"] = { sysname = "Darwin", machine = "arm64" },
+  }
+
+  it("matches every real v1.0.0 release asset name for its own platform", function()
+    for _, asset in ipairs(REAL_V1_0_0_ASSETS) do
+      local pattern = install.asset_pattern(UNAME_FOR[asset])
+      expect.truthy(
+        glob_matches(pattern, asset),
+        ("pattern %q must match %s"):format(pattern, asset)
+      )
+    end
+  end)
+
+  it("would have rejected every real asset under the old os-before-arch order", function()
+    for _, asset in ipairs(REAL_V1_0_0_ASSETS) do
+      local uname = UNAME_FOR[asset]
+      local os_name = uname.sysname == "Darwin" and "macos" or "linux"
+      local arch = uname.machine == "arm64" and "aarch64" or uname.machine
+      local old_pattern = ("*%s*%s*"):format(os_name, arch)
+      expect.falsy(
+        glob_matches(old_pattern, asset),
+        ("old pattern %q must NOT match %s - this is the bug being fixed"):format(
+          old_pattern,
+          asset
+        )
+      )
+    end
+  end)
+end)
+
+describe("release checksum verification", function()
+  local NAME = "navgraph-x86_64-linux.tar.gz"
+  local CONTENT = "fake archive bytes for the checksum test"
+  local HASH = vim.fn.sha256(CONTENT)
+
+  it("passes when the content matches its listed SHA256", function()
+    local sums = ("%s  %s\n"):format(HASH, NAME)
+    local ok, err = install.verify_checksum(sums, NAME, CONTENT)
+    expect.truthy(ok)
+    expect.eq(err, nil)
+  end)
+
+  it("rejects a download whose bytes do not match the listed SHA256", function()
+    local sums = ("%s  %s\n"):format(HASH, NAME)
+    local ok, err = install.verify_checksum(sums, NAME, "tampered or corrupted bytes")
+    expect.eq(ok, nil, "a checksum mismatch must not be treated as ok")
+    expect.matches(err, "failed SHA256 verification")
+    -- NAME's `-` is a Lua pattern quantifier, not a literal, once inside a pattern.
+    expect.matches(err, (NAME:gsub("[%-%.]", "%%%1")))
+  end)
+
+  it("passes through a repo that publishes no SHA256SUMS at all", function()
+    local ok, err = install.verify_checksum(nil, NAME, CONTENT)
+    expect.truthy(ok, "no checksums published is not itself a failure")
+    expect.eq(err, nil)
+  end)
+
+  it("passes through an asset SHA256SUMS does not list", function()
+    local sums = ("%s  some-other-asset.tar.gz\n"):format(HASH)
+    local ok, err = install.verify_checksum(sums, NAME, CONTENT)
+    expect.truthy(ok, "an unlisted asset has nothing to verify against")
+    expect.eq(err, nil)
+  end)
+
+  it("reads the standard sha256sum two-space and binary-mode formats", function()
+    local two_space = ("%s  %s"):format(HASH, NAME)
+    local binary_mode = ("%s *%s"):format(HASH, NAME)
+    expect.truthy((install.verify_checksum(two_space, NAME, CONTENT)))
+    expect.truthy((install.verify_checksum(binary_mode, NAME, CONTENT)))
   end)
 end)
 
@@ -191,6 +296,27 @@ describe("install orchestration", function()
     expect.matches(ran[2] or "", "^git clone")
   end)
 
+  -- F1: a broken asset pattern used to fall through to a source build with no
+  -- explanation anywhere the user would see it - the toast just said "done".
+  it("names why it fell back from a release download, in the toast", function()
+    stub_system(ran)
+    local toast = require("epicenter.ui.toast")
+    toast.clear()
+    local captured = "pending"
+    install.install({
+      tools = { gh = true, gh_auth = true, git = true, zig = true },
+      on_done = function(err)
+        captured = err
+      end,
+    })
+    wait(function()
+      return captured ~= "pending"
+    end, 5000, "install to report")
+    expect.matches(toast_text(), "release download unavailable")
+    expect.matches(toast_text(), "built from source instead")
+    toast.clear()
+  end)
+
   it("wait = true blocks the caller until the async install actually finishes", function()
     stub_system(ran)
     -- A build/run hook calls install() and treats its RETURN as done; wait
@@ -208,17 +334,6 @@ end)
 
 describe("the first-run notice", function()
   local toast = require("epicenter.ui.toast")
-
-  local function toast_text()
-    local out = {}
-    for _, win in ipairs(vim.api.nvim_list_wins()) do
-      local buf = vim.api.nvim_win_get_buf(win)
-      if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "epicenter-toast" then
-        table.insert(out, table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
-      end
-    end
-    return table.concat(out, "\n")
-  end
 
   before_each(function()
     require("epicenter.config").reset()

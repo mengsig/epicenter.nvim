@@ -231,14 +231,16 @@ function M.plan(tools)
   return nil, "epicenter: cannot install navgraph - " .. table.concat(missing, "; ")
 end
 
---- Release asset pattern for this machine.
+--- Release asset pattern for this machine. Real assets are named
+--- `navgraph-<arch>-<os>.tar.gz` (arch before os) - a glob's literal
+--- fragments must appear in that order to match.
 function M.asset_pattern(uname)
   uname = uname or uv.os_uname()
   local os_name = ({ Linux = "linux", Darwin = "macos", Windows_NT = "windows" })[uname.sysname]
     or uname.sysname:lower()
   local arch = ({ x86_64 = "x86_64", arm64 = "aarch64", aarch64 = "aarch64" })[uname.machine]
     or uname.machine
-  return ("*%s*%s*"):format(os_name, arch)
+  return ("*%s*%s*"):format(arch, os_name)
 end
 
 --- @param cb fun(tools: table)
@@ -280,9 +282,10 @@ local function run(cmd, opts, cb)
   end)
 end
 
---- Copies the resolved binary into place. No checksum or signature check -
---- `gh release download`/`git clone` from the configured repo is the trust
---- root (see navgraph.repo in the README/vimdoc).
+--- Copies the resolved binary into place. A release download is already
+--- SHA256-verified by `install_from_release`; a source build has no
+--- artifact to check against, so `git clone` from the configured repo plus a
+--- local `zig build` is its trust root (see navgraph.repo in README/vimdoc).
 local function install_binary(source_path, cb)
   local target = M.managed_path()
   vim.fn.mkdir(vim.fs.dirname(target), "p")
@@ -300,6 +303,63 @@ local function find_binary(dir)
   return found[1]
 end
 
+--- Whether `content`'s SHA256 matches what a `SHA256SUMS` file lists for
+--- `name`. Pure - no disk, no network - so this is testable without touching
+--- either. A repo that publishes no checksums, or lists no entry for this
+--- asset, has nothing to verify against; that is not itself a failure. A
+--- listed asset that does not match is a corrupted or tampered download.
+--- @param sums_text string|nil `SHA256SUMS`'s content, or nil if none was published
+--- @param name string the asset's filename, as `SHA256SUMS` lists it
+--- @param content string the asset's raw bytes
+--- @return true|nil ok, string|nil err
+function M.verify_checksum(sums_text, name, content)
+  if not sums_text then
+    return true, nil
+  end
+  local expected
+  for line in sums_text:gmatch("[^\r\n]+") do
+    local hash, sum_name = line:match("^(%x+)%s+%*?(%S+)$")
+    if sum_name == name then
+      expected = hash
+      break
+    end
+  end
+  if not expected then
+    return true, nil
+  end
+  local actual = vim.fn.sha256(content)
+  if actual ~= expected then
+    return nil,
+      ("%s failed SHA256 verification (expected %s, got %s)"):format(name, expected, actual)
+  end
+  return true, nil
+end
+
+--- Reads `archive` and its sibling `SHA256SUMS` (when `gh` downloaded one)
+--- off disk and hands their bytes to the pure `M.verify_checksum`.
+--- @return string|nil err
+local function checksum_error(dir, archive)
+  local sums_path = vim.fs.joinpath(dir, "SHA256SUMS")
+  local sums_text
+  if uv.fs_stat(sums_path) then
+    local sums_fh = io.open(sums_path, "rb")
+    if sums_fh then
+      sums_text = sums_fh:read("*a")
+      sums_fh:close()
+    end
+  end
+
+  local archive_fh = io.open(archive, "rb")
+  if not archive_fh then
+    return ("could not open %s to verify its checksum"):format(archive)
+  end
+  local content = archive_fh:read("*a")
+  archive_fh:close()
+
+  local _, err = M.verify_checksum(sums_text, vim.fs.basename(archive), content)
+  return err
+end
+
 local function install_from_release(cfg, tmp, progress, cb)
   progress.update(0.3, "downloading the latest release")
   local cmd = {
@@ -312,13 +372,14 @@ local function install_from_release(cfg, tmp, progress, cb)
     tmp,
     "--pattern",
     M.asset_pattern(),
+    "--pattern",
+    "SHA256SUMS",
     "--clobber",
   }
   run(cmd, {}, function(err)
     if err then
       return cb(err)
     end
-    progress.update(0.6, "unpacking")
     local archive = vim.fs.find(function(name)
       return name:match("%.tar%.gz$") or name:match("%.tgz$") or name:match("%.zip$")
     end, { path = tmp, type = "file", limit = 1 })[1]
@@ -334,6 +395,14 @@ local function install_from_release(cfg, tmp, progress, cb)
     if not archive then
       return finish()
     end
+
+    progress.update(0.5, "verifying checksum")
+    local checksum_err = checksum_error(tmp, archive)
+    if checksum_err then
+      return cb(checksum_err)
+    end
+
+    progress.update(0.6, "unpacking")
     local extract = archive:match("%.zip$") and { "unzip", "-o", archive, "-d", tmp }
       or { "tar", "-xzf", archive, "-C", tmp }
     run(extract, { cwd = tmp }, function(extract_err)
@@ -390,18 +459,26 @@ function M.install(opts)
   local progress = toast.progress("installing navgraph")
 
   local finished, final_err, final_path = false, nil, nil
-  local function done(err, path)
+  local function done(err, path, note)
     finished = true
     final_err, final_path = err, path
     -- A new binary at the same path: what the old one could do is stale, and
     -- so is any "cannot serve" line already said about it.
     M.forget_capabilities()
     M.forget_first_run_notice()
+    -- `note` names why a source build ran when a release download was
+    -- possible in principle, so the toast says why regardless of whether the
+    -- fallback build itself then succeeded or failed.
     if err then
-      require("epicenter.log").error("install failed: %s", err)
-      progress.finish(err, "error")
+      local message = note and (note .. "\n" .. err) or err
+      require("epicenter.log").error("install failed: %s", message)
+      progress.finish(message, "error")
     else
-      progress.finish("navgraph installed to " .. path)
+      local message = "navgraph installed to " .. path
+      if note then
+        message = message .. "\n" .. note
+      end
+      progress.finish(message)
     end
     if opts.on_done then
       opts.on_done(err, path)
@@ -418,9 +495,9 @@ function M.install(opts)
       vim.fs.joinpath(vim.fn.stdpath("cache"), "epicenter-install-" .. tostring(uv.hrtime()))
     vim.fn.mkdir(tmp, "p")
 
-    local function cleanup_then(err, path)
+    local function cleanup_then(err, path, note)
       vim.fn.delete(tmp, "rf")
-      done(err, path)
+      done(err, path, note)
     end
 
     if kind == "release" then
@@ -432,10 +509,13 @@ function M.install(opts)
         if not (tools.git and tools.zig) then
           return cleanup_then(err)
         end
-        progress.update(0.2, "no usable release; building from source")
+        local note = ("release download unavailable (%s); built from source instead"):format(err)
+        progress.update(0.2, note)
         vim.fn.delete(tmp, "rf")
         vim.fn.mkdir(tmp, "p")
-        install_from_source(cfg, tmp, progress, cleanup_then)
+        install_from_source(cfg, tmp, progress, function(source_err, source_path)
+          cleanup_then(source_err, source_path, note)
+        end)
       end)
     else
       install_from_source(cfg, tmp, progress, cleanup_then)
