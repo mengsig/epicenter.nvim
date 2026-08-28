@@ -195,8 +195,7 @@ end
 --- still opens the panel - it just shows the gate line where the rows would
 --- be, rather than a request the server would only refuse.
 local function open_impact(ctx)
-  local reason =
-    require("epicenter.client").unsupported_reason(ctx.bufnr, "navgraph/impact", "impact")
+  local reason = require("epicenter.client").gate_notice(ctx.bufnr, "navgraph/impact", "impact")
   return require("epicenter.features.blast.panel").open({
     kind = "impact",
     target = {},
@@ -206,7 +205,8 @@ local function open_impact(ctx)
 end
 
 --- @param session table the live `current` table, mutated by a fresh answer
---- @param gate_reason? string forwarded to `review.open` - see there
+--- @param gate_reason? string a `client.gate_notice` result, forwarded to
+---   `review.open` - see there
 local function open_review(session, gate_reason)
   session.on_change = approval_changed
   panel = review.open(session, gate_reason)

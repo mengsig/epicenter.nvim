@@ -601,6 +601,21 @@ function M.unsupported_reason(bufnr, method, what)
   )
 end
 
+--- The two-space indent every panel notice takes from its caller (matches
+--- `ui.panel.Panel:notice` and `blast.Panel:notice`'s own convention). Owned
+--- here, once, so a caller that must thread a gate reason through `open()`
+--- and present it later does not re-apply the indent by hand.
+local GATE_NOTICE_INDENT = "  "
+
+--- `unsupported_reason`, pre-indented for a panel's `notice(text)` - for a
+--- caller that opens the panel later and cannot hand it to `M.gate` (which
+--- needs an already-open one) to present directly.
+--- @return string|nil
+function M.gate_notice(bufnr, method, what)
+  local reason = M.unsupported_reason(bufnr, method, what)
+  return reason and (GATE_NOTICE_INDENT .. reason) or nil
+end
+
 --- Presents the protocol-1.1 gate for a feature in whichever channel fits
 --- its surface, so every gated feature reads the same way instead of five
 --- hand-rolled checks: a persistent line in `panel` when one is already open
@@ -617,7 +632,7 @@ function M.gate(bufnr, method, what, panel)
     return nil
   end
   if panel then
-    panel:notice("  " .. reason)
+    panel:notice(GATE_NOTICE_INDENT .. reason)
   else
     require("epicenter").notify(reason, "warn")
   end

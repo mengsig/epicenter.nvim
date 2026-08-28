@@ -198,8 +198,9 @@ end
 
 --- @param session { root: string, result: table, groups: table[], state: table,
 ---   bufnr: integer, on_change: fun() }
---- @param gate_reason? string set when the server predates the protocol this
----   needs - the panel opens showing that instead of a (nonexistent) session
+--- @param gate_reason? string a `client.gate_notice` result (already
+---   indented) - set when the server predates the protocol this needs, the
+---   panel opens showing that instead of a (nonexistent) session
 --- @return epicenter.Panel
 function M.open(session, gate_reason)
   local panel_mod = require("epicenter.ui.panel")
@@ -320,7 +321,7 @@ function M.open(session, gate_reason)
   })
 
   if gate_reason then
-    panel:notice("  " .. gate_reason)
+    panel:notice(gate_reason)
   else
     panel:set_roots(tree_of(session.groups), { expand_roots = true })
   end

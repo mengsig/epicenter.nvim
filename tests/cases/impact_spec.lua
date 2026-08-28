@@ -650,7 +650,12 @@ end)
 --- Both panels are gated on the same v1.1-only method, and both used to say
 --- so with a toast that left the freshly opened panel blank and unexplained.
 --- The gate now writes into the panel itself, the same channel a query error
---- uses - a stand-in v1.0 session proves the request is never even sent.
+--- uses - and it is panel state, re-checked on every re-query (a reindex, a
+--- keypress), not just the open that first showed it: a stand-in v1.0
+--- session proves the blast panel never sends the request on any of those
+--- paths. The review panel issues no request of its own (it renders from
+--- the cached session - see `impact/review.lua`), so only its notice is
+--- worth proving there.
 describe("the protocol 1.1 gate on impact/review", function()
   local root, buf, panel
 
@@ -714,5 +719,82 @@ describe("the protocol 1.1 gate on impact/review", function()
       return panel ~= nil and panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
     end, 5000, "the gate's notice")
     expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
+  end)
+
+  --- HIGH-1: the gate used to be a one-shot argument to the FIRST query
+  --- only. A reindex re-queries on a debounce - this proves it still finds
+  --- the gate in place and never puts `navgraph/impact` on the wire.
+  it("keeps the gate through a reindex - a v1.0 server is never re-asked", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+
+    -- Reindexing also wakes unrelated ambient features (outline badges) on
+    -- the same wire - `navgraph/impact` specifically is what must stay off.
+    expect.falsy(
+      vim.tbl_contains(sent, "navgraph/impact"),
+      "a reindex must not send navgraph/impact to a v1.0 server: " .. vim.inspect(sent)
+    )
+    expect.matches(body(panel), "protocol 1.1", "the notice survives the reindex")
+  end)
+
+  --- HIGH-1: every live keypress (+/-/d/t/s) re-queries too - toggle_strict
+  --- stands in for all of them, since they all funnel through `Panel:query`.
+  it("keeps the gate through a keypress - a v1.0 server is never re-asked", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    panel:toggle_strict()
+
+    expect.eq(sent, {}, "a keypress must not send navgraph/impact to a v1.0 server")
+    expect.matches(body(panel), "protocol 1.1", "the notice survives the keypress")
+  end)
+
+  it("clears the gate once a capable session appears, and answers for real", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    -- A 1.1 server takes over the same root - the recovery this codebase's
+    -- own INFO-2 note called "accidental": this proves it is now deliberate.
+    -- Only `navgraph/impact` succeeds, so an unrelated ambient method (the
+    -- outline badges' reindex fetch) still 32601s exactly as it did above.
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        table.insert(sent, method)
+        vim.schedule(function()
+          if method == "navgraph/impact" then
+            cb(nil, { roots = {}, summary = {}, changeId = "1" })
+          else
+            cb({ code = -32601, message = "method not found" }, nil)
+          end
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 2, methods = { "navgraph/impact" } } } })
+
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+
+    wait(function()
+      return body(panel):find("protocol 1.1", 1, true) == nil
+    end, 5000, "the panel to repaint from a real answer")
+    expect.truthy(
+      vim.tbl_contains(sent, "navgraph/impact"),
+      "the gate clears and the real method goes out: " .. vim.inspect(sent)
+    )
   end)
 end)

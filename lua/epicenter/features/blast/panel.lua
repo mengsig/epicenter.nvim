@@ -221,7 +221,9 @@ local function initial_state(cfg)
   }
 end
 
---- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer, gate_reason?: string }
+--- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer,
+---   gate_reason?: string a `client.gate_notice` result (already indented) -
+---   held as panel state and re-checked on every query, not just this open }
 --- @return epicenter.blast.Panel
 function M.open(opts)
   local existing = M.current()
@@ -255,6 +257,11 @@ function M.open(opts)
     --- Test seam: forwarded to every tween this panel starts.
     animate_opts = {},
     ns = vim.api.nvim_create_namespace("epicenter.blast"),
+    --- Set when the buffer's server predates the protocol `kind` needs.
+    --- Panel state, not a one-shot argument: `query()` re-checks it on every
+    --- path (open, reindex, a keypress) so a gated panel never sends the
+    --- method it names, until a capable session actually appears.
+    gate_reason = opts.gate_reason,
   }, Panel)
 
   self.surface = cfg.blast.layout == "vsplit" and split_surface() or float_surface(" blast ")
@@ -271,7 +278,7 @@ function M.open(opts)
   end
 
   current = self
-  self:query({ first = true, gate_reason = opts.gate_reason })
+  self:query({ first = true })
   return self
 end
 
@@ -340,11 +347,12 @@ end
 
 --- Points the panel at a new target (a new cursor position, a named symbol, a
 --- diff ref) and re-queries.
---- @param gate_reason? string set when the buffer's server predates the
----   protocol `kind` needs - queries the panel with that instead of asking
+--- @param gate_reason? string a `client.gate_notice` result (already
+---   indented) - replaces any earlier gate, cleared entirely when omitted
 function Panel:set_query(kind, target, bufnr, gate_reason)
   self.kind = kind
   self.target = target
+  self.gate_reason = gate_reason
   self.meta = { kind = kind, ref = target.ref, root = self.meta and self.meta.root or nil }
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
     self.origin_buf = bufnr
@@ -354,10 +362,10 @@ function Panel:set_query(kind, target, bufnr, gate_reason)
   else
     self:_clear_anchor()
   end
-  self:query({ gate_reason = gate_reason })
+  self:query({})
 end
 
---- @param opts? { first?: boolean, realtime?: boolean, gate_reason?: string }
+--- @param opts? { first?: boolean, realtime?: boolean }
 function Panel:query(opts)
   opts = opts or {}
   if not self:valid() then
@@ -367,10 +375,18 @@ function Panel:query(opts)
   self.generation = self.generation + 1
   local generation = self.generation
 
-  -- A superseding generation bump above stops any in-flight request's
-  -- callback from overwriting this notice once it lands (F3-style race).
-  if opts.gate_reason then
-    return self:notice("  " .. opts.gate_reason)
+  if self.gate_reason then
+    -- Re-checked live rather than trusted as a stale flag: a capable session
+    -- appearing later (a 1.1 server after a reindex) clears the gate right
+    -- here, the one place every re-query path passes through.
+    local client = require("epicenter.client")
+    if client.supports(client.METHODS[self.kind], { bufnr = self.origin_buf }) then
+      self.gate_reason = nil
+    else
+      -- The generation bump above stops any in-flight request's callback
+      -- from overwriting this notice once it lands (F3-style race).
+      return self:notice(self.gate_reason)
+    end
   end
 
   if self.kind == "diff" then
