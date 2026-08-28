@@ -111,6 +111,30 @@ function M.symbol(index, symbol)
   return out
 end
 
+--- The indexed symbol with `id`, or nil.
+function M.symbol_by_id(index, id)
+  return M.of(index).by_id[id]
+end
+
+--- Edges into (`callers`) or out of (`callees`) `id`, each naming the symbol
+--- at the other end. The shared walk behind the v1.1 hierarchy and tests
+--- methods, which need the call-site lines and the exactness flag per edge.
+--- @param direction "callers"|"callees"
+--- @return { other: integer, exact: boolean, lines: integer[] }[]
+function M.edges_of(index, id, direction)
+  local built = M.of(index)
+  local edges = direction == "callees" and built.callees[id] or built.callers[id]
+  local out = {}
+  for _, edge in ipairs(edges or {}) do
+    table.insert(out, {
+      other = edge.from == id and edge.to or edge.from,
+      exact = edge.exact,
+      lines = edge.lines,
+    })
+  end
+  return out
+end
+
 --- @param edges Edge[]
 --- @param opts { strict?: boolean, tests?: string }
 local function passes(graph, edge, other_id, opts)

@@ -268,7 +268,7 @@ M.option_rules = {
 M.commands = {
   {
     name = "crumbs",
-    desc = "Toggle the breadcrumb winbar in this window",
+    desc = "Toggle the breadcrumb winbar here",
     run = toggle_winbar,
   },
 }

@@ -698,6 +698,18 @@ local HELPERS = {
   importers = "navgraph/importers",
   rescan = "navgraph/rescan",
   graph = "navgraph/graph",
+  -- v1.1. Every one of these is gated behind `M.supports`, so a v1.0 server
+  -- is never sent a method it would answer `-32601` to.
+  tests = "navgraph/tests",
+  types = "navgraph/types",
+  impact = "navgraph/impact",
+  prepare_call_hierarchy = "textDocument/prepareCallHierarchy",
+  incoming_calls = "callHierarchy/incomingCalls",
+  outgoing_calls = "callHierarchy/outgoingCalls",
+  prepare_type_hierarchy = "textDocument/prepareTypeHierarchy",
+  supertypes = "typeHierarchy/supertypes",
+  subtypes = "typeHierarchy/subtypes",
+  implementation = "textDocument/implementation",
 }
 
 for name, method in pairs(HELPERS) do

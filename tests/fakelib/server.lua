@@ -8,6 +8,7 @@ local index = require("fakelib.index")
 local schema = require("contract.schema")
 
 local PROTOCOL_VERSION = 1
+local PROTOCOL_MINOR = 1
 
 local function capabilities(methods)
   local navgraph_methods = vim.tbl_filter(function(name)
@@ -20,16 +21,34 @@ local function capabilities(methods)
   -- exception - blast's K routing (navgraph_owns_hover) reads it as a
   -- capability signal and never issues a literal textDocument/hover
   -- request, matching real navgraph's own protocol.
-  return {
+  -- v1.1: a standard-LSP addition announces itself the standard way, so the
+  -- client's own capability gate can trust it (`epicenter.client.supports`).
+  local standard = {
+    ["textDocument/prepareCallHierarchy"] = "callHierarchyProvider",
+    ["textDocument/prepareTypeHierarchy"] = "typeHierarchyProvider",
+    ["textDocument/implementation"] = "implementationProvider",
+  }
+  local providers = {}
+  for method, capability in pairs(standard) do
+    if methods[method] then
+      providers[capability] = true
+    end
+  end
+
+  return vim.tbl_extend("error", providers, {
     textDocumentSync = { openClose = true, change = 1, save = { includeText = false } },
     definitionProvider = true,
     hoverProvider = true,
     documentSymbolProvider = true,
     positionEncoding = "utf-8",
     experimental = {
-      navgraph = { protocolVersion = PROTOCOL_VERSION, methods = navgraph_methods },
+      navgraph = {
+        protocolVersion = PROTOCOL_VERSION,
+        protocolMinor = PROTOCOL_MINOR,
+        methods = navgraph_methods,
+      },
     },
-  }
+  })
 end
 
 --- @param opts { root?: string, input?: file*, output?: file* }
@@ -102,7 +121,9 @@ function M.serve(opts)
 
     -- The contract, enforced on the wire: a request the client should never
     -- have been able to build is refused here, before any handler sees it.
-    if vim.startswith(method, "navgraph/") then
+    -- Every method the contract defines, custom or standard - v1.1 adds
+    -- call/type hierarchy on the standard LSP names.
+    if schema.method(method) then
       local bad = schema.check_params(method, params)
       if bad then
         rpc.respond_error(output, id, -32602, bad)
@@ -124,7 +145,7 @@ function M.serve(opts)
     end
     -- ...and on the way back out, so a fake that drifts from the contract
     -- fails here rather than teaching a feature the wrong shape.
-    if vim.startswith(method, "navgraph/") then
+    if schema.method(method) then
       local bad = schema.check_result(method, result)
       if bad then
         rpc.respond_error(output, id, -32603, "fake server broke the contract: " .. bad)

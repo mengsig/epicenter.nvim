@@ -374,7 +374,7 @@ M.option_rules = {
 M.commands = {
   {
     name = "outline",
-    desc = "Live symbol outline of the current buffer",
+    desc = "Live symbol outline of this buffer",
     run = run,
     rows = true,
   },

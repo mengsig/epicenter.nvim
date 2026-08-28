@@ -24,6 +24,7 @@ CONTENTS                                                   *epicenter-contents*
      - explore ................................ |epicenter-explore|
      - peek ................................... |epicenter-peek|
      - crumbs ................................. |epicenter-crumbs|
+     - hierarchy .............................. |epicenter-hierarchy|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -95,25 +96,27 @@ The binary is looked up in this order:
 
                                                     *epicenter-commands-table*
 >
-    search   |epicenter-search|   Fuzzy symbol search across the project
-    grep     |epicenter-search|   Repo-wide text search, unsaved edits too
-    blast    |epicenter-blast|    Blast radius of the symbol at the cursor
-    hover    |epicenter-blast|    What this symbol is, and who calls it
-    diff     |epicenter-blast|    Impact of the changes since a git ref
-    callers  |epicenter-explore|  Who calls the symbol under the cursor
-    callees  |epicenter-explore|  What the symbol under the cursor calls
-    peek     |epicenter-peek|     Read the definition under the cursor
-    crumbs   |epicenter-crumbs|   Toggle the breadcrumb winbar in this window
-    path     |epicenter-path|     Call chain between two symbols
-    outline  |epicenter-outline|  Live symbol outline of the current buffer
-    hot      |epicenter-hot|      Most depended-on symbols, ranked by fan-in
-    unused   |epicenter-hot|      Symbols nothing in the index reaches
-    graph    |epicenter-hot|      Write the call graph to a file and open it
-    status   |epicenter-core|     Dashboard: index, server, languages, log
-    install  |epicenter-core|     Download or build the navgraph binary
-    restart  |epicenter-core|     Restart the server for this project
-    rescan   |epicenter-core|     Re-stat every file and rebuild the index
-    log      |epicenter-core|     Open the epicenter log
+    search     |epicenter-search|     Fuzzy symbol search across the project
+    grep       |epicenter-search|     Repo-wide text search, unsaved edits too
+    blast      |epicenter-blast|      Blast radius of the symbol at the cursor
+    hover      |epicenter-blast|      What this symbol is, and who calls it
+    diff       |epicenter-blast|      Impact of the changes since a git ref
+    callers    |epicenter-explore|    Who calls the symbol under the cursor
+    callees    |epicenter-explore|    What the symbol under the cursor calls
+    peek       |epicenter-peek|       Read the definition under the cursor
+    crumbs     |epicenter-crumbs|     Toggle the breadcrumb winbar here
+    hierarchy  |epicenter-hierarchy|  Call hierarchy at the cursor
+    types      |epicenter-hierarchy|  Supertypes, subtypes and implementors
+    path       |epicenter-path|       Call chain between two symbols
+    outline    |epicenter-outline|    Live symbol outline of this buffer
+    hot        |epicenter-hot|        Most depended-on symbols, by fan-in
+    unused     |epicenter-hot|        Symbols nothing in the index reaches
+    graph      |epicenter-hot|        Write the call graph and open it
+    status     |epicenter-core|       Dashboard: index, server, languages, log
+    install    |epicenter-core|       Download or build the navgraph binary
+    restart    |epicenter-core|       Restart the server for this project
+    rescan     |epicenter-core|       Re-stat every file and rebuild the index
+    log        |epicenter-core|       Open the epicenter log
 <
                                                          *epicenter-quickfix*
 QUICKFIX AND LOCATION LIST
@@ -141,18 +144,20 @@ change `keymaps.prefix`.
 
                                                     *epicenter-mappings-table*
 >
-    <leader>es  :Epicenter search   Fuzzy symbol search across the project
-    <leader>eg  :Epicenter grep     Repo-wide text search, unsaved edits too
-    <leader>ee  :Epicenter blast    Blast radius of the symbol at the cursor
-    <leader>ek  :Epicenter hover    What this symbol is, and who calls it
-    <leader>ed  :Epicenter diff     Impact of the changes since a git ref
-    <leader>ec  :Epicenter callers  Who calls the symbol under the cursor
-    <leader>eC  :Epicenter callees  What the symbol under the cursor calls
-    <leader>eP  :Epicenter peek     Read the definition under the cursor
-    <leader>ep  :Epicenter path     Call chain between two symbols
-    <leader>eo  :Epicenter outline  Live symbol outline of the current buffer
-    <leader>eh  :Epicenter hot      Most depended-on symbols, ranked by fan-in
-    <leader>ex  :Epicenter status   Dashboard: index, server, languages, log
+    <leader>es  :Epicenter search     Fuzzy symbol search across the project
+    <leader>eg  :Epicenter grep       Repo-wide text search, unsaved edits too
+    <leader>ee  :Epicenter blast      Blast radius of the symbol at the cursor
+    <leader>ek  :Epicenter hover      What this symbol is, and who calls it
+    <leader>ed  :Epicenter diff       Impact of the changes since a git ref
+    <leader>ec  :Epicenter callers    Who calls the symbol under the cursor
+    <leader>eC  :Epicenter callees    What the symbol under the cursor calls
+    <leader>eP  :Epicenter peek       Read the definition under the cursor
+    <leader>eH  :Epicenter hierarchy  Call hierarchy at the cursor
+    <leader>eT  :Epicenter types      Supertypes, subtypes and implementors
+    <leader>ep  :Epicenter path       Call chain between two symbols
+    <leader>eo  :Epicenter outline    Live symbol outline of this buffer
+    <leader>eh  :Epicenter hot        Most depended-on symbols, by fan-in
+    <leader>ex  :Epicenter status     Dashboard: index, server, languages, log
 <
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
@@ -613,6 +618,38 @@ Options: >lua
 
     crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
 <
+==============================================================================
+HIERARCHY                                                 *epicenter-hierarchy*
+
+Both panels ride the standard LSP call- and type-hierarchy methods the v1.1
+protocol adds, so any editor gets them - not just this one. Against a server
+that does not announce them the panel says so and sends nothing.
+
+                                                     *:Epicenter-hierarchy*
+:Epicenter hierarchy [incoming|outgoing]                       *<leader>eH*
+    Who calls the symbol under the cursor, as a tree. `incoming` by default;
+    `d` flips the whole tree to what it calls instead. Only the first level is
+    fetched - `l` asks for the next one - so the panel opens in one request
+    whatever the size of the graph.
+
+                                                         *:Epicenter-types*
+:Epicenter types                                               *<leader>eT*
+    The supertypes, subtypes and implementors of the type under the cursor, in
+    three groups. A supertype expands upward and a subtype downward; an
+    implementor is a location, so it is a leaf.
+
+Rows carry the kind icon, the qualified name, `file:line`, and:
+
+    3x              the caller reaches it from more than one call site
+    ?               a heuristic edge - resolved by trailing name, not by an
+                    exact qualified match
+    recursive       the definition is already open further up this branch
+
+Keys are the shared panel keys (|epicenter-explore| lists them), plus:
+
+    l, h            expand (fetching the level) / collapse
+    d               call hierarchy: flip incoming <-> outgoing
+
 ==============================================================================
 PATH                                                           *epicenter-path*
 

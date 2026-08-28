@@ -16,6 +16,10 @@ local UNCALLED = {
   ["navgraph/events"] = true,
   ["navgraph/imports"] = true,
   ["navgraph/importers"] = true,
+  -- v1.1 helpers whose panels land in the next wave.
+  ["navgraph/tests"] = true,
+  ["navgraph/types"] = true,
+  ["navgraph/impact"] = true,
 }
 
 local function symbol(over)
@@ -108,6 +112,37 @@ local ANSWERS = {
 }
 ANSWERS["navgraph/rescan"] = ANSWERS["navgraph/status"]
 
+--- v1.1: the standard LSP hierarchy methods. `data` is what lets a follow-up
+--- request name the same definition the server resolved.
+local function hierarchy_item()
+  return {
+    name = "handle",
+    kind = 12,
+    uri = "file:///proj/app/server.lua",
+    range = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 8, character = 0 },
+    },
+    selectionRange = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 2, character = 6 },
+    },
+    data = { id = 1, qualified = "M.handle", file = "app/server.lua" },
+  }
+end
+
+ANSWERS["textDocument/prepareCallHierarchy"] = { hierarchy_item() }
+ANSWERS["callHierarchy/incomingCalls"] = {
+  { from = hierarchy_item(), fromRanges = {} },
+}
+ANSWERS["callHierarchy/outgoingCalls"] = {
+  { to = hierarchy_item(), fromRanges = {} },
+}
+ANSWERS["textDocument/prepareTypeHierarchy"] = { hierarchy_item() }
+ANSWERS["typeHierarchy/supertypes"] = {}
+ANSWERS["typeHierarchy/subtypes"] = {}
+ANSWERS["textDocument/implementation"] = {}
+
 --- A session that records what a feature sent and answers from ANSWERS, so
 --- chained requests (symbolAt -> blast) reach their second call.
 local function recorder()
@@ -156,6 +191,9 @@ local DRIVEN = {
   { "callees", {} },
   { "peek", {} },
   { "crumbs", {} },
+  { "hierarchy", {} },
+  { "hierarchy", { "outgoing" } },
+  { "types", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },
@@ -225,7 +263,20 @@ describe("every feature builds contract-shaped requests", function()
     buf = vim.api.nvim_get_current_buf()
     root = require("epicenter.root").find(buf)
     session = recorder()
-    client.register_session(root, session)
+    -- A v1.1 handshake: without it every v1.1-gated feature would correctly
+    -- refuse to send, and this spec would prove nothing about their requests.
+    client.register_session(root, session, {
+      callHierarchyProvider = true,
+      typeHierarchyProvider = true,
+      implementationProvider = true,
+      experimental = {
+        navgraph = {
+          protocolVersion = 1,
+          protocolMinor = 1,
+          methods = { "navgraph/impact", "navgraph/tests", "navgraph/types" },
+        },
+      },
+    })
 
     opened = {}
     ui_open = vim.ui.open

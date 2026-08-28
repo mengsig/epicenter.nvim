@@ -1,5 +1,5 @@
---- `docs/lsp.md` v1 as data: one params shape and one result shape per
---- `navgraph/*` method, plus the shared `Symbol`/`Node`/`Edge` shapes.
+--- `docs/lsp.md` v1 (plus the v1.1 addendum) as data: one params shape and one
+--- result shape per method, plus the shared `Symbol`/`Node`/`Edge` shapes.
 --- The vendored copy of that document sits beside this file.
 ---
 --- Requests are checked STRICTLY - an unknown or ill-typed param is an error,
@@ -9,6 +9,9 @@
 local M = {}
 
 M.VERSION = 1
+--- The addendum this schema also covers. Every v1.1 method is gated behind
+--- `epicenter.client.supports`, so a v1.0 server is never sent one.
+M.MINOR = 1
 
 -- Field specs -----------------------------------------------------------------
 --
@@ -156,6 +159,36 @@ local DIRECTION = str({ enum = { "callers", "callees" } })
 local function params(...)
   return vim.tbl_extend("error", {}, ...)
 end
+
+-- v1.1 shapes ------------------------------------------------------------------
+
+--- The `data` a `CallHierarchyItem`/`TypeHierarchyItem` carries back, so a
+--- follow-up request names the same definition the server resolved.
+local HIERARCHY_DATA = object({
+  id = required(int()),
+  qualified = required(str()),
+  file = required(str()),
+  exact = bool(),
+})
+
+--- `CallHierarchyItem` and `TypeHierarchyItem` are the same shape.
+local HIERARCHY_ITEM = object({
+  name = required(str()),
+  kind = required(int()),
+  uri = required(str()),
+  range = required(RANGE),
+  selectionRange = required(RANGE),
+  detail = str(),
+  data = required(HIERARCHY_DATA),
+})
+
+local LOCATION = object({ uri = required(str()), range = required(RANGE) })
+
+--- `{ textDocument: { uri }, position }`, the standard LSP request shape.
+local TEXT_DOCUMENT_POSITION = {
+  textDocument = required(object({ uri = required(str()) })),
+  position = required(POSITION),
+}
 
 -- The method table ------------------------------------------------------------
 
@@ -392,6 +425,121 @@ M.METHODS = {
   ["navgraph/rescan"] = {
     params = { full = bool() },
     result = STATUS_RESULT,
+  },
+
+  -- v1.1 ----------------------------------------------------------------------
+
+  ["navgraph/tests"] = {
+    target = "required",
+    params = params(SCOPE, TARGET, { limit = int() }),
+    result = object({
+      symbol = required(SYMBOL),
+      tests = required(list_of(object({
+        symbol = required(SYMBOL),
+        depth = required(int()),
+        via = required(list_of(int())),
+      }))),
+      summary = required(object({ count = required(int()), maxDepth = required(int()) })),
+      truncated = required(bool()),
+    }),
+  },
+
+  ["navgraph/types"] = {
+    target = "required",
+    params = params(SCOPE, TARGET, { limit = int() }),
+    result = object({
+      symbol = required(SYMBOL),
+      supertypes = required(list_of(SYMBOL)),
+      subtypes = required(list_of(SYMBOL)),
+      implementors = required(list_of(SYMBOL)),
+      users = required(list_of(object({
+        symbol = required(SYMBOL),
+        kind = required(str({
+          enum = {
+            "param",
+            "return",
+            "field",
+            "local",
+            "extends",
+            "implements",
+            "annotation",
+            "generic",
+          },
+        })),
+      }))),
+      truncated = required(bool()),
+    }),
+  },
+
+  -- No `target` rule: "the whole working change" is the call with no target
+  -- at all, which is the common one.
+  ["navgraph/impact"] = {
+    params = params(SCOPE, {
+      uri = str(),
+      range = RANGE,
+      ref = str(),
+      depth = int(),
+      direction = DIRECTION,
+      limit = int(),
+    }),
+    result = object({
+      roots = required(list_of(SYMBOL)),
+      nodes = required(list_of(object({
+        symbol = required(SYMBOL),
+        depth = required(int()),
+        via = required(list_of(int())),
+        exact = required(bool()),
+      }))),
+      edges = required(list_of(EDGE)),
+      summary = required(SUMMARY),
+      hunks = required(list_of(object({
+        uri = required(str()),
+        range = required(RANGE),
+        roots = required(list_of(SYMBOL)),
+      }))),
+      truncated = required(bool()),
+    }),
+  },
+
+  ["textDocument/prepareCallHierarchy"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["callHierarchy/incomingCalls"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(object({
+      from = required(HIERARCHY_ITEM),
+      fromRanges = required(list_of(RANGE)),
+    })),
+  },
+
+  ["callHierarchy/outgoingCalls"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(object({
+      to = required(HIERARCHY_ITEM),
+      fromRanges = required(list_of(RANGE)),
+    })),
+  },
+
+  ["textDocument/prepareTypeHierarchy"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["typeHierarchy/supertypes"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["typeHierarchy/subtypes"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["textDocument/implementation"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(LOCATION),
   },
 
   ["navgraph/graph"] = {

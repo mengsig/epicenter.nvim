@@ -169,7 +169,7 @@ describe("status dashboard against the fake navgraph server", function()
   it("shows what the running server reports", function()
     win = require("epicenter").run("status", {}, buf)
     wait(function()
-      return body():match("3 files") ~= nil
+      return body():match("4 files") ~= nil
     end, 10000, "status dashboard")
     expect.matches(body(), "running")
     expect.matches(body(), "protocol 1")
@@ -191,7 +191,7 @@ describe("status dashboard against the fake navgraph server", function()
   it("rescans and repaints on r", function()
     win = require("epicenter").run("status", {}, buf)
     wait(function()
-      return body():match("3 files") ~= nil
+      return body():match("4 files") ~= nil
     end, 10000, "status dashboard")
 
     local reindexed = false
@@ -203,7 +203,7 @@ describe("status dashboard against the fake navgraph server", function()
       return reindexed
     end, 10000, "the rescan reached the server")
     wait(function()
-      return body():match("3 files") ~= nil
+      return body():match("4 files") ~= nil
     end, 10000, "the dashboard repainted")
   end)
 

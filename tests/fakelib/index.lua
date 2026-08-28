@@ -54,6 +54,23 @@ local function scan_lua(lines)
   return found
 end
 
+--- Base classes named in a `class Foo(Bar, Baz):` header. The fake's
+--- stand-in for the resolver's base/impl tables (v1.1 type hierarchy).
+--- @return string[]
+local function bases_of(line)
+  local inside = line:match("^%s*class%s+[%w_]+%s*%((.-)%)")
+  if not inside then
+    return {}
+  end
+  local names = {}
+  for name in inside:gmatch("[%w_]+") do
+    if name ~= "object" then
+      table.insert(names, name)
+    end
+  end
+  return names
+end
+
 local function scan_python(lines)
   local found = {}
   local class, class_indent = nil, 0
@@ -68,6 +85,7 @@ local function scan_python(lines)
         line = i,
         sig = vim.trim(line),
         exported = not class_name:match("^_"),
+        bases = bases_of(line),
       })
     else
       -- `async def` is a definition too - the real indexer sees it, so a
@@ -115,6 +133,8 @@ function M.build(root, overlays)
   table.sort(files)
 
   local sources, symbols = {}, {}
+  --- symbol id -> the base-class names its header declared.
+  local bases = {}
   local next_id = 0
 
   for _, file in ipairs(files) do
@@ -126,6 +146,7 @@ function M.build(root, overlays)
       local found = SCANNERS[language](lines)
       for i, def in ipairs(found) do
         next_id = next_id + 1
+        bases[next_id] = def.bases or {}
         table.insert(symbols, {
           id = next_id,
           name = def.name,
@@ -163,6 +184,7 @@ function M.build(root, overlays)
     files = files,
     sources = sources,
     symbols = symbols,
+    bases = bases,
     ms = math.floor((uv.hrtime() - started) / 1e6),
   }
 end

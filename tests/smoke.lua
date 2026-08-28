@@ -45,6 +45,8 @@ local EXPECTED_COMMANDS = {
   "callees",
   "peek",
   "crumbs",
+  "hierarchy",
+  "types",
   "path",
   "outline",
   "hot",
@@ -233,7 +235,7 @@ local dashboard = require("epicenter").run("status", {}, source)
 wait_for("dashboard reported the index", function()
   return table
     .concat(vim.api.nvim_buf_get_lines(dashboard.buf, 0, -1, false), "\n")
-    :match("3 files") ~= nil
+    :match("4 files") ~= nil
 end)
 dashboard:close()
 -- === end ep-explore wave ===

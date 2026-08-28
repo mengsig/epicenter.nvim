@@ -257,7 +257,7 @@ M.options = {
 M.commands = {
   {
     name = "hot",
-    desc = "Most depended-on symbols, ranked by fan-in",
+    desc = "Most depended-on symbols, by fan-in",
     run = open_hot,
     rows = true,
   },
@@ -267,7 +267,7 @@ M.commands = {
     run = open_unused,
     rows = true,
   },
-  { name = "graph", desc = "Write the call graph to a file and open it", run = export_graph },
+  { name = "graph", desc = "Write the call graph and open it", run = export_graph },
 }
 
 M.keymaps = {

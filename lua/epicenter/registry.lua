@@ -19,6 +19,8 @@
 --- @field variants? table<string, string[]> config path -> the types it accepts
 --- @field enums? table<string, any[]> config path -> the values it accepts
 --- @field positive? table<string, boolean> config path -> must be a positive number
+--- @field extensible? table<string, boolean> config path -> a subtree the user
+---   may add keys to (e.g. one entry per language)
 ---
 --- @class epicenter.FeatureSpec
 --- @field name string unique feature id, also its vimdoc tag
@@ -56,7 +58,7 @@ local function validate_spec(spec, source)
   end
 end
 
-local RULE_KINDS = { "variants", "enums", "positive" }
+local RULE_KINDS = { "variants", "enums", "positive", "extensible" }
 
 --- Same ownership rule as the option rules: a feature may only document a
 --- path rooted at an option key it owns.
@@ -117,7 +119,7 @@ local function build()
     by_name = {},
     keymaps = {},
     options = {},
-    rules = { variants = {}, enums = {}, positive = {} },
+    rules = { variants = {}, enums = {}, positive = {}, extensible = {} },
     docs = {},
   }
   local feature_names, option_owner = {}, {}
@@ -209,7 +211,7 @@ end
 
 --- Validation rules features declared for their own options, keyed by config
 --- path. `epicenter.config` merges these over its own.
---- @return { variants: table, enums: table, positive: table }
+--- @return { variants: table, enums: table, positive: table, extensible: table }
 function M.option_rules()
   return vim.deepcopy(get().rules)
 end

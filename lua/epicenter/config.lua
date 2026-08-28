@@ -113,7 +113,8 @@ local FREE_FORM = { highlights = true }
 
 --- Subtrees that pass an option unknown to their own defaults straight
 --- through, e.g. a newer navgraph's init_options key this plugin does not
---- know about yet - a documented option still gets its own validation.
+--- know about yet - a documented option still gets its own validation. A
+--- feature adds its own via the `extensible` option rule.
 local ALLOW_UNKNOWN = { ["lsp.init_options"] = true }
 
 local ENUMS = {
@@ -176,13 +177,14 @@ local function join(prefix, key)
 end
 
 --- Core rules plus the ones features declared for their own options.
---- @return { variants: table, enums: table, positive: table }
+--- @return { variants: table, enums: table, positive: table, extensible: table }
 local function rules()
   local extra = registry.option_rules()
   return {
     variants = vim.tbl_extend("force", VARIANTS, extra.variants),
     enums = vim.tbl_extend("force", ENUMS, extra.enums),
     positive = vim.tbl_extend("force", POSITIVE, extra.positive),
+    extensible = vim.tbl_extend("force", ALLOW_UNKNOWN, extra.extensible),
   }
 end
 
@@ -264,7 +266,7 @@ local function merge(defaults, opts, prefix, rule, allow_unknown)
       if FREE_FORM[key] and prefix == "" then
         out[key] = vim.deepcopy(value)
       elseif type(value) == "table" and type(default) == "table" and not vim.islist(default) then
-        out[key] = merge(default, value, path, rule, ALLOW_UNKNOWN[path])
+        out[key] = merge(default, value, path, rule, rule.extensible[path])
       else
         out[key] = vim.deepcopy(value)
       end
