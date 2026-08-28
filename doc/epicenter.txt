@@ -212,9 +212,11 @@ Defaults: >lua
 navgraph.path        Explicit binary path. When set but not executable this is
                      an error, not a silent fallback.
 navgraph.args        Extra arguments appended to `navgraph lsp`.
-navgraph.repo        Source repository for |epicenter.install()|. Installed
-                     with no checksum/signature check - `navgraph.repo` is
-                     the trust root.
+navgraph.repo        Source repository for |epicenter.install()|. A release
+                     download is SHA256-verified against the release's
+                     `SHA256SUMS`; a source build has no artifact to check
+                     against, so `navgraph.repo` plus a local `zig build` is
+                     its trust root.
 navgraph.install_ref Git ref to build from on the source route.
 
 lsp.auto_start       Start a server automatically for indexed buffers.
