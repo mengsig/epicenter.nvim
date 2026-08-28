@@ -24,6 +24,12 @@ local CHANNEL = "blast"
 --- The protocol's code for a Target that resolves to nothing.
 local TARGET_NOT_FOUND = -32001
 
+--- Anchors a cursor target's line across edits (below), so a realtime
+--- re-query resolves the same definition the cursor was on even after a
+--- line-shifting edit - without pinning to the symbol's name, which can be
+--- ambiguous (overloads, same-named methods across files) (F3).
+local PIN_NS = vim.api.nvim_create_namespace("epicenter.blast.pin")
+
 local SPLIT_WINHIGHLIGHT = table.concat({
   "Normal:EpicenterNormal",
   "CursorLine:EpicenterSelection",
@@ -227,6 +233,10 @@ function M.open(opts)
   self:_paint()
   self.surface:reveal(self.animate_opts)
 
+  if opts.target.position then
+    self:_anchor(opts.target.position.line, opts.target.position.character)
+  end
+
   current = self
   self:query({ first = true })
   return self
@@ -249,6 +259,48 @@ function Panel:_cancel_pending()
   end
 end
 
+--- Deletes the anchor extmark, if any, and forgets it.
+function Panel:_clear_anchor()
+  if self.pin_mark and self.pin_buf and vim.api.nvim_buf_is_valid(self.pin_buf) then
+    pcall(vim.api.nvim_buf_del_extmark, self.pin_buf, PIN_NS, self.pin_mark)
+  end
+  self.pin_buf, self.pin_mark, self.pin_col = nil, nil, nil
+end
+
+--- Anchors `self.origin_buf`'s `line` (0-based) via an extmark, replacing
+--- any earlier anchor - `nvim` keeps it on the right line as edits land.
+--- Follow mode can change `origin_buf` between anchors, so a mark left in a
+--- buffer we have since moved off never gets picked up again - delete it.
+function Panel:_anchor(line, character)
+  if self.pin_buf and self.pin_buf ~= self.origin_buf then
+    self:_clear_anchor()
+  end
+  if not vim.api.nvim_buf_is_valid(self.origin_buf) then
+    self:_clear_anchor()
+    return
+  end
+  self.pin_mark = vim.api.nvim_buf_set_extmark(self.origin_buf, PIN_NS, line, 0, {
+    id = self.pin_mark,
+  })
+  self.pin_buf = self.origin_buf
+  self.pin_col = character or 0
+end
+
+--- The anchor's current position, or nil once it and its buffer are gone.
+function Panel:_anchored_target()
+  if not (self.pin_mark and self.pin_buf and vim.api.nvim_buf_is_valid(self.pin_buf)) then
+    return nil
+  end
+  local mark = vim.api.nvim_buf_get_extmark_by_id(self.pin_buf, PIN_NS, self.pin_mark, {})
+  if not mark[1] then
+    return nil
+  end
+  return {
+    uri = vim.uri_from_bufnr(self.pin_buf),
+    position = { line = mark[1], character = self.pin_col or 0 },
+  }
+end
+
 --- Points the panel at a new target (a new cursor position, a named symbol, a
 --- diff ref) and re-queries.
 function Panel:set_query(kind, target, bufnr)
@@ -257,6 +309,11 @@ function Panel:set_query(kind, target, bufnr)
   self.meta = { kind = kind, ref = target.ref, root = self.meta and self.meta.root or nil }
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
     self.origin_buf = bufnr
+  end
+  if target.position then
+    self:_anchor(target.position.line, target.position.character)
+  else
+    self:_clear_anchor()
   end
   self:query({})
 end
@@ -278,6 +335,9 @@ function Panel:query(opts)
   if self.target.symbol then
     return self:_request("blast", model.params(self.state, self.target), opts, generation)
   end
+  -- Re-derive the position from the anchor (if one exists) rather than
+  -- trusting a stale `self.target.position` a line-shifting edit invalidated.
+  self.target = self:_anchored_target() or self.target
   self:_resolve_cursor(opts, generation)
 end
 
@@ -306,7 +366,9 @@ function Panel:_resolve_cursor(opts, generation)
       end
       -- On a name, hand the position straight back so the server applies its
       -- own resolution rules; otherwise blast the definition the cursor sits
-      -- inside, so `<leader>ee` works anywhere in a body.
+      -- inside, so `<leader>ee` works anywhere in a body. Either way query by
+      -- the resolved symbol's OWN uri/position, not its name (F3) - a bare
+      -- qualified name can be shared by several definitions.
       local resolved = result and result.symbol
       local target = { uri = self.target.uri, position = self.target.position }
       if not resolved or resolved == vim.NIL then
@@ -314,7 +376,7 @@ function Panel:_resolve_cursor(opts, generation)
         if not enclosing or enclosing == vim.NIL then
           return self:_show_message("no symbol under the cursor")
         end
-        target = { symbol = enclosing.qualified }
+        target = { uri = enclosing.uri, position = { line = enclosing.line - 1, character = 0 } }
       end
       self:_request("blast", model.params(self.state, target), opts, generation)
     end)
@@ -364,13 +426,6 @@ function Panel:_on_result(err, result, opts)
   local blast, changed = unwrap(self.kind, result)
   local roots = blast.roots or {}
   self.meta = { kind = self.kind, root = roots[1], ref = result.ref or self.target.ref }
-
-  -- A cursor target is a fixed position, but a re-index shifts lines - pin
-  -- to the resolved symbol so a realtime re-query never silently re-roots
-  -- onto whatever now sits at that stale position (#F2).
-  if self.kind == "blast" and self.target.position and roots[1] and roots[1].qualified then
-    self.target = { symbol = roots[1].qualified }
-  end
 
   local summary = vim.tbl_extend("force", model.empty_summary(), blast.summary or {})
   summary.changed = changed
@@ -880,6 +935,7 @@ function Panel:_cleanup()
     self.unsubscribe = nil
   end
   pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
+  self:_clear_anchor()
   self:_close_peek()
   ripples.clear()
   if current == self then

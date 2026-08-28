@@ -249,3 +249,84 @@ describe(
     end)
   end
 )
+
+--- The F2 pin re-queries by symbol NAME, which is ambiguous once a same-named
+--- definition appears elsewhere - the exact failure mode it was meant to
+--- close, in a narrower window (merge-gate F3).
+describe("the blast panel's pin survives a same-named definition appearing elsewhere", function()
+  local root, buf, other_buf, panel, original, other_original
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_fake()
+
+    local path = vim.fs.joinpath(root, "app/server.lua")
+    local existing = vim.fn.bufnr(path)
+    if existing ~= -1 then
+      vim.api.nvim_buf_delete(existing, { force = true })
+    end
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+    original = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+
+    -- Loaded (attached) but never displayed, so editing it cannot steal the
+    -- window `buf` needs for `blast.cursor_target()` to find its cursor.
+    local other_path = vim.fs.joinpath(root, "app/config.lua")
+    local other_existing = vim.fn.bufnr(other_path)
+    if other_existing ~= -1 then
+      vim.api.nvim_buf_delete(other_existing, { force = true })
+    end
+    other_buf = vim.fn.bufadd(other_path)
+    vim.fn.bufload(other_buf)
+    other_original = vim.api.nvim_buf_get_lines(other_buf, 0, -1, false)
+  end)
+
+  after_each(function()
+    if panel then
+      panel:close()
+      panel = nil
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, original)
+      vim.bo[buf].modified = false
+    end
+    if vim.api.nvim_buf_is_valid(other_buf) then
+      vim.api.nvim_buf_set_lines(other_buf, 0, -1, false, other_original)
+      vim.bo[other_buf].modified = false
+    end
+    require("epicenter.events").clear()
+  end)
+
+  it("keeps the root on the original definition, not the alphabetically-first namesake", function()
+    panel = epicenter.run("blast", {}, buf)
+    wait(function()
+      return panel.answered > 0 and #panel.nodes > 0
+    end, 10000, "the first result")
+    expect.eq(panel.meta.root.qualified, "M.handle_request")
+    expect.eq(panel.meta.root.file, "app/server.lua")
+
+    local before = panel.answered
+    -- app/config.lua sorts before app/server.lua, so a name-based re-query
+    -- for "M.handle_request" would resolve to THIS one first (#F3's bug).
+    vim.api.nvim_buf_set_lines(
+      other_buf,
+      -1,
+      -1,
+      false,
+      { "", "function M.handle_request()", "  return true", "end" }
+    )
+    wait(function()
+      return panel.answered > before
+    end, 10000, "a realtime re-query")
+
+    expect.eq(
+      panel.meta.root.file,
+      "app/server.lua",
+      "the pin must resolve by position, not by an ambiguous name"
+    )
+    expect.eq(names(panel), { "M.start" })
+  end)
+end)
