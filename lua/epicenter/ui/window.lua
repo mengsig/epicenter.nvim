@@ -359,14 +359,43 @@ end
 local Split = {}
 Split.__index = Split
 
+--- Elides the RIGHT end of `text` down to `width` display columns, keeping
+--- its start - the opposite direction from `ui.text.fit`'s path elision,
+--- because a winbar title's own left-anchored name (e.g. "outline") is the
+--- part worth keeping, not whatever varies after it.
+local function elide_right(text, width)
+  if vim.fn.strdisplaywidth(text) <= width then
+    return text
+  end
+  local ellipsis = "…"
+  local budget = width - vim.fn.strdisplaywidth(ellipsis)
+  if budget <= 0 then
+    return ""
+  end
+  local kept = text
+  while vim.fn.strdisplaywidth(kept) > budget do
+    kept = vim.fn.strcharpart(kept, 0, vim.fn.strchars(kept) - 1)
+  end
+  return kept .. ellipsis
+end
+
 --- A split has no border to hang a title and a footer on; the winbar carries
---- both, title left and footer right.
-local function winbar_of(title, footer)
+--- both, title left and footer right. Neovim's own winbar truncation - eaten
+--- from the left when the string overflows the window, with no `%<` marker
+--- to steer it - used to chew through the title's own fixed name once the
+--- footer pushed the combined string over width (D6); `width` lets the
+--- title elide itself first instead, keeping its name intact.
+--- @param width integer|nil the split's current column width; nil skips fitting
+local function winbar_of(title, footer, width)
   local function chunk(text, group)
     if not text or text == "" then
       return ""
     end
     return ("%%#%s#%s%%*"):format(group, (text:gsub("%%", "%%%%")))
+  end
+  if width then
+    local budget = width - vim.fn.strdisplaywidth(footer or "")
+    title = elide_right(title or "", math.max(0, budget))
   end
   return chunk(title, "EpicenterTitle") .. "%=" .. chunk(footer, "EpicenterHint")
 end
@@ -407,7 +436,7 @@ function M.open_split(spec)
     footer = spec.footer,
     closed = false,
   }, Split)
-  vim.wo[win].winbar = winbar_of(self.title, self.footer)
+  vim.wo[win].winbar = winbar_of(self.title, self.footer, vim.api.nvim_win_get_width(win))
 
   self.augroup = vim.api.nvim_create_augroup("EpicenterSplit" .. win, { clear = true })
   vim.api.nvim_create_autocmd("WinClosed", {
@@ -447,7 +476,8 @@ Split.focus = Window.focus
 
 function Split:_paint_winbar()
   if self:valid() then
-    vim.wo[self.win].winbar = winbar_of(self.title, self.footer)
+    vim.wo[self.win].winbar =
+      winbar_of(self.title, self.footer, vim.api.nvim_win_get_width(self.win))
   end
 end
 

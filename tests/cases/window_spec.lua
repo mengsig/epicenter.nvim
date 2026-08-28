@@ -155,3 +155,45 @@ describe("window lifecycle", function()
     win:close({ motion = false })
   end)
 end)
+
+describe("split winbar (D6)", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    vim.cmd("silent! only")
+  end)
+
+  after_each(function()
+    vim.cmd("silent! only")
+  end)
+
+  -- D6: the winbar used to hand Neovim `title .. "%=" .. footer` unfitted,
+  -- and Neovim's own truncation eats from the left with no `%<` marker -
+  -- chewing through the title's own fixed name ("outline") once the footer
+  -- pushed the combined string over the split's width.
+  it(
+    "elides the title's own tail rather than losing its name to Neovim's left-truncation",
+    function()
+      local split = window.open_split({
+        width = 34,
+        title = " outline: user_service.py ",
+        footer = " 0 ",
+      })
+      split:set_footer(" 8 · functions ")
+
+      local winbar = vim.wo[split.win].winbar
+      expect.matches(winbar, "outline", "the title's own fixed name survives")
+      expect.matches(winbar, "…", "the varying part elided instead")
+      expect.matches(winbar, "8 · functions", "the footer survives whole")
+      split:close()
+    end
+  )
+
+  it("does not elide when the title and footer already fit", function()
+    local split = window.open_split({ width = 34, title = " outline: x.lua ", footer = " 3 " })
+    expect.eq(
+      vim.wo[split.win].winbar,
+      "%#EpicenterTitle# outline: x.lua %*%=%#EpicenterHint# 3 %*"
+    )
+    split:close()
+  end)
+end)
