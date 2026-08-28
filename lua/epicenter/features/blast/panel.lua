@@ -302,9 +302,13 @@ function Panel:_anchored_target()
   if not mark[1] then
     return nil
   end
+  -- Re-snap the column here, not at anchor time: the extmark follows the line
+  -- across edits, and an edit can change that line's indentation under it.
+  local column =
+    require("epicenter.features.blast").column_at(self.pin_buf, mark[1], self.pin_col or 0)
   return {
     uri = vim.uri_from_bufnr(self.pin_buf),
-    position = { line = mark[1], character = self.pin_col or 0 },
+    position = { line = mark[1], character = column },
   }
 end
 
@@ -372,20 +376,21 @@ function Panel:_resolve_cursor(opts, generation)
         return self:_show_message(err.message or "navgraph did not answer")
       end
       -- On a name, hand the position straight back so the server applies its
-      -- own resolution rules; otherwise blast the definition the cursor sits
-      -- inside, so `<leader>ee` works anywhere in a body. Either way query by
-      -- the resolved symbol's OWN uri/position, not its name (F3) - a bare
-      -- qualified name can be shared by several definitions.
+      -- own resolution rules. Anywhere else in a body the cursor is not on a
+      -- definition's name, and NO column of the enclosing definition's line is
+      -- reliably one either - re-ask by that definition's disambiguated name
+      -- instead, so `<leader>ee` works anywhere in a body (F10).
       local resolved = result and result.symbol
-      local target = { uri = self.target.uri, position = self.target.position }
-      if not resolved or resolved == vim.NIL then
-        local enclosing = result and result.enclosing
-        if not enclosing or enclosing == vim.NIL then
-          return self:_show_message("no symbol under the cursor")
-        end
-        target = { uri = enclosing.uri, position = { line = enclosing.line - 1, character = 0 } }
+      if resolved and resolved ~= vim.NIL then
+        local target = { uri = self.target.uri, position = self.target.position }
+        return self:_request("blast", model.params(self.state, target), opts, generation)
       end
-      self:_request("blast", model.params(self.state, target), opts, generation)
+      local enclosing = result and result.enclosing
+      local name = enclosing ~= vim.NIL and client.symbol_ref(enclosing) or nil
+      if not name then
+        return self:_show_message("no symbol under the cursor")
+      end
+      self:_request("blast", model.params(self.state, { symbol = name }), opts, generation)
     end)
   end, { bufnr = self.origin_buf, channel = CHANNEL })
 end

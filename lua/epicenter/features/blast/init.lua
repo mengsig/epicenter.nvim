@@ -60,6 +60,9 @@ M.option_rules = {
   },
 }
 
+--- Where the cursor is pointing, as a protocol Target. The column is the
+--- cursor's own, snapped out of the leading indentation (F10) - navgraph
+--- resolves an identifier under the column and nothing off one.
 --- @param bufnr integer
 --- @return { uri: string, position: { line: integer, character: integer } }
 function M.cursor_target(bufnr)
@@ -67,8 +70,24 @@ function M.cursor_target(bufnr)
   local cursor = win ~= -1 and vim.api.nvim_win_get_cursor(win) or { 1, 0 }
   return {
     uri = vim.uri_from_bufnr(bufnr),
-    position = { line = cursor[1] - 1, character = cursor[2] },
+    position = { line = cursor[1] - 1, character = M.column_at(bufnr, cursor[1] - 1, cursor[2]) },
   }
+end
+
+--- `model.target_column` against a buffer line, for the callers that hold a
+--- (bufnr, line, column) rather than the text.
+--- @param line integer 0-based
+--- @param column integer 0-based
+--- @return integer 0-based column
+function M.column_at(bufnr, line, column)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return column
+  end
+  local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
+  if not text then
+    return column
+  end
+  return require("epicenter.features.blast.model").target_column(text, column)
 end
 
 --- True when navgraph is the buffer's hover provider - which, under

@@ -358,15 +358,9 @@ local function open(direction, ctx)
   local events = require("epicenter.events")
   local panel_mod = require("epicenter.ui.panel")
 
-  local ref = ctx.args[1]
-  if not ref then
-    local win = vim.api.nvim_get_current_win()
-    local cursor = vim.api.nvim_win_get_cursor(win)
-    ref = {
-      uri = vim.uri_from_bufnr(ctx.bufnr),
-      position = { line = cursor[1] - 1, character = cursor[2] },
-    }
-  end
+  -- Shared with the blast panel and the hover card, so all three aim a cursor
+  -- target at the same column (F10).
+  local ref = ctx.args[1] or require("epicenter.features.blast").cursor_target(ctx.bufnr)
 
   local view = {
     direction = direction,

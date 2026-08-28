@@ -186,10 +186,29 @@ describe("fake call graph", function()
     local named = graph.targets(built, { symbol = "M.start" }, to_relative)
     expect.eq(named[1].qualified, "M.start")
 
-    -- Line 10 (0-based 9) is inside M.handle_request's body.
-    local positioned =
-      graph.targets(built, { uri = uri, position = { line = 9, character = 4 } }, to_relative)
-    expect.eq(positioned[1].qualified, "M.handle_request")
+    -- The contract's `name@path` form, which is what disambiguates a name
+    -- several definitions share (F1/F10).
+    local by_path = graph.targets(built, { symbol = "M.start@app/server.lua" }, to_relative)
+    expect.eq(by_path[1].qualified, "M.start")
+    expect.eq(by_path[1].file, "app/server.lua")
+    expect.eq(graph.targets(built, { symbol = "M.start@app/config.lua" }, to_relative), {})
+
+    -- Resolution is COLUMN-sensitive, exactly as the real server's is (F11).
+    -- Line 10 (0-based 9) is `  log_request(method, path)` inside
+    -- M.handle_request's body: the column decides what resolves there.
+    local function at(line, character)
+      local found = graph.targets(
+        built,
+        { uri = uri, position = { line = line, character = character } },
+        to_relative
+      )
+      return found[1] and found[1].qualified or nil
+    end
+    expect.eq(at(9, 4), "log_request", "the called name under the column")
+    expect.eq(at(9, 0), nil, "the leading indentation resolves nothing")
+    expect.eq(at(9, 15), nil, "an argument name is not a definition")
+    expect.eq(at(8, 13), "M.handle_request", "a definition's own name")
+    expect.eq(at(3, 0), nil, "a blank line resolves nothing")
 
     local whole_file = graph.targets(built, { file = "app/config.lua" }, to_relative)
     expect.eq(#whole_file, 2, "{ file } unions every definition in that file")

@@ -72,6 +72,24 @@ local FALLBACK_METHODS = {
 --- the lsp.restart.max ceiling.
 local RESTART_FORGIVE_MS = 60000
 
+--- The contract's disambiguating name form for a Symbol: `qualified@file`
+--- (`docs/lsp.md`: "Names accept the same `Parent.name` / `name@path` forms
+--- as every CLI name argument"). A bare `qualified` is NOT unique - `router`
+--- is four definitions in the shipped fixture - so anything re-asking the
+--- server by name sends this form instead.
+--- @param symbol table a protocol Symbol
+--- @return string|nil nil when the symbol carries no usable name
+function M.symbol_ref(symbol)
+  local qualified = symbol and (symbol.qualified or symbol.name)
+  if type(qualified) ~= "string" or qualified == "" then
+    return nil
+  end
+  if type(symbol.file) ~= "string" or symbol.file == "" then
+    return qualified
+  end
+  return qualified .. "@" .. symbol.file
+end
+
 --- @param path string
 function M.is_supported(path)
   local ext = path:match("(%.[%w_]+)$")

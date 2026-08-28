@@ -164,7 +164,10 @@ describe("hover card focus lifetime with motion on", function()
     require("epicenter.ui.theme").apply()
     root = root or support.start_fake()
     vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
-    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+    -- Column 12 is inside `handle_request` on `function M.handle_request(...)`.
+    -- The column matters: navgraph resolves the identifier under it and
+    -- nothing off one, so a hover at column 0 ("function") has no symbol.
+    vim.api.nvim_win_set_cursor(0, { 9, 12 })
     buf = vim.api.nvim_get_current_buf()
   end)
 
@@ -222,7 +225,10 @@ describe("hover card against the fake navgraph server", function()
     require("epicenter.ui.theme").apply()
     root = root or support.start_fake()
     vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, "app/server.lua")))
-    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+    -- Column 12 is inside `handle_request` on `function M.handle_request(...)`.
+    -- The column matters: navgraph resolves the identifier under it and
+    -- nothing off one, so a hover at column 0 ("function") has no symbol.
+    vim.api.nvim_win_set_cursor(0, { 9, 12 })
     buf = vim.api.nvim_get_current_buf()
   end)
 

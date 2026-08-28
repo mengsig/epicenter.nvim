@@ -5,22 +5,14 @@ local index = require("fakelib.index")
 --- @param ctx { root: string, index: table, overlays: table }
 local function symbol_at(ctx, params)
   local file = ctx.to_relative(params.uri)
-  local lines = ctx.index.sources[file] or {}
-  local line = lines[(params.position.line or 0) + 1] or ""
-  local col = (params.position.character or 0) + 1
+  local line = (params.position.line or 0) + 1
+  local word = index.word_at(ctx.index, file, line, (params.position.character or 0) + 1)
 
-  local word = ""
-  local from = 1
-  while true do
-    local s, e = line:find("[%w_]+", from)
-    if not s then
-      break
-    end
-    if col >= s and col <= e + 1 then
-      word = line:sub(s, e)
-      break
-    end
-    from = e + 1
+  -- Off an identifier the real server has nothing to report - not even the
+  -- enclosing definition (F11). Reporting one here is what let a blast target
+  -- at `character = 0` pass the fake lane and fail against the real server.
+  if not word then
+    return { word = "", symbol = vim.NIL, enclosing = vim.NIL, candidates = {} }
   end
 
   -- Same-file definitions win; the rest come back as ambiguity candidates.
@@ -41,7 +33,7 @@ local function symbol_at(ctx, params)
   return {
     word = word,
     symbol = candidates[1] or vim.NIL,
-    enclosing = index.enclosing(ctx.index, file, (params.position.line or 0) + 1) or vim.NIL,
+    enclosing = index.enclosing(ctx.index, file, line) or vim.NIL,
     candidates = vim.list_slice(candidates, 2, #candidates),
   }
 end

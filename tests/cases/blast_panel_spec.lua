@@ -290,6 +290,41 @@ describe("blast panel against the fake navgraph server", function()
     expect.matches(lines_of(panel)[1], "M%.start", "the panel followed to the new definition")
   end)
 
+  -- F10: the fallback for "the cursor is not on a name" used to re-target at
+  -- `character = 0`, which is leading whitespace for every indented
+  -- definition - the one column the server can never resolve. It now re-asks
+  -- by the enclosing definition's disambiguated name.
+  it("blasts the enclosing definition from anywhere inside its body", function()
+    -- app/server.lua:11 is `  return config.route(method, path)`, indented,
+    -- inside M.handle_request and not on any definition's own name.
+    buf = open_fixture(root, "app/server.lua", 11)
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    expect.eq(names(panel), { "M.start" }, "the callers of the enclosing definition")
+    expect.eq(panel.meta.root.qualified, "M.handle_request")
+    expect.eq(panel.message, nil, "no 'no symbol under the cursor'")
+  end)
+
+  it("blasts from the leading indentation of a body line too", function()
+    -- Column 0 of an indented line: where `<CR>` from any picker parks the
+    -- cursor, and where the server resolves nothing at all.
+    buf = open_fixture(root, "app/server.lua", 10)
+    vim.api.nvim_win_set_cursor(0, { 10, 0 })
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+
+    expect.eq(panel.message, nil, "no 'no symbol under the cursor'")
+    expect.eq(panel.meta.root.qualified, "log_request", "the call under the first non-blank column")
+  end)
+
+  it("still says so where there is genuinely no symbol", function()
+    buf = open_fixture(root, "app/server.lua", 8)
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    expect.matches(body(panel), "no symbol under the cursor")
+  end)
+
   it("ignores cursor movement inside the panel itself", function()
     panel = epicenter.run("blast", {}, buf)
     settled(panel)

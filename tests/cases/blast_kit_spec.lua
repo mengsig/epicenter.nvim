@@ -19,7 +19,10 @@ describe("K under lsp.fallback_only decides the hover provider at press time", f
     end
     vim.cmd.edit(vim.fn.fnameescape(path))
     buf = vim.api.nvim_get_current_buf()
-    vim.api.nvim_win_set_cursor(0, { 9, 0 })
+    -- Column 12 is inside `handle_request` on `function M.handle_request(...)`.
+    -- The column matters: navgraph resolves the identifier under it and
+    -- nothing off one, so a hover at column 0 ("function") has no symbol.
+    vim.api.nvim_win_set_cursor(0, { 9, 12 })
     wait(function()
       return #vim.lsp.get_clients({ bufnr = buf, name = "navgraph" }) > 0
     end, 10000, "navgraph to attach to the buffer")

@@ -70,7 +70,13 @@ local function scan_python(lines)
         exported = not class_name:match("^_"),
       })
     else
-      local def_indent, def_name = line:match("^(%s*)def%s+([%w_]+)")
+      -- `async def` is a definition too - the real indexer sees it, so a
+      -- fake that did not was invisibly less complete than the server it
+      -- stands in for (caught by tests/real/resolution_spec.lua).
+      local def_indent, def_name = line:match("^(%s*)async%s+def%s+([%w_]+)")
+      if not def_name then
+        def_indent, def_name = line:match("^(%s*)def%s+([%w_]+)")
+      end
       if def_name then
         local nested = class ~= nil and #def_indent > class_indent
         table.insert(found, {
@@ -159,6 +165,48 @@ function M.build(root, overlays)
     symbols = symbols,
     ms = math.floor((uv.hrtime() - started) / 1e6),
   }
+end
+
+--- The contract's name forms for a Target or a path endpoint: `Parent.name`
+--- and `name@path`, where `path` is a suffix of the root-relative file
+--- (`place@order_service.py` and `place@app/services/order_service.py` both
+--- name the same definition).
+--- @return string name, string|nil path
+function M.split_ref(ref)
+  local name, path = ref:match("^([^@]+)@(.+)$")
+  if not name then
+    return ref, nil
+  end
+  return name, path
+end
+
+--- @param path string|nil the `@path` half of a name ref; nil matches every file
+function M.in_path(symbol, path)
+  return path == nil or symbol.file == path or symbol.file:sub(-#path - 1) == "/" .. path
+end
+
+--- Identifier under `column` (1-based) on `line` (1-based) of `file`, or nil
+--- when the column is not on one. The real server resolves an identifier
+--- under the column and nothing off one, so the fake must not either (F11):
+--- a target the real server answers with `-32001` has to fail here too.
+--- @return string|nil
+function M.word_at(index, file, line, column)
+  local text = (index.sources[file] or {})[line]
+  if not text then
+    return nil
+  end
+  local from = 1
+  while true do
+    local first, last = text:find("[%w_]+", from)
+    if not first then
+      return nil
+    end
+    -- One past the end still counts: a cursor just after a name is on it.
+    if column >= first and column <= last + 1 then
+      return text:sub(first, last)
+    end
+    from = last + 1
+  end
 end
 
 --- Symbol whose body spans `line` (1-based) in `file`, innermost first.

@@ -30,9 +30,9 @@ describe("real navgraph: the server contract", function()
     expect.matches(status.indexedAt, "^%d%d%d%d%-%d%d%-%d%d")
   end)
 
-  it("indexes all three fixture languages", function()
+  it("indexes every fixture language", function()
     local _, status = support.request(root, "navgraph/status", {})
-    for _, lang in ipairs({ "py", "go", "lua" }) do
+    for _, lang in ipairs({ "py", "go", "lua", "zig" }) do
       expect.truthy(
         (status.languages or {})[lang] ~= nil,
         "navgraph/status.languages has no " .. lang .. ": " .. vim.inspect(status.languages)

@@ -5,9 +5,9 @@
 ---
 --- This area also answers the blast wave's `navgraph/callers` (the hover
 --- card) and `navgraph/outline` (badges) requests - both are on the same
---- wire, and `root_symbol`'s Target resolution (a cursor mid-call, not just
---- on a definition's own line) is a strict superset of what a definition-line
---- cursor needs, so one owner serves both waves correctly.
+--- wire, and `root_symbol` resolves a Target the way the real server does:
+--- by the identifier under the COLUMN, a cursor mid-call included, and
+--- nothing at all off one.
 ---
 --- Params arrive already checked against `tests/contract/schema.lua` (the
 --- fake's dispatch loop refuses anything the contract does not name), so the
@@ -142,18 +142,21 @@ end
 
 -- Target resolution --------------------------------------------------------------
 
---- Exact qualified name first, then a bare-name hit.
-local function find_named(index, name)
-  if type(name) ~= "string" or name == "" then
+--- Exact qualified name first, then a bare-name hit. Accepts both name forms
+--- the contract defines, `Parent.name` and `name@path`.
+local function find_named(index, ref)
+  if type(ref) ~= "string" or ref == "" then
     return nil
   end
+  local index_lib = require("fakelib.index")
+  local name, path = index_lib.split_ref(ref)
   for _, symbol in ipairs(index.symbols) do
-    if symbol.qualified == name then
+    if symbol.qualified == name and index_lib.in_path(symbol, path) then
       return symbol
     end
   end
   for _, symbol in ipairs(index.symbols) do
-    if symbol.name == name then
+    if symbol.name == name and index_lib.in_path(symbol, path) then
       return symbol
     end
   end
@@ -205,8 +208,12 @@ local function mentions(line)
   end
 end
 
---- Symbol the request points at: an explicit name, else the word under the
---- cursor, else the symbol whose body encloses the cursor.
+--- Symbol the request points at: an explicit name, else the definition the
+--- identifier UNDER THE COLUMN resolves to. Off an identifier - leading
+--- indentation, a keyword, a local's name - nothing resolves, exactly as the
+--- real server answers there (F11): a line-only fallback to the enclosing
+--- definition is what let a `character = 0` target pass this lane and fail
+--- against the real binary.
 local function root_symbol(ctx, params)
   if type(params.symbol) == "string" and params.symbol ~= "" then
     return find_named(ctx.index, params.symbol)
@@ -242,7 +249,7 @@ local function root_symbol(ctx, params)
       end
     end
   end
-  return require("fakelib.index").enclosing(ctx.index, file, row)
+  return nil
 end
 
 -- Call trees ---------------------------------------------------------------------

@@ -275,12 +275,16 @@ end
 --- @return table[]
 function M.targets(index, params, to_relative, overlays)
   if params.symbol then
+    -- `Parent.name` and `name@path`, the two forms the contract names.
+    local name, path = index_lib.split_ref(params.symbol)
     local exact, loose = {}, {}
     for _, symbol in ipairs(index.symbols) do
-      if symbol.qualified == params.symbol then
-        table.insert(exact, symbol)
-      elseif symbol.name == params.symbol then
-        table.insert(loose, symbol)
+      if index_lib.in_path(symbol, path) then
+        if symbol.qualified == name then
+          table.insert(exact, symbol)
+        elseif symbol.name == name then
+          table.insert(loose, symbol)
+        end
       end
     end
     local found = #exact > 0 and exact or loose
@@ -300,9 +304,29 @@ function M.targets(index, params, to_relative, overlays)
   if not (params.uri and params.position) then
     return {}
   end
+  -- The contract's resolution order (`docs/lsp.md`, `navgraph/symbolAt`), and
+  -- it is COLUMN-sensitive: off an identifier nothing resolves at all (F11).
   local file = to_relative(params.uri)
-  local symbol = index_lib.enclosing(index, file, (params.position.line or 0) + 1)
-  return symbol and { symbol } or {}
+  local line = (params.position.line or 0) + 1
+  local word = index_lib.word_at(index, file, line, (params.position.character or 0) + 1)
+  if not word then
+    return {}
+  end
+  local same_file, elsewhere = {}, {}
+  for _, symbol in ipairs(index.symbols) do
+    if symbol.name == word or symbol.qualified == word then
+      table.insert(symbol.file == file and same_file or elsewhere, symbol)
+    end
+  end
+  -- 1. the definition whose own name sits under the cursor; 2. a same-file
+  -- definition of that name; 3. one elsewhere.
+  for _, symbol in ipairs(same_file) do
+    if symbol.line == line then
+      return { symbol }
+    end
+  end
+  local found = same_file[1] or elsewhere[1]
+  return found and { found } or {}
 end
 
 --- `navgraph/outline`: every definition per file, in indexing order.

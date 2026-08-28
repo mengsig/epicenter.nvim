@@ -42,6 +42,17 @@ function M.clamp_depth(depth, max)
   return math.max(1, math.min(math.floor(depth), max))
 end
 
+--- Column to aim a cursor target at, given the source line it sits on. The
+--- server resolves an identifier under the column and NOTHING off one, so a
+--- cursor parked in the leading indentation - where `<CR>` from any picker
+--- lands it - would otherwise answer "no symbol" (F10). Pure.
+--- @param text string the source line
+--- @param column integer 0-based cursor column
+--- @return integer 0-based column
+function M.target_column(text, column)
+  return math.max(column, #(text:match("^[ \t]*") or ""))
+end
+
 --- Request parameters shared by `navgraph/blast` and `navgraph/diff`.
 --- @param state { depth: integer, direction: string, tests: string, strict: boolean }
 --- @param target table one of the protocol's Target forms
