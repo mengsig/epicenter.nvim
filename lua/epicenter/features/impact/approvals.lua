@@ -64,9 +64,30 @@ function M.prune(state, change_id)
   return { entries = entries, changes = changes }
 end
 
+--- Another Neovim on the same project keeps its own copy of this state. A
+--- plain write would drop whatever it approved, so its entries are folded
+--- back in - except the ones this session explicitly took back. Pure.
+--- @param stored table the state as it is on disk right now
+--- @param state table this session's state
+--- @return table
+function M.merge(stored, state)
+  local entries = vim.tbl_extend("force", stored.entries or {}, state.entries)
+  for key in pairs(state.revoked or {}) do
+    entries[key] = nil
+  end
+  local changes = vim.list_extend({}, state.changes or {})
+  for _, id in ipairs(stored.changes or {}) do
+    if not vim.tbl_contains(changes, id) then
+      table.insert(changes, id)
+    end
+  end
+  return { entries = entries, changes = changes, change_id = state.change_id }
+end
+
 --- @return boolean ok, string|nil err
 function M.save(root, state)
-  return require("epicenter.store").write(KIND, root, M.prune(state, state.change_id))
+  local merged = M.merge(M.load(root, state.change_id), state)
+  return require("epicenter.store").write(KIND, root, M.prune(merged, state.change_id))
 end
 
 --- Reviewed means: this exact source was approved, AND it was approved for
@@ -92,6 +113,11 @@ function M.set(state, symbol, approved)
   end
   local before = state.entries[key]
   state.entries[key] = approved and state.change_id or nil
+  -- Taking an approval back has to survive the merge in `save`: without this
+  -- another instance's copy of the same entry would put the tick straight
+  -- back.
+  state.revoked = state.revoked or {}
+  state.revoked[key] = (not approved) and true or nil
   return before ~= state.entries[key]
 end
 

@@ -4,6 +4,10 @@
 --- project itself.
 local M = {}
 
+--- Bumped when the on-disk shape changes. A file that does not carry exactly
+--- this version is discarded rather than mis-read as the current shape.
+M.VERSION = 1
+
 --- Overridden only by `M.set_root`.
 local base = nil
 
@@ -21,7 +25,9 @@ end
 --- not a filename, and two projects with the same basename are not one.
 --- @return string
 function M.path(kind, root)
-  local slug = vim.fn.sha256(vim.fs.normalize(root)):sub(1, 16)
+  -- `root.normalize`, never `vim.fs.normalize` alone: a project reached
+  -- through a symlink is one project, not two state files.
+  local slug = vim.fn.sha256(require("epicenter.root").normalize(root)):sub(1, 16)
   return vim.fs.joinpath(dir_for(kind), slug .. ".json")
 end
 
@@ -41,7 +47,16 @@ function M.read(kind, root)
     require("epicenter.log").warn("unreadable %s state at %s; starting fresh", kind, path)
     return {}
   end
-  return decoded
+  if decoded.version ~= M.VERSION or type(decoded.data) ~= "table" then
+    require("epicenter.log").warn(
+      "%s state at %s is not version %d; starting fresh",
+      kind,
+      path,
+      M.VERSION
+    )
+    return {}
+  end
+  return decoded.data
 end
 
 --- @param value table
@@ -49,12 +64,21 @@ end
 function M.write(kind, root, value)
   local path = M.path(kind, root)
   vim.fn.mkdir(vim.fs.dirname(path), "p")
-  local ok, encoded = pcall(vim.json.encode, value)
+  local ok, encoded = pcall(vim.json.encode, { version = M.VERSION, data = value })
   if not ok then
     return false, ("could not encode %s state: %s"):format(kind, tostring(encoded))
   end
-  if vim.fn.writefile({ encoded }, path) ~= 0 then
-    return false, ("could not write %s"):format(path)
+  -- Written beside the real file and renamed over it. Writing in place would
+  -- leave a truncated file after a crash mid-write, and `read` reports that
+  -- as "nothing was ever stored" - every approval in the project, gone.
+  local temp = path .. ".tmp"
+  if vim.fn.writefile({ encoded }, temp) ~= 0 then
+    return false, ("could not write %s"):format(temp)
+  end
+  local renamed, err = (vim.uv or vim.loop).fs_rename(temp, path)
+  if not renamed then
+    vim.fn.delete(temp)
+    return false, ("could not replace %s: %s"):format(path, err or "rename failed")
   end
   return true, nil
 end
