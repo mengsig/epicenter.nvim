@@ -72,6 +72,17 @@ local FALLBACK_METHODS = {
 --- the lsp.restart.max ceiling.
 local RESTART_FORGIVE_MS = 60000
 
+--- Upper bound on how long a restart waits for the old client to fully leave
+--- Neovim's own client registry before starting the replacement. `vim.lsp.
+--- start`'s default `reuse_client` matches on name+root_dir, not `cmd`; on
+--- 0.11 it also has no `is_stopped()` guard, so it can hand back a client
+--- that already exited but whose removal from that registry is still a
+--- scheduled callback away, silently reusing the old cmd instead of spawning
+--- the caller's. Poll the same registry Neovim's own reuse check reads
+--- (`vim.lsp.get_client_by_id`) rather than guessing a delay long enough for
+--- its internal bookkeeping to catch up.
+local RESTART_STOP_TIMEOUT_MS = 2000
+
 --- The contract's disambiguating name form for a Symbol: `qualified@file`
 --- (`docs/lsp.md`: "Names accept the same `Parent.name` / `name@path` forms
 --- as every CLI name argument"). A bare `qualified` is NOT unique - `router`
@@ -264,6 +275,20 @@ local function schedule_restart(root, state)
   end, delay)
 end
 
+--- Blocks until `client_id` is gone from Neovim's client registry, up to
+--- `RESTART_STOP_TIMEOUT_MS`. A server that ignores the stop and never exits
+--- must not hang the restart forever, so this gives up and proceeds after the
+--- bound rather than waiting indefinitely.
+--- @param client_id integer|nil the id M.stop asked to exit
+local function wait_for_stop(client_id)
+  if not client_id then
+    return
+  end
+  vim.wait(RESTART_STOP_TIMEOUT_MS, function()
+    return vim.lsp.get_client_by_id(client_id) == nil
+  end, 10)
+end
+
 local function on_indexed(payload)
   events.emit(events.INDEXED, payload or {})
 end
@@ -408,6 +433,9 @@ function M.restart(opts)
   local cmd = opts.cmd or (dying and dying.cmd)
 
   M.stop(root)
+  -- Wait for the old client to actually leave Neovim's client registry
+  -- before starting the replacement - see RESTART_STOP_TIMEOUT_MS.
+  wait_for_stop(dying and dying.client_id)
   local client_id, err =
     M.start({ root = root, cmd = cmd, bufnr = opts.bufnr, restarts = opts.restarts })
   if not client_id then
