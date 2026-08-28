@@ -8,6 +8,7 @@
 local M = {}
 
 local theme = require("epicenter.ui.theme")
+local root_mod = require("epicenter.root")
 
 local NS = vim.api.nvim_create_namespace("epicenter.impact")
 
@@ -18,7 +19,12 @@ local SIGNS = { "▍", "▏", "▏" }
 local ASCII_SIGNS = { "|", ":", "." }
 
 --- path -> line -> { depth, label, approved }, or nil with nothing marked.
+--- Keys are `root.normalize`d: the server's paths come from a canonicalized
+--- root, so a symlinked checkout would never match a raw buffer name.
 local marked = nil
+--- bufnr -> line -> extmark id, so a repaint moves marks instead of snapping
+--- them back to the line numbers the last answer named.
+local placed = {}
 local augroup = nil
 
 local function grade(depth)
@@ -59,29 +65,27 @@ function M.note(entry)
   return ("%s %s · %s"):format(icons.ui("impact"), marker, entry.label)
 end
 
+--- @param entry { depth: integer, label: string, approved: boolean }
+local function decorate(entry)
+  local group = entry.approved and M.DONE_GROUP or M.GROUPS[grade(entry.depth)]
+  return {
+    virt_text = { { "  " .. M.note(entry), group } },
+    virt_text_pos = "eol",
+    sign_text = sign_for(entry.depth),
+    sign_hl_group = group,
+    priority = 80,
+  }
+end
+
 local function paint(bufnr)
-  if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    placed[bufnr] = nil
     return
   end
-  vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
   local name = vim.api.nvim_buf_get_name(bufnr)
-  local lines = name ~= "" and marked and marked[vim.fs.normalize(name)] or nil
-  if not lines then
-    return
-  end
-  local last = vim.api.nvim_buf_line_count(bufnr)
-  for line, entry in pairs(lines) do
-    if line >= 1 and line <= last then
-      local group = entry.approved and M.DONE_GROUP or M.GROUPS[grade(entry.depth)]
-      vim.api.nvim_buf_set_extmark(bufnr, NS, line - 1, 0, {
-        virt_text = { { "  " .. M.note(entry), group } },
-        virt_text_pos = "eol",
-        sign_text = sign_for(entry.depth),
-        sign_hl_group = group,
-        priority = 80,
-      })
-    end
-  end
+  local lines = name ~= "" and marked and marked[root_mod.normalize(name)] or nil
+  placed[bufnr] =
+    require("epicenter.ui.marklayer").reapply(bufnr, NS, placed[bufnr], lines, decorate)
 end
 
 local function paint_all()
@@ -97,8 +101,15 @@ function M.apply(entries)
     return M.clear()
   end
   local by_path = {}
+  -- One realpath per distinct file, not per impacted definition: a deep
+  -- impact is thousands of entries over a handful of files.
+  local canonical = {}
   for _, entry in ipairs(entries) do
-    local path = vim.fs.normalize(entry.path)
+    local path = canonical[entry.path]
+    if not path then
+      path = root_mod.normalize(entry.path)
+      canonical[entry.path] = path
+    end
     by_path[path] = by_path[path] or {}
     local existing = by_path[path][entry.line]
     -- One line, one mark: the nearest ring wins, so a definition reached
@@ -124,12 +135,19 @@ function M.apply(entries)
       M.define()
     end,
   })
+  vim.api.nvim_create_autocmd({ "BufWipeout", "BufDelete" }, {
+    group = augroup,
+    callback = function(event)
+      placed[event.buf] = nil
+    end,
+  })
   paint_all()
 end
 
 --- Drops every mark. Called the moment the working change is gone.
 function M.clear()
   marked = nil
+  placed = {}
   if augroup then
     vim.api.nvim_clear_autocmds({ group = augroup })
   end

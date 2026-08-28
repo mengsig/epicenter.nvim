@@ -202,6 +202,70 @@ describe("the inline marker", function()
   end)
 end)
 
+describe("inline marks on a real buffer", function()
+  local dir, path, bufnr
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, impact = { marker = "hit" } })
+    dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(dir, "p")
+    path = vim.fs.joinpath(dir, "s.lua")
+    vim.fn.writefile({ "local a = 1", "local b = 2", "local c = 3", "target()" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    bufnr = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    marks.clear()
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      vim.bo[bufnr].modified = false
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+    bufnr = nil
+    vim.fn.delete(dir, "rf")
+  end)
+
+  local function marked_line(target)
+    local all = vim.api.nvim_buf_get_extmarks(target, marks.namespace, 0, -1, {})
+    return all[1] and (all[1][2] + 1) or nil
+  end
+
+  it("keeps a mark on the code it was placed on, repaint included", function()
+    marks.apply({ { path = path, line = 4, depth = 1, label = "x", approved = false } })
+    expect.eq(marked_line(bufnr), 4)
+
+    vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, { "-- one", "-- two", "-- three" })
+    expect.eq(marked_line(bufnr), 7, "the extmark follows the buffer's own edit")
+
+    -- BufWinEnter fires on every window switch, and used to re-place every
+    -- mark from the line numbers the last answer named.
+    vim.api.nvim_exec_autocmds("BufWinEnter", { buffer = bufnr })
+    expect.eq(marked_line(bufnr), 7, "a repaint must not snap it back")
+    expect.matches(marks.mark_at(bufnr, 7).text, "hit")
+
+    -- A fresh answer for the same line does the same: an approval repaints.
+    marks.apply({ { path = path, line = 4, depth = 1, label = "x", approved = true } })
+    expect.eq(marked_line(bufnr), 7)
+    expect.matches(marks.mark_at(bufnr, 7).text, "reviewed")
+  end)
+
+  it("paints when the server names the file through a symlinked path", function()
+    local link = vim.fs.normalize(vim.fn.tempname())
+    local ok = vim.uv.fs_symlink(dir, link)
+    if not ok then
+      return skip("this platform would not make a symlink")
+    end
+    -- A server rooted at the alias sends paths through it; Neovim's buffer
+    -- name is the resolved one. Same file, two spellings.
+    marks.apply({
+      { path = vim.fs.joinpath(link, "s.lua"), line = 4, depth = 1, label = "x", approved = false },
+    })
+    expect.truthy(marks.mark_at(bufnr, 4) ~= nil, "the alias resolves to the same file")
+    vim.fn.delete(link)
+  end)
+end)
+
 describe("impact against the fake navgraph server", function()
   local root, edited, watched, panel, state_dir
 
