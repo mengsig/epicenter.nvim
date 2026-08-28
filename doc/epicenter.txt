@@ -57,6 +57,19 @@ newer keystroke is dropped rather than painted. The preview's file read is
 the one blocking part of the UI path, capped at 20,000 lines scanned; past
 that it says so instead of freezing (see |epicenter-search|).
 
+                                                         *epicenter-first-five*
+The first five minutes, after |:Epicenter-install|:
+    1. Open a file. The server for that root starts on its own.
+    2. `<leader>es` - search palette, fuzzy over every definition
+       (|epicenter-search|).
+    3. Cursor on a symbol, `<leader>ec` - who calls it, as a tree
+       (|epicenter-explore|).
+    4. `<leader>ee` - blast radius: what breaks if you change this
+       (|epicenter-blast|).
+    5. Edit something, `<leader>ea` - impact review, `a` to approve a row
+       (|epicenter-review|). Needs navgraph protocol 1.1; an older server
+       says so instead of showing the panel (|epicenter-health|).
+
 ==============================================================================
 2. INSTALLATION                                        *epicenter-installation*
 
