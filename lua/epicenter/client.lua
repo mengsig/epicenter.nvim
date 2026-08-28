@@ -238,6 +238,17 @@ local function on_indexed(payload)
   events.emit(events.INDEXED, payload or {})
 end
 
+--- The `navgraph/indexed` handler `M.start` wires, exposed so `lsp/navgraph.lua`
+--- (the `vim.lsp.enable` route, F7) can install the exact same one - live
+--- refresh on reindex must work whichever path started the server.
+function M.handlers()
+  return {
+    ["navgraph/indexed"] = function(_, payload)
+      on_indexed(payload)
+    end,
+  }
+end
+
 --- Starts (or reuses) the server for `root`.
 --- @param opts { root: string, cmd?: string[], bufnr?: integer, restarts?: integer }
 --- @return integer|nil client_id, string|nil err
@@ -283,11 +294,7 @@ function M.start(opts)
     root_dir = root,
     init_options = cfg.lsp.init_options,
     capabilities = capabilities(),
-    handlers = {
-      ["navgraph/indexed"] = function(_, payload)
-        on_indexed(payload)
-      end,
-    },
+    handlers = M.handlers(),
     on_init = function(client)
       if cfg.lsp.fallback_only then
         install_fallback_guard(client)
@@ -375,6 +382,53 @@ function M.attach(bufnr)
     log.warn("attach skipped for %s: %s", name, err)
     require("epicenter.install").first_run_notice()
   end
+end
+
+--- Adopts a navgraph client `vim.lsp.enable` started externally, via
+--- `lsp/navgraph.lua` (F7): the `LspAttach` autocmd in `epicenter.init`
+--- calls this so the request layer (`M.request`/`session_for_root`) can
+--- route to it exactly as if `M.start` had started it. A no-op when this
+--- root's server is one epicenter itself already tracks - `M.start`'s own
+--- path fires `LspAttach` too, and this must not fight it.
+--- @param client vim.lsp.Client
+--- @param bufnr integer
+function M.adopt(client, bufnr)
+  local cfg = config.get()
+  local root =
+    vim.fs.normalize(client.config.root_dir or root_mod.find(bufnr, cfg.lsp.root_markers))
+  local existing = servers[root]
+  if existing and existing.client_id == client.id then
+    if bufnr then
+      existing.buffers[bufnr] = true
+    end
+    return
+  end
+  if existing and vim.lsp.get_client_by_id(existing.client_id) then
+    -- Something else already serves this root (epicenter's own start, or an
+    -- earlier adoption) - two navgraph clients on one root would double the
+    -- index and race on which one a request lands. Leave the incumbent.
+    log.warn("a navgraph client for %s is already tracked; not adopting a second one", root)
+    return
+  end
+
+  if cfg.lsp.fallback_only then
+    install_fallback_guard(client)
+  end
+  local experimental = vim.tbl_get(client.server_capabilities or {}, "experimental", "navgraph")
+  local state = {
+    cmd = client.config.cmd or {},
+    restarts = 0,
+    root = root,
+    stopping = false,
+    buffers = bufnr and { [bufnr] = true } or {},
+    starting = false,
+    client_id = client.id,
+    adopted = true,
+    protocol_version = experimental and experimental.protocolVersion or nil,
+  }
+  state.session = M.session(lsp_rpc(client.id))
+  servers[root] = state
+  log.info("navgraph adopted for %s (protocol %s)", root, tostring(state.protocol_version))
 end
 
 --- @param root string

@@ -32,6 +32,20 @@ end
 
 local function install_autocmds(cfg)
   local group = vim.api.nvim_create_augroup("Epicenter", { clear = true })
+
+  -- Adopts a navgraph client `vim.lsp.enable` started (F7) - unconditional
+  -- on `auto_start`, since setting that false is exactly how the README
+  -- tells a `vim.lsp.enable` user to configure the plugin.
+  vim.api.nvim_create_autocmd("LspAttach", {
+    group = group,
+    callback = function(event)
+      local client = vim.lsp.get_client_by_id(event.data.client_id)
+      if client and client.name == "navgraph" then
+        require("epicenter.client").adopt(client, event.buf)
+      end
+    end,
+  })
+
   if not cfg.lsp.auto_start then
     return
   end
