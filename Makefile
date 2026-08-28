@@ -1,9 +1,9 @@
 NVIM ?= nvim
-LUA_FILES := $(shell find lua lsp plugin tests -name '*.lua' -not -path 'tests/fixtures/*')
+LUA_FILES := $(shell find lua lsp plugin scripts tests -name '*.lua' -not -path 'tests/fixtures/*')
 
 NAVGRAPH_BIN ?= navgraph
 
-.PHONY: test test-real smoke lint fmt doc docs-check docs-fix all
+.PHONY: test test-real smoke lint fmt doc docs-check docs-fix screenshots all
 
 all: lint test
 
@@ -47,3 +47,8 @@ docs-fix:
 
 doc:
 	$(NVIM) --headless --clean -c 'helptags doc' -c 'quit'
+
+# assets/*.svg: a real Neovim driving the real panels against a real
+# `navgraph lsp`, captured out of a 120x36 tmux pane. Needs tmux.
+screenshots:
+	NVIM=$(NVIM) NAVGRAPH_BIN=$(NAVGRAPH_BIN) scripts/screenshots.sh

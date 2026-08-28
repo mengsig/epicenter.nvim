@@ -174,6 +174,22 @@ describe("documentation stays in sync", function()
     expect.falsy(doc:lower():find("this release", 1, true), "vimdoc must not say 'this release'")
   end)
 
+  it("links every committed screenshot, and links nothing that is missing", function()
+    local linked = {}
+    for asset in readme:gmatch("%(assets/([%w%-%.]+)%)") do
+      linked[asset] = true
+      expect.truthy(
+        vim.uv.fs_stat(vim.fs.joinpath(repo, "assets", asset)) ~= nil,
+        "README links assets/" .. asset .. ", which is not in the repo"
+      )
+    end
+    for _, path in ipairs(vim.fn.glob(repo .. "/assets/*", false, true)) do
+      local name = vim.fs.basename(path)
+      expect.truthy(linked[name], "assets/" .. name .. " is committed but nothing links it")
+    end
+    expect.truthy(next(linked) ~= nil, "the README must show at least one screenshot")
+  end)
+
   it("qualifies every <C-k> mention with the panel it belongs to (F11)", function()
     -- <C-k> belongs to search (cycle the kind filter) and to outline; grep
     -- and the other panels have no binding for it. Substring presence alone
