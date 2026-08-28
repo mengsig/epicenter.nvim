@@ -186,6 +186,80 @@ describe("palette <Tab> marks survive a re-populate when mark_key is set (M3)", 
   end)
 end)
 
+--- M4: an armed --qf/--loc used to hijack every ACTIONS entry (`<CR>`,
+--- `<C-t>`, `<C-v>`, `<C-x>`) - `Palette:accept` exported whenever
+--- `armed_export` was set, regardless of which key sent it there. Both the
+--- footer and the README/vimdoc promise `<CR>` only.
+describe("an armed export claims <CR> only (M4)", function()
+  local qf = require("epicenter.ui.qf")
+  local original_send
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+    original_send = qf.send_and_notify
+  end)
+
+  after_each(function()
+    qf.send_and_notify = original_send
+  end)
+
+  local function armed_palette(on_accept)
+    local p = palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        cb(nil, { { id = "a" } }, 1)
+      end,
+      render_item = function(item)
+        return { text = item.id }
+      end,
+      on_accept = on_accept,
+      empty_text = "  no matches",
+    })
+    p:arm_export("quickfix")
+    p:query("x")
+    vim.wait(50)
+    return p
+  end
+
+  it("exports on <CR> (a nil or 'edit' action)", function()
+    local sent = 0
+    qf.send_and_notify = function()
+      sent = sent + 1
+    end
+    local accepted = 0
+    local p = armed_palette(function()
+      accepted = accepted + 1
+    end)
+
+    p:accept("edit")
+    vim.wait(20)
+
+    expect.eq(sent, 1, "the armed export ran")
+    expect.eq(accepted, 0, "on_accept must not also run")
+  end)
+
+  for _, action in ipairs({ "tab", "vsplit", "split" }) do
+    it(("keeps its normal meaning: <%s> still opens the row, not export"):format(action), function()
+      local sent = 0
+      qf.send_and_notify = function()
+        sent = sent + 1
+      end
+      local accepted, accepted_action = 0, nil
+      local p = armed_palette(function(_item, act)
+        accepted, accepted_action = accepted + 1, act
+      end)
+
+      p:accept(action)
+      vim.wait(20)
+
+      expect.eq(sent, 0, "an armed export must not hijack " .. action)
+      expect.eq(accepted, 1, "the row still opens")
+      expect.eq(accepted_action, action)
+    end)
+  end
+end)
+
 describe("palette resize across the preview threshold (F2)", function()
   before_each(function()
     require("epicenter.config").reset()

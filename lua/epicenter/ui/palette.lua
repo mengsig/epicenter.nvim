@@ -287,7 +287,9 @@ function Palette:toggle_help()
 end
 
 function Palette:accept(action)
-  if self.armed_export then
+  -- M4: the flag arms <CR> only (README/vimdoc), not <C-t>/<C-v>/<C-x> - a
+  -- nil action (the default) is <CR>'s own "edit" too.
+  if self.armed_export and (action == nil or action == "edit") then
     return self:export(self.armed_export)
   end
   local item = self.list:current()

@@ -191,7 +191,11 @@ describe("sending rows to a list, against the fake navgraph server", function()
     expect.eq(#vim.fn.getqflist(), 0, "the quickfix list is left alone")
   end)
 
-  it("sends a palette's matches on <C-q>", function()
+  -- L3: this used to call palette:export("quickfix") directly - the real
+  -- <C-q>/<C-l>/<Tab> maps at palette.lua:365-373 had no coverage through
+  -- the key path at all, which is exactly how M4's <C-v> hijack shipped
+  -- untested.
+  it("sends a palette's matches on a real <C-q>", function()
     local palette = epicenter.run("search", {}, buf)
     palette:query("handle_request")
     wait(function()
@@ -199,7 +203,7 @@ describe("sending rows to a list, against the fake navgraph server", function()
       return item ~= nil and #(item.matches or {}) > 0
     end, 10000, "search results")
 
-    palette:export("quickfix")
+    press("<C-q>")
     wait(function()
       return #vim.fn.getqflist() > 0
     end, 5000, "the quickfix list to fill")
