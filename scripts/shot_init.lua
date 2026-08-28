@@ -92,8 +92,12 @@ SHOTS.explorer = function()
   settle(function()
     return panel.list:count() > 1
   end, "the first level of callers")
-  -- Two levels: expand the first caller, so the tree shows a fetched level.
-  panel.list:select(2)
+  -- Two levels: expand UserService.replace (list position 3), not
+  -- UserService.create (position 2) - the latter's own callers include
+  -- create_item, a name-collision heuristic match (exact = false) navgraph
+  -- honestly flags but that reads as a wrong edge in a headline image (F8).
+  -- replace_user is the one and only, unambiguous caller of .replace.
+  panel.list:select(3)
   press(panel.win.buf, "l")
   settle(function()
     return panel.list:count() > 2

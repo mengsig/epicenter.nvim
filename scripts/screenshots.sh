@@ -34,7 +34,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp -r "$repo/tests/fixtures/real" "$work/demo"
+# A plain `cp -r` copies in whatever order the source directory's own entries
+# happen to be stored in, which varies between copies (confirmed: five
+# independent `cp -r`s of the same fixture gave four different navgraph
+# indexing orders). navgraph indexes in directory-read order, so the copy
+# below creates every directory, then every file, each in a fixed sorted
+# order - the one part of this pipeline the asset's determinism depends on.
+mkdir -p "$work/demo"
+(cd "$repo/tests/fixtures/real" && find . -type d | sort) | while IFS= read -r d; do
+  mkdir -p "$work/demo/$d"
+done
+(cd "$repo/tests/fixtures/real" && find . -type f | sort) | while IFS= read -r f; do
+  cp "$repo/tests/fixtures/real/$f" "$work/demo/$f"
+done
 rm -rf "$work/demo/.navgraph"
 mkdir -p "$work/demo/.navgraph" "$repo/assets"
 
@@ -47,6 +59,8 @@ for shot in "${shots[@]}"; do
     -e "EPICENTER_SHOT_ROOT=$work/demo" \
     -e "EPICENTER_SHOT_COLORS=$scheme" \
     -e "EPICENTER_SHOT_NORMAL_FILE=$work/normal.txt" \
+    -e "EPICENTER_SHOT_FREEZE_MS=1" \
+    -e "EPICENTER_SHOT_FREEZE_AT=2026-01-01T00:00:00.000Z" \
     -e "COLORTERM=truecolor" \
     "cd '$repo' && '$nvim' --clean -u scripts/shot_init.lua; sleep 120"
 

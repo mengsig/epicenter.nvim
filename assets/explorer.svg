@@ -26,92 +26,78 @@
 <text x="9 18" y="115" fill="#585858">10</text>
 <rect x="108" y="100" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="115" fill="#767676">│</text>
-<rect x="117" y="100" width="864" height="20" fill="#464d4d"/>
-<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729" y="115" fill="#c7c7c7" font-weight="bold">v&#160;me&#160;UserService.create&#160;&#160;py_fastapi/app/services/user_service.py:22</text>
+<rect x="117" y="100" width="225" height="20" fill="#3a3a3a"/>
+<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333" y="115" fill="#c7c7c7">&gt;&#160;me&#160;UserService.create</text>
+<rect x="342" y="100" width="396" height="20" fill="#3a3a3a"/>
+<text x="360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729" y="115" fill="#767676">py_fastapi/app/services/user_service.py:22</text>
+<rect x="738" y="100" width="243" height="20" fill="#3a3a3a"/>
 <rect x="981" y="100" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="115" fill="#767676">│</text>
 <text x="9 18" y="135" fill="#585858">11</text>
 <text x="72 81 90" y="135" fill="#c7c7c7">def</text>
 <rect x="108" y="120" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="135" fill="#767676">│</text>
-<rect x="117" y="120" width="198" height="20" fill="#3a3a3a"/>
-<text x="171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306" y="135" fill="#c7c7c7">fn&#160;test_get_user</text>
-<rect x="315" y="120" width="306" height="20" fill="#3a3a3a"/>
-<text x="333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612" y="135" fill="#767676">py_fastapi/tests/test_users.py:6</text>
-<rect x="621" y="120" width="360" height="20" fill="#3a3a3a"/>
+<rect x="117" y="120" width="864" height="20" fill="#464d4d"/>
+<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738" y="135" fill="#c7c7c7" font-weight="bold">v&#160;me&#160;UserService.replace&#160;&#160;py_fastapi/app/services/user_service.py:40</text>
 <rect x="981" y="120" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="135" fill="#767676">│</text>
 <text x="9 18" y="155" fill="#585858">12</text>
 <rect x="108" y="140" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="155" fill="#767676">│</text>
-<rect x="117" y="140" width="180" height="20" fill="#3a3a3a"/>
-<text x="153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288" y="155" fill="#c7c7c7">&gt;&#160;fn&#160;create_item</text>
-<rect x="297" y="140" width="315" height="20" fill="#3a3a3a"/>
-<text x="315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603" y="155" fill="#767676">py_fastapi/app/routes/items.py:34</text>
-<rect x="612" y="140" width="27" height="20" fill="#3a3a3a"/>
-<text x="630" y="155" fill="#add8e6">?</text>
-<rect x="639" y="140" width="342" height="20" fill="#3a3a3a"/>
+<rect x="117" y="140" width="189" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297" y="155" fill="#c7c7c7">&gt;&#160;fn&#160;replace_user</text>
+<rect x="306" y="140" width="315" height="20" fill="#3a3a3a"/>
+<text x="324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612" y="155" fill="#767676">py_fastapi/app/routes/users.py:32</text>
+<rect x="621" y="140" width="360" height="20" fill="#3a3a3a"/>
 <rect x="981" y="140" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="155" fill="#767676">│</text>
 <text x="9 18" y="175" fill="#585858">13</text>
 <rect x="108" y="160" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="175" fill="#767676">│</text>
-<rect x="117" y="160" width="180" height="20" fill="#3a3a3a"/>
-<text x="153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288" y="175" fill="#c7c7c7">&gt;&#160;fn&#160;create_user</text>
-<rect x="297" y="160" width="315" height="20" fill="#3a3a3a"/>
-<text x="315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603" y="175" fill="#767676">py_fastapi/app/routes/users.py:25</text>
-<rect x="612" y="160" width="369" height="20" fill="#3a3a3a"/>
+<rect x="117" y="160" width="279" height="20" fill="#3a3a3a"/>
+<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387" y="175" fill="#c7c7c7">&gt;&#160;me&#160;UserService.update_email</text>
+<rect x="396" y="160" width="396" height="20" fill="#3a3a3a"/>
+<text x="414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783" y="175" fill="#767676">py_fastapi/app/services/user_service.py:48</text>
+<rect x="792" y="160" width="189" height="20" fill="#3a3a3a"/>
 <rect x="981" y="160" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="175" fill="#767676">│</text>
 <text x="9 18" y="195" fill="#585858">14</text>
 <rect x="108" y="180" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="195" fill="#767676">│</text>
-<rect x="117" y="180" width="54" height="20" fill="#3a3a3a"/>
-<text x="153" y="195" fill="#c7c7c7">&gt;</text>
-<rect x="171" y="180" width="81" height="20" fill="#3a3a3a"/>
-<text x="171 180 189 198 207 216 225 234 243" y="195" fill="#767676">~&#160;ext&#160;(1)</text>
-<rect x="252" y="180" width="729" height="20" fill="#3a3a3a"/>
+<rect x="117" y="180" width="216" height="20" fill="#3a3a3a"/>
+<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324" y="195" fill="#c7c7c7">&gt;&#160;me&#160;AuthService.issue</text>
+<rect x="333" y="180" width="396" height="20" fill="#3a3a3a"/>
+<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720" y="195" fill="#767676">py_fastapi/app/services/auth_service.py:16</text>
+<rect x="729" y="180" width="252" height="20" fill="#3a3a3a"/>
 <rect x="981" y="180" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="195" fill="#767676">│</text>
 <text x="9 18" y="215" fill="#585858">15</text>
 <rect x="108" y="200" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="215" fill="#767676">│</text>
-<rect x="117" y="200" width="234" height="20" fill="#3a3a3a"/>
-<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342" y="215" fill="#c7c7c7">&gt;&#160;me&#160;UserService.replace</text>
-<rect x="351" y="200" width="396" height="20" fill="#3a3a3a"/>
-<text x="369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738" y="215" fill="#767676">py_fastapi/app/services/user_service.py:40</text>
-<rect x="747" y="200" width="234" height="20" fill="#3a3a3a"/>
+<rect x="117" y="200" width="36" height="20" fill="#3a3a3a"/>
+<text x="135" y="215" fill="#c7c7c7">&gt;</text>
+<rect x="153" y="200" width="81" height="20" fill="#3a3a3a"/>
+<text x="153 162 171 180 189 198 207 216 225" y="215" fill="#767676">~&#160;ext&#160;(2)</text>
+<rect x="234" y="200" width="747" height="20" fill="#3a3a3a"/>
 <rect x="981" y="200" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="215" fill="#767676">│</text>
 <text x="9 18" y="235" fill="#585858">16</text>
 <rect x="108" y="220" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="235" fill="#767676">│</text>
-<rect x="117" y="220" width="279" height="20" fill="#3a3a3a"/>
-<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387" y="235" fill="#c7c7c7">&gt;&#160;me&#160;UserService.update_email</text>
-<rect x="396" y="220" width="396" height="20" fill="#3a3a3a"/>
-<text x="414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738 747 756 765 774 783" y="235" fill="#767676">py_fastapi/app/services/user_service.py:48</text>
-<rect x="792" y="220" width="189" height="20" fill="#3a3a3a"/>
+<rect x="117" y="220" width="864" height="20" fill="#3a3a3a"/>
 <rect x="981" y="220" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="235" fill="#767676">│</text>
 <text x="9 18" y="255" fill="#585858">17</text>
 <rect x="108" y="240" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="255" fill="#767676">│</text>
-<rect x="117" y="240" width="216" height="20" fill="#3a3a3a"/>
-<text x="135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324" y="255" fill="#c7c7c7">&gt;&#160;me&#160;AuthService.issue</text>
-<rect x="333" y="240" width="396" height="20" fill="#3a3a3a"/>
-<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720" y="255" fill="#767676">py_fastapi/app/services/auth_service.py:16</text>
-<rect x="729" y="240" width="252" height="20" fill="#3a3a3a"/>
+<rect x="117" y="240" width="864" height="20" fill="#3a3a3a"/>
 <rect x="981" y="240" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="255" fill="#767676">│</text>
 <text x="9 18" y="275" fill="#585858">18</text>
 <text x="72 81 90" y="275" fill="#c7c7c7">def</text>
 <rect x="108" y="260" width="9" height="20" fill="#3a3a3a"/>
 <text x="108" y="275" fill="#767676">│</text>
-<rect x="117" y="260" width="36" height="20" fill="#3a3a3a"/>
-<text x="135" y="275" fill="#c7c7c7">&gt;</text>
-<rect x="153" y="260" width="81" height="20" fill="#3a3a3a"/>
-<text x="153 162 171 180 189 198 207 216 225" y="275" fill="#767676">~&#160;ext&#160;(2)</text>
-<rect x="234" y="260" width="747" height="20" fill="#3a3a3a"/>
+<rect x="117" y="260" width="864" height="20" fill="#3a3a3a"/>
 <rect x="981" y="260" width="9" height="20" fill="#3a3a3a"/>
 <text x="981" y="275" fill="#767676">│</text>
 <text x="9 18" y="295" fill="#585858">19</text>
@@ -222,10 +208,10 @@
 <text x="72 81 90" y="635" fill="#c7c7c7">def</text>
 <rect x="108" y="620" width="234" height="20" fill="#3a3a3a"/>
 <text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333" y="635" fill="#767676">╰─────────────────────────</text>
-<rect x="342" y="620" width="414" height="20" fill="#3a3a3a"/>
-<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729 738" y="635" fill="#767676" font-style="italic">10&#160;·&#160;tests:&#160;with&#160;·&#160;l/h&#160;expand&#160;·&#160;r/s/t&#160;toggle</text>
-<rect x="756" y="620" width="234" height="20" fill="#3a3a3a"/>
-<text x="756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="635" fill="#767676">─────────────────────────╯</text>
+<rect x="342" y="620" width="405" height="20" fill="#3a3a3a"/>
+<text x="351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549 558 567 576 585 594 603 612 621 630 639 648 657 666 675 684 693 702 711 720 729" y="635" fill="#767676" font-style="italic">7&#160;·&#160;tests:&#160;with&#160;·&#160;l/h&#160;expand&#160;·&#160;r/s/t&#160;toggle</text>
+<rect x="747" y="620" width="243" height="20" fill="#3a3a3a"/>
+<text x="747 756 765 774 783 792 801 810 819 828 837 846 855 864 873 882 891 900 909 918 927 936 945 954 963 972 981" y="635" fill="#767676">──────────────────────────╯</text>
 <text x="9 18" y="655" fill="#585858">37</text>
 <text x="108 117 126 135 144 153 162 171 180 189 198 207 216 225 234 243 252 261 270 279 288 297 306 315 324 333 342 351 360 369 378 387 396 405 414 423 432 441 450 459 468 477 486 495 504 513 522 531 540 549" y="655" fill="#c7c7c7">"""Return&#160;every&#160;stored&#160;user&#160;as&#160;a&#160;domain&#160;object."""</text>
 <text x="9 18" y="675" fill="#585858">38</text>

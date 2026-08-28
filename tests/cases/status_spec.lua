@@ -45,6 +45,26 @@ describe("status dashboard", function()
     expect.matches(body, "/state/epicenter%.log")
   end)
 
+  it("freezes the last-index row for a screenshot run (F8)", function()
+    -- navgraph/status.indexedAt is wall-clock, so a captured `assets/*.svg`
+    -- changes on every regeneration unless `make screenshots` pins it.
+    vim.env.EPICENTER_SHOT_FREEZE_MS = "1"
+    vim.env.EPICENTER_SHOT_FREEZE_AT = "2026-01-01T00:00:00.000Z"
+    local body = text()
+    vim.env.EPICENTER_SHOT_FREEZE_MS = nil
+    vim.env.EPICENTER_SHOT_FREEZE_AT = nil
+
+    expect.matches(body, "1ms  2026%-01%-01T00:00:00%.000Z")
+    expect.falsy(body:match("4ms"), "the live lastIndexMs must not leak through the freeze")
+    expect.falsy(body:match("2026%-08%-28"), "the live indexedAt must not leak through the freeze")
+  end)
+
+  it("reports the live values when no freeze is set", function()
+    expect.eq(vim.env.EPICENTER_SHOT_FREEZE_MS, nil)
+    expect.eq(vim.env.EPICENTER_SHOT_FREEZE_AT, nil)
+    expect.matches(text(), "4ms  2026%-08%-28")
+  end)
+
   it("draws a bar per language, scaled to the busiest one", function()
     local body = text()
     expect.matches(body, "%.lua%s+##########%s2")

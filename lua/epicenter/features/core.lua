@@ -86,12 +86,12 @@ function M.dashboard_lines(view)
       )
     )
     row(lines, spans, "overlays", ("%d unsaved"):format(status.overlays or 0))
-    row(
-      lines,
-      spans,
-      "last index",
-      ("%dms  %s"):format(status.lastIndexMs or 0, status.indexedAt or "?")
-    )
+    -- `make screenshots` freeze (F8): navgraph/status is wall-clock and
+    -- indexing-timing dependent, so a screenshot run pins both via env vars
+    -- to keep the committed asset byte-identical run over run.
+    local last_index_ms = tonumber(vim.env.EPICENTER_SHOT_FREEZE_MS) or status.lastIndexMs or 0
+    local indexed_at = vim.env.EPICENTER_SHOT_FREEZE_AT or status.indexedAt or "?"
+    row(lines, spans, "last index", ("%dms  %s"):format(last_index_ms, indexed_at))
 
     local languages, max = {}, 0
     for ext, count in pairs(status.languages or {}) do
