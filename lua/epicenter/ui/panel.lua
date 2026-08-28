@@ -49,6 +49,20 @@ function M.box(scale)
   })
 end
 
+--- `M.box`, sized to `count` rows instead of `ui.height` - floored at 3, so a
+--- small result set (or the empty/loading message) does not sit in a
+--- mostly-empty float, and never taller than the panel's own default (F13).
+--- @return epicenter.Box
+local function box_for_count(count)
+  local cfg = require("epicenter.config").get()
+  return window.box({
+    width = cfg.ui.width,
+    height = math.min(math.max(count, 3), M.box().height),
+    max_width = cfg.ui.max_width,
+    max_height = cfg.ui.max_height,
+  })
+end
+
 --- A throwaway float showing the target's source. Any of q/<Esc>/<CR> closes it.
 --- @param target epicenter.Target
 --- @return epicenter.Window
@@ -93,6 +107,10 @@ function M.open(spec)
     open = true,
     help_open = false,
     previous_win = vim.api.nvim_get_current_win(),
+    -- A split already takes only the height the user left it at (F8); an
+    -- explicit box is the caller's own choice. Everything else sizes to its
+    -- row count rather than sitting in `ui.height` regardless of it (F13).
+    size_to_content = spec.layout ~= "vsplit" and not spec.box,
   }, Panel)
 
   local function on_close()
@@ -273,6 +291,12 @@ end
 
 --- @param opts? { stagger?: boolean }
 function Panel:draw(opts)
+  if self.size_to_content then
+    local box = box_for_count(self.list:count())
+    if box.height ~= self.win.box.height then
+      self.win:set_geometry(box)
+    end
+  end
   -- A split is whatever height/width the user has left it at, so both are
   -- read here rather than fixed at open. A float's are its own box, unchanged
   -- outside a reflow (F12: row text needs the live width to fit itself).

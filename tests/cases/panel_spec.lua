@@ -175,3 +175,61 @@ describe("panel shared keys (F12)", function()
     expect.eq(footer_calls, { "alpha" })
   end)
 end)
+
+--- F13: a fixed default height either clipped a big result set or wasted
+--- most of the float on a small one - the same defect `core.lua`'s
+--- `box_for` fixed for the status dashboard, now for every float panel.
+describe("panel sizes to its content", function()
+  local panel
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+  end)
+
+  local function open_panel(spec_extra)
+    return panel_mod.open(vim.tbl_extend("force", {
+      title = " test ",
+      render_row = function(item)
+        return { text = item.name }
+      end,
+    }, spec_extra or {}))
+  end
+
+  it("shrinks below the default height for a small result set", function()
+    panel = open_panel()
+    local natural = panel_mod.box()
+    panel:set_items({ { name = "one" }, { name = "two" } })
+    expect.truthy(panel.win.box.height < natural.height, "shrunk: " .. panel.win.box.height)
+    expect.eq(panel.win.box.height, 3, "floored at 3, not at the item count of 2")
+  end)
+
+  it("never grows past the default height for a large result set", function()
+    panel = open_panel()
+    local natural = panel_mod.box()
+    local items = {}
+    for i = 1, natural.height + 50 do
+      table.insert(items, { name = "item" .. i })
+    end
+    panel:set_items(items)
+    expect.eq(panel.win.box.height, natural.height)
+  end)
+
+  it("leaves an explicit box alone", function()
+    panel = open_panel({ box = { row = 0, col = 0, width = 40, height = 20 } })
+    panel:set_items({ { name = "one" } })
+    expect.eq(panel.win.box.height, 20)
+  end)
+
+  -- A vsplit's height stays the user's, not the row count: `Split` carries
+  -- no `.box`, so this is what every outline_spec.lua case already proves in
+  -- production (a Split panel resized to content here would error there
+  -- rather than pass) - no standalone case needed to duplicate that split.
+end)
