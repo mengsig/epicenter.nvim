@@ -51,7 +51,12 @@ function M.stop(message)
     return
   end
   if running.timer then
+    -- `vim.defer_fn` closes its handle only from inside its own fired
+    -- callback: an interrupted tour would leak one uv handle each time.
     running.timer:stop()
+    if not running.timer:is_closing() then
+      running.timer:close()
+    end
   end
   close_panel()
   running = nil
@@ -104,7 +109,11 @@ local function offer_once()
   if seen.offered then
     return
   end
-  store.write(STORE_KIND, STORE_SCOPE, { offered = true })
+  local ok, err = store.write(STORE_KIND, STORE_SCOPE, { offered = true })
+  if not ok then
+    -- Without this the offer comes back on every start-up and nothing says why.
+    require("epicenter.log").warn("could not remember the tour offer: %s", err)
+  end
   require("epicenter").notify("new here? `:Epicenter tour` is a minute long", "info")
 end
 

@@ -79,6 +79,54 @@ describe("the tour", function()
     epicenter.run = run
   end)
 
+  it("closes the timer it stops, rather than leaking a uv handle", function()
+    local timers = {}
+    local original_defer = vim.defer_fn
+    vim.defer_fn = function(fn, ms)
+      local timer = original_defer(fn, ms)
+      table.insert(timers, timer)
+      return timer
+    end
+    local run = epicenter.run
+    epicenter.run = function(name, args, bufnr)
+      -- The steps' own panels are covered by their own specs; keep them off
+      -- the screen here.
+      return name == "tour" and run(name, args, bufnr) or nil
+    end
+
+    epicenter.run("tour", {}, buf)
+    expect.truthy(#timers > 0, "the tour armed a step timer")
+    epicenter.run("tour", {}, buf)
+    expect.falsy(tour.running(), "the same command stops it")
+
+    epicenter.run = run
+    vim.defer_fn = original_defer
+    for _, timer in ipairs(timers) do
+      expect.truthy(timer:is_closing(), "an interrupted tour closes the handle it stopped")
+    end
+  end)
+
+  it("says why the first-run offer could not be remembered", function()
+    local store = require("epicenter.store")
+    local log = require("epicenter.log")
+    local original_write, original_warn = store.write, log.warn
+    local warned = {}
+    store.write = function()
+      return false, "the state directory is read-only"
+    end
+    log.warn = function(fmt, ...)
+      table.insert(warned, string.format(fmt, ...))
+    end
+
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    local ok = vim.wait(5000, function()
+      return #warned > 0
+    end, 10)
+    store.write, log.warn = original_write, original_warn
+    expect.truthy(ok, "an offer that cannot be remembered says so, or it comes back forever")
+    expect.matches(warned[1], "read%-only")
+  end)
+
   it("offers itself once, and never starts itself", function()
     require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
     wait(function()

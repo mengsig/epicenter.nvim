@@ -39,6 +39,13 @@ describe("quickfix entries", function()
     })
   end)
 
+  it("carries the row's end line where the panel knew one", function()
+    expect.eq(
+      qf.entries({ { target = { path = "/proj/a.lua", line = 9, end_line = 14 }, text = "x" } })[1],
+      { filename = "/proj/a.lua", lnum = 9, end_lnum = 14, col = 1, text = "x" }
+    )
+  end)
+
   it("drops a row with no target rather than inventing a location", function()
     expect.eq(qf.entries({ { text = "a heading" } }), {})
   end)

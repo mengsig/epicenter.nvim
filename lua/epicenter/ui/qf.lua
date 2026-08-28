@@ -10,6 +10,12 @@ local M = {}
 --- @field text string the row's own display text
 
 --- Vim's list items for `rows`. Pure.
+---
+--- Quickfix `col` is a 1-indexed BYTE column, and `target.character` is a
+--- protocol position offset. The handshake asks for `utf-8` first
+--- (`client.capabilities`), which makes the two the same thing; a server that
+--- negotiates otherwise is reported by `client.record_capabilities` rather
+--- than silently drawing columns in the wrong place.
 --- @param rows epicenter.qf.Row[]
 --- @return table[]
 function M.entries(rows)
@@ -17,9 +23,11 @@ function M.entries(rows)
   for _, row in ipairs(rows or {}) do
     local target = row.target
     if target and target.path then
+      local lnum = math.max(1, target.line or 1)
       table.insert(items, {
         filename = target.path,
-        lnum = math.max(1, target.line or 1),
+        lnum = lnum,
+        end_lnum = target.end_line and math.max(lnum, target.end_line) or nil,
         col = math.max(1, (target.character or 0) + 1),
         text = vim.trim(row.text or ""),
       })

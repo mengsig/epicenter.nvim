@@ -547,6 +547,16 @@ function M.record_capabilities(state, announced)
   for _, name in ipairs((experimental and experimental.methods) or {}) do
     state.methods[name] = true
   end
+  -- Every position this plugin sends or draws is a BYTE column, which is what
+  -- `capabilities()` asks for by putting utf-8 first. A server that negotiated
+  -- something else would put columns in the wrong place on non-ASCII lines.
+  local encoding = state.capabilities.positionEncoding
+  if encoding ~= nil and encoding ~= "utf-8" then
+    require("epicenter.log").warn(
+      "server negotiated position encoding %s; epicenter reads positions as utf-8 byte columns",
+      tostring(encoding)
+    )
+  end
 end
 
 --- Whether the server serving this buffer implements `method`. A v1.0 server
