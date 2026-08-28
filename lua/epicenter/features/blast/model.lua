@@ -53,6 +53,16 @@ function M.target_column(text, column)
   return math.max(column, #(text:match("^[ \t]*") or ""))
 end
 
+--- Column of the line's first identifier character, past any doc-comment
+--- marker (`"""`, `///`, `/**`, `---`, ...) - none of which the server
+--- resolves an enclosing definition from (D4). Pure.
+--- @param text string the source line
+--- @return integer|nil 0-based column, nil when the line has no identifier
+function M.first_identifier_column(text)
+  local from = text:find("[%a_]")
+  return from and (from - 1) or nil
+end
+
 --- Request parameters shared by `navgraph/blast` and `navgraph/diff`.
 --- @param state { depth: integer, direction: string, tests: string, strict: boolean }
 --- @param target table one of the protocol's Target forms

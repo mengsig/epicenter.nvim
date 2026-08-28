@@ -296,4 +296,18 @@ describe("blast model", function()
       end_line = 5,
     })
   end)
+
+  it("finds the first identifier past a doc-comment marker (#D4)", function()
+    expect.eq(model.first_identifier_column('        """Return the user, or None."""'), 11)
+    expect.eq(model.first_identifier_column("    /// Sum of every row's weight."), 8)
+    expect.eq(model.first_identifier_column("    /** Sum of every row. */"), 8)
+    expect.eq(model.first_identifier_column("    --- Sum of every row."), 8)
+    expect.eq(model.first_identifier_column("    place_order()"), 4, "an ordinary body line")
+  end)
+
+  it("finds no identifier on a blank or marker-only line (#D4)", function()
+    expect.eq(model.first_identifier_column(""), nil)
+    expect.eq(model.first_identifier_column("        "), nil)
+    expect.eq(model.first_identifier_column("    ///"), nil)
+  end)
 end)

@@ -74,11 +74,32 @@ function M.cursor_target(bufnr)
   }
 end
 
+--- A doc-comment marker (Python `"""`, Zig `///`, C `/** */`, Lua `---`, ...)
+--- resolves to neither a symbol nor an enclosing definition, so a target
+--- snapped only past leading whitespace still answers nothing there (D4).
+--- Column of the line's first identifier - past whatever marker owns the
+--- columns before it - for one retry that recovers the enclosing definition
+--- the same way a body line already gets it.
+--- @param bufnr integer|nil
+--- @param line integer 0-based
+--- @param already integer 0-based column already asked
+--- @return integer|nil 0-based column, nil when no retry is warranted
+local function retry_column(bufnr, line, already)
+  if not (bufnr and vim.api.nvim_buf_is_valid(bufnr)) then
+    return nil
+  end
+  local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
+  local column = text and require("epicenter.features.blast.model").first_identifier_column(text)
+  return column ~= already and column or nil
+end
+
 --- Turns a raw cursor target into one the server can resolve: on a name it
 --- passes straight through, anywhere else in a body it re-asks by the
 --- enclosing definition's disambiguated name (F10) - the fallback every
 --- cursor-targeted feature shares (blast, hover, callers/callees), so
 --- "works anywhere in a body" holds everywhere the cursor drives a query.
+--- A nil answer gets one retry at the line's first identifier column, past
+--- a doc-comment marker the snapped column landed on (D4).
 --- @param target { uri: string, position: table } from `cursor_target`
 --- @param cb fun(err: table|nil, resolved: table|nil) `resolved` is nil, with
 ---   no error, when the cursor genuinely names nothing
@@ -86,18 +107,46 @@ end
 --- @return { cancel: fun() }
 function M.resolve_target(target, cb, opts)
   local client = require("epicenter.client")
-  return client.symbol_at({ uri = target.uri, position = target.position }, function(err, result)
-    if err then
-      return cb(err, nil)
-    end
-    local resolved = result and result.symbol
-    if resolved and resolved ~= vim.NIL then
-      return cb(nil, { uri = target.uri, position = target.position })
-    end
-    local enclosing = result and result.enclosing
-    local name = enclosing ~= vim.NIL and client.symbol_ref(enclosing) or nil
-    cb(nil, name and { symbol = name } or nil)
-  end, opts)
+  local cancelled = false
+  local inflight
+
+  --- @param position table the position this specific request asked at
+  --- @param allow_retry boolean whether a nil answer here may retry once
+  local function ask(position, allow_retry)
+    inflight = client.symbol_at({ uri = target.uri, position = position }, function(err, result)
+      if cancelled then
+        return
+      end
+      if err then
+        return cb(err, nil)
+      end
+      local resolved = result and result.symbol
+      if resolved and resolved ~= vim.NIL then
+        return cb(nil, { uri = target.uri, position = position })
+      end
+      local enclosing = result and result.enclosing
+      local name = enclosing ~= vim.NIL and client.symbol_ref(enclosing) or nil
+      if name then
+        return cb(nil, { symbol = name })
+      end
+      local retry = allow_retry
+        and retry_column(opts and opts.bufnr, position.line, position.character)
+      if retry then
+        return ask({ line = position.line, character = retry }, false)
+      end
+      cb(nil, nil)
+    end, opts)
+  end
+
+  ask(target.position, true)
+  return {
+    cancel = function()
+      cancelled = true
+      if inflight then
+        inflight.cancel()
+      end
+    end,
+  }
 end
 
 --- `model.target_column` against a buffer line, for the callers that hold a
