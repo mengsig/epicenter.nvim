@@ -407,6 +407,9 @@ end
 --- @param spec { title: string, prompt_prefix?: string, debounce_ms?: integer,
 ---   state?: table, source: fun(query: string, state: table, cb: fun(err, items, total)),
 ---   render_item: fun(item, index): { text: string, spans?: table[] },
+---   mark_key?: fun(item): any what a `<Tab>` mark survives a re-populate
+---     under (M3); every `source` answer is a fresh item list, so the default
+---     mark key (the item table's own identity) drops every mark on it,
 ---   preview_of?: fun(item): { path: string, line: integer, end_line?: integer }|nil,
 ---   on_accept: fun(item, action: "edit"|"tab"|"vsplit"|"split"),
 ---   keys?: table<string, fun(palette: epicenter.Palette)>,
@@ -477,6 +480,7 @@ function M.open(spec)
     width = boxes.results.width,
     render_item = spec.render_item,
     empty_text = spec.empty_text or "  type to search",
+    mark_key = spec.mark_key,
   })
 
   self.prompt = prompt_mod.new({

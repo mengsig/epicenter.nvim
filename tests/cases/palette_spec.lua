@@ -126,6 +126,66 @@ describe("palette query staleness", function()
   end)
 end)
 
+--- M3: `71235f9`'s <Tab> mark-preservation fix keyed marks by `mark_key(item)`,
+--- but only `ui.tree` supplied one - a palette fell back to the item table's
+--- own identity, so any re-populate with equal-but-fresh tables (a live
+--- source answers fresh every time) dropped every mark silently.
+describe("palette <Tab> marks survive a re-populate when mark_key is set (M3)", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+  end)
+
+  --- Same three logical rows, a fresh table each time `source` answers -
+  --- exactly what a live search does on every keystroke.
+  local function three_rows()
+    return { { id = "a" }, { id = "b" }, { id = "c" } }
+  end
+
+  it("keeps the mark on the same logical row, and drops it on a genuinely new one", function()
+    local p = palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        cb(nil, three_rows(), 3)
+      end,
+      render_item = function(item)
+        return { text = item.id }
+      end,
+      mark_key = function(item)
+        return item.id
+      end,
+      empty_text = "  no matches",
+    })
+    p:query("x")
+    vim.wait(50, function()
+      return p.list:count() == 3
+    end)
+
+    p.list:select(1)
+    expect.eq(p.list:toggle_mark(), true)
+    expect.eq(#p.list:marked_or_all(), 1, "one row marked")
+
+    -- Re-populate with fresh tables carrying the same logical rows (id "a").
+    -- The count stays 3 either way, so this waits unconditionally rather
+    -- than on a predicate that was already true before the refresh ran.
+    p:refresh()
+    vim.wait(50)
+    expect.eq(#p.list:marked_or_all(), 1, "the mark survives a re-populate of the same rows")
+    expect.eq(p.list:marked_or_all()[1].id, "a")
+
+    -- A genuinely different result set carries none of the old keys.
+    p.spec.source = function(_, _, cb)
+      cb(nil, { { id = "x" }, { id = "y" } }, 2)
+    end
+    p:refresh()
+    vim.wait(50, function()
+      return p.list:count() == 2
+    end)
+    expect.eq(#p.list:marked_or_all(), 2, "a genuinely fresh result set starts unmarked")
+    p:close()
+  end)
+end)
+
 describe("palette resize across the preview threshold (F2)", function()
   before_each(function()
     require("epicenter.config").reset()

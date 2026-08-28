@@ -156,8 +156,23 @@ function M.symbol_target(item)
   return { path = vim.uri_to_fname(symbol.uri), line = symbol.line, end_line = symbol.endLine }
 end
 
+--- What "the same row" means for a `<Tab>` mark on a `{ symbol = Symbol }`
+--- item (M3): every query answer is a fresh item list, so the default mark
+--- key (the item table's own identity) would drop every mark on it.
+--- @param item { symbol: table }
+function M.symbol_key(item)
+  local symbol = item.symbol
+  return ("%s#%s@%d"):format(symbol.uri, symbol.qualified, symbol.line)
+end
+
 local function match_target(item)
   return { path = vim.uri_to_fname(item.uri), line = item.line, character = item.character }
+end
+
+--- Mark key for a grep match: two matches can share a line, so the column
+--- is part of the row's identity too.
+local function match_key(item)
+  return ("%s:%d:%d"):format(item.uri, item.line, item.character)
 end
 
 -- Frecency -----------------------------------------------------------------------
@@ -270,6 +285,9 @@ local function open_palette(ctx, mode)
         return grep_source(query, current, cb)
       end
       return symbol_source(query, current, cb)
+    end,
+    mark_key = function(item)
+      return state.mode == "grep" and match_key(item) or M.symbol_key(item)
     end,
     render_item = function(item, index, width)
       if state.mode == "grep" then

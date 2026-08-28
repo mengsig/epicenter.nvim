@@ -143,6 +143,9 @@ Panel.__index = Panel
 ---   enter?: boolean, zindex?: integer, reflow?: fun(): epicenter.Box,
 ---   render_row: fun(row, index): { text: string, spans?: table[] },
 ---   text_of?: fun(row): string, empty_text?: string,
+---   mark_key?: fun(row): any what a `<Tab>` mark survives a re-populate under;
+---     a tree panel keys off its own row instead (see `tree.lua`), so this is
+---     read only when `tree` is nil,
 ---   tree?: { key_of: fun(node): string, children_of: fun(node): any[],
 ---     identity_of?: fun(node): string },
 ---   target_of?: fun(row): epicenter.Target|nil, hints?: table<string, string>,
@@ -222,6 +225,7 @@ function M.open(spec)
       render_item = spec.render_row,
       text_of = spec.text_of,
       empty_text = spec.empty_text,
+      mark_key = spec.mark_key,
     })
   end
 

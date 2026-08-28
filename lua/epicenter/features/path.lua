@@ -164,6 +164,7 @@ local function symbol_palette(bufnr, title, opts)
     prompt_prefix = " " .. icons.ui("search") .. " ",
     state = { bufnr = bufnr },
     render_item = search.render_symbol,
+    mark_key = search.symbol_key,
     preview_of = function(item)
       return {
         path = vim.uri_to_fname(item.symbol.uri),

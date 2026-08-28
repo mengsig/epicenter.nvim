@@ -234,6 +234,52 @@ describe("panel sizes to its content", function()
   -- rather than pass) - no standalone case needed to duplicate that split.
 end)
 
+--- M3: `71235f9`'s <Tab> mark-preservation fix keyed marks by `mark_key(item)`,
+--- but only `ui.tree` supplied one - a non-tree (flat) panel fell back to the
+--- item table's own identity, so any `set_items` re-populate with
+--- equal-but-fresh tables (any feature that reloads from a fresh answer)
+--- dropped every mark silently.
+describe("flat panel <Tab> marks survive a re-populate when mark_key is set (M3)", function()
+  local panel
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+  end)
+
+  it("keeps the mark on the same logical row, and drops it on a genuinely new one", function()
+    panel = panel_mod.open({
+      title = " test ",
+      render_row = function(item)
+        return { text = item.name }
+      end,
+      mark_key = function(item)
+        return item.id
+      end,
+    })
+    panel:set_items({ { id = "a", name = "one" }, { id = "b", name = "two" } })
+    panel.list:select(1)
+    expect.eq(panel.list:toggle_mark(), true)
+    expect.eq(#panel.list:marked_or_all(), 1, "one row marked")
+
+    -- Re-populate with fresh tables carrying the same logical rows.
+    panel:set_items({ { id = "a", name = "one" }, { id = "b", name = "two" } })
+    expect.eq(#panel.list:marked_or_all(), 1, "the mark survives a re-populate of the same rows")
+    expect.eq(panel.list:marked_or_all()[1].id, "a")
+
+    -- A genuinely different result set carries none of the old keys.
+    panel:set_items({ { id = "x", name = "three" }, { id = "y", name = "four" } })
+    expect.eq(#panel.list:marked_or_all(), 2, "a genuinely fresh result set starts unmarked")
+  end)
+end)
+
 --- Deliverable 10: every panel remembers its size/position per session -
 --- keyed by panel TYPE (`filetype`), a terminal preference rather than
 --- project data, so `store.set_root` isolates it the same way frecency does.

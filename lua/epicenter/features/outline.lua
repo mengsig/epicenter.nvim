@@ -167,6 +167,14 @@ local function target_of(row)
   }
 end
 
+--- What "the same row" means for a `<Tab>` mark (M3): the kind filter
+--- rebuilds `rows` from scratch, so the default mark key (the row table's
+--- own identity) would drop every mark the moment `<C-k>` cycles it.
+local function mark_key(row)
+  local symbol = row.symbol
+  return ("%s#%s@%d"):format(symbol.uri, symbol.qualified, symbol.line)
+end
+
 --- Jumps in the source window and hands it the cursor. The split stays open -
 --- unlike every other panel's `<CR>`, this one is a persistent widget you keep
 --- browsing from, so it overrides `ui.panel`'s default close-then-jump action.
@@ -276,6 +284,7 @@ local function open(ctx)
     text_of = function(row)
       return row.symbol.name
     end,
+    mark_key = mark_key,
     target_of = target_of,
     hints = { ["<C-k>"] = "cycle the kind filter" },
     on_filter = function()
