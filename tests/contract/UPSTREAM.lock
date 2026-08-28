@@ -1,4 +1,4 @@
 ## Pin for `tests/contract/lsp.md`, checked by `make contract-check`.
 ## Refresh: see "To update" in tests/contract/README.md.
-upstream_rev=39b11f8ab9d8f419b6a23b36fa47e0f5b6658412
-sha256=5141619d26863baacc22931cf491807946e9e72a3966ce4d61d604c50a576d79
+upstream_rev=5e0f6cb125778bf6c697efc781bbfbc204d57fa2
+sha256=1af63351525d75f5af4edf713ec5114ca802ca36961756e27a276918497050f9

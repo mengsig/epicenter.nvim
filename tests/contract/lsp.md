@@ -93,7 +93,7 @@ disappears again when the buffer is closed.
 | `-32700` | A frame body that is not JSON, or a frame the server could not parse. The server resyncs and keeps serving. |
 | `-32600` | Not a JSON-RPC request, or a request before `initialized`. |
 | `-32601` | Unknown method. |
-| `-32602` | Bad params: a missing/ill-typed field, an unknown `direction` or `tests` scope, a grep pattern that will not compile or is too long or too deeply nested, an unindexed file. |
+| `-32602` | Bad params: a missing required field, an ill-typed *required* field, an unknown `direction` or `tests` scope, a grep pattern that will not compile or is too long or too deeply nested, an unindexed file. An ill-typed *optional* field (e.g. `{"strict":"yes"}`) falls back to its default instead of erroring. |
 | `-32603` | Internal failure (allocation, IO). |
 | `-32001` | A `Target` that resolves to nothing — `{"code": -32001, "message": "…: symbol not found"}`. An error object never carries `data`. |
 | `-32002` | The request could not be completed: a grep regex that exhausts one of the bounds below, or a `navgraph/diff` / `{ref}` target whose `git diff` failed (bad ref, no git tree, git unavailable). |
@@ -459,7 +459,14 @@ re-parsed its slot takes a private arena holding the newer copy; the arena the
 *live* index still points into is retired and freed only once the replacement
 index is in place. So a re-index never frees memory a served response might
 still reference, and steady-state memory is the initial walk plus one arena per
-currently-edited file.
+currently-edited file — under realistic editing. There is no leak (the Debug
+build's leak-detecting allocator is silent over long runs); on **ReleaseFast**
+specifically, the allocator retains rather than reuses freed per-generation
+arenas, so RSS grows roughly linearly under an edit pattern dominated by
+*brand-new* symbol names — about 72 kB per re-index at 600 new names per edit.
+Realistic edits (existing names, growing bodies, a handful of new names) show
+no measurable growth; only heavy sustained refactoring of a large file will
+drift RSS above the steady-state figure below.
 
 ## Measured performance
 
