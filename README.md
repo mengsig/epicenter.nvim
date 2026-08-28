@@ -257,7 +257,7 @@ What the server knows, and the three keys that change it: `r` rescan,
 ```
 ╭─ · navgraph ───────────────────────────────────────────────────╮
 │                                                                │
-│  epicenter   1.0.0                                             │
+│  epicenter   1.0.1                                             │
 │  root        ~/src/myproject                                   │
 │  server      running · client 1 · navgraph 1.0.0 · protocol 1  │
 │  index       32 files · 330 symbols · 258 edges                │
@@ -598,16 +598,18 @@ they never go through the standard LSP methods. In the many files no language
 server covers, navgraph's providers are still there. Set
 `lsp = { fallback_only = false }` if you want it to answer everywhere.
 
-**NavGraph is a private repo for me. How does `:Epicenter install` get it?**
+**How does `:Epicenter install` get the `navgraph` binary?**
 
-Through `gh`. When `gh` is installed *and* authenticated (`gh auth status`
-exits 0), the installer runs `gh release download` against `navgraph.repo`,
-which uses your existing GitHub credentials — so a private repo works with no
-extra configuration. Without an authenticated `gh` it falls back to
-`git clone` + `zig build`, which needs `git` and `zig` on `$PATH` and public
-read access. `:checkhealth epicenter` tells you which route is available.
-Point `navgraph.repo` at your fork, and `navgraph.install_ref` at a branch or
-tag, to build something other than the default `main`.
+Both `epicenter.nvim` and [NavGraph](https://github.com/mengsig/NavGraph) are
+public repos, so either route works with no GitHub access of your own. When
+`gh` is installed *and* authenticated (`gh auth status` exits 0), the
+installer runs `gh release download` against `navgraph.repo` — a prebuilt
+binary in a few seconds. Otherwise it falls back to `git clone` + `zig build`,
+which needs `git` and `zig` on `$PATH` and takes roughly a minute. `gh` only
+buys speed here, not access — skip it and the fallback still works.
+`:checkhealth epicenter` tells you which route is available. Point
+`navgraph.repo` at your fork, and `navgraph.install_ref` at a branch or tag,
+to build something other than the default `main`.
 
 **I do not use a nerd font and the icons are boxes.**
 

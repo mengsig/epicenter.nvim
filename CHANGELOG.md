@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1 — 2026-08-28
+
+Fixes `:Epicenter install` always falling back to a ~100s source build: the
+release-asset glob checked `<os>` before `<arch>`, but the published assets are
+named `navgraph-<arch>-<os>`, so a matching prebuilt binary never downloaded
+even with `gh` authenticated. The pattern now matches the real names, a
+downloaded archive is verified against the release's `SHA256SUMS` before it is
+extracted, and a fallback to a source build now says why in the toast. The
+README FAQ no longer describes NavGraph as a private repo — both repos are
+public, and `gh` now only buys install speed, not access.
+
 ## 1.0.0 — 2026-08-28
 
 The first release. epicenter.nvim drives [NavGraph](https://github.com/mengsig/NavGraph)
