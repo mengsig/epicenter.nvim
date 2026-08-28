@@ -7,32 +7,39 @@ local function target_of(symbol)
 end
 
 --- Row for a hot spot: the symbol, its location, and a bar scaled to the
---- busiest symbol in the list. Pure.
+--- busiest symbol in the list. The path elides before the bar/count ever
+--- do, so a narrow panel never silently loses the number it exists to show
+--- (F12). Pure.
 --- @param item { symbol: table, fanIn?: integer }
 --- @param max integer the largest fan-in in the same list
-function M.render_hot(item, max, width)
+--- @param bar_width integer the bar's own width, in cells
+--- @param row_width integer|nil the panel's current width; nil skips fitting
+function M.render_hot(item, max, bar_width, row_width)
   local icons = require("epicenter.ui.icons")
   local toast = require("epicenter.ui.toast")
+  local text_mod = require("epicenter.ui.text")
   local symbol, spans = item.symbol, {}
   local count = item.fanIn or 0
 
   local head = (" %s %s"):format(icons.kind(symbol.kind), symbol.qualified)
   local location = ("  %s:%d"):format(symbol.file, symbol.line)
-  table.insert(spans, { hl = "EpicenterMuted", from = #head, to = #head + #location })
 
   local bar = "  "
     .. toast.bar(
       max > 0 and count / max or 0,
-      width,
+      bar_width,
       icons.ui("progress_full"),
       icons.ui("progress_empty")
     )
-  local at = #head + #location
-  table.insert(spans, { hl = "EpicenterAccent", from = at, to = at + #bar })
   local tail = (" %d"):format(count)
+
+  local text, shown_location = text_mod.fit(head, location, bar .. tail, row_width)
+  table.insert(spans, { hl = "EpicenterMuted", from = #head, to = #head + #shown_location })
+  local at = #head + #shown_location
+  table.insert(spans, { hl = "EpicenterAccent", from = at, to = at + #bar })
   table.insert(spans, { hl = "EpicenterCount", from = at + #bar, to = at + #bar + #tail })
 
-  return { text = head .. location .. bar .. tail, spans = spans }
+  return { text = text, spans = spans }
 end
 
 --- Row for an unused symbol. Pure.
@@ -121,8 +128,8 @@ local function open_hot(ctx)
     footer = (" 0 · %s "):format(view.scope),
     filetype = "epicenter-hot",
     empty_text = "  nothing depends on anything here",
-    render_row = function(item)
-      return M.render_hot(item, view.max, cfg.hot.bar_width)
+    render_row = function(item, _index, width)
+      return M.render_hot(item, view.max, cfg.hot.bar_width, width)
     end,
     text_of = function(item)
       return item.symbol.qualified

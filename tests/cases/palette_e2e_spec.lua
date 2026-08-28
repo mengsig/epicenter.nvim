@@ -110,7 +110,10 @@ describe("search palette against the fake navgraph server", function()
     wait(function()
       return p.list:count() > 0
     end, 10000, "grep results")
-    expect.matches(results_lines(p)[1], "app/server%.lua:%d+")
+    -- F12: the file may elide at a narrow palette width, keeping its
+    -- filename over its leading directories - the line number and the
+    -- matched text are what the row guarantees.
+    expect.matches(results_lines(p)[1], "%.lua:%d+")
     expect.matches(results_lines(p)[1], "log_request")
     p:close()
   end)

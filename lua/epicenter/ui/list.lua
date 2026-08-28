@@ -26,8 +26,10 @@ end
 --- @field top integer 1-based index of the first visible item
 --- @field height integer visible rows
 --- @field selected integer|nil 1-based
---- @field render_item fun(item: any, index: integer): { text: string, spans?: table[] }
+--- @field render_item fun(item: any, index: integer, width: integer|nil): { text: string, spans?: table[] }
 --- @field empty_text? string
+--- @field width? integer display columns available - nil where the caller
+---   never set one, so a `render_item` ignoring its third argument still works
 
 --- Renders the visible slice. Pure.
 --- @param state epicenter.ListState
@@ -42,7 +44,7 @@ function M.render(state)
   local last = math.min(total, state.top + state.height - 1)
   for i = state.top, last do
     local row = i - state.top
-    local rendered = state.render_item(state.items[i], i)
+    local rendered = state.render_item(state.items[i], i, state.width)
     table.insert(lines, rendered.text)
     for _, span in ipairs(rendered.spans or {}) do
       table.insert(spans, { row = row, hl = span.hl, from = span.from, to = span.to })
@@ -60,14 +62,15 @@ end
 local List = {}
 List.__index = List
 
---- @param opts { buf: integer, height: integer,
----   render_item: fun(item, index): { text: string, spans?: table[] },
+--- @param opts { buf: integer, height: integer, width?: integer,
+---   render_item: fun(item, index, width): { text: string, spans?: table[] },
 ---   text_of?: fun(item): string, empty_text?: string, on_select?: fun(item, index) }
 function M.new(opts)
   return setmetatable({
     buf = opts.buf,
     ns = vim.api.nvim_create_namespace("epicenter.list"),
     height = opts.height,
+    width = opts.width,
     render_item = opts.render_item,
     text_of = opts.text_of or tostring,
     empty_text = opts.empty_text or "  no results",
@@ -112,6 +115,10 @@ function List:set_height(height)
   self.top = M.scroll(#self.view, self.height, self.selected, self.top)
 end
 
+function List:set_width(width)
+  self.width = width
+end
+
 function List:items()
   return self.view
 end
@@ -154,6 +161,7 @@ function List:state()
     items = self.view,
     top = self.top,
     height = self.height,
+    width = self.width,
     selected = self.selected,
     render_item = self.render_item,
     empty_text = self.empty_text,

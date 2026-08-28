@@ -126,11 +126,12 @@ function M.open(spec)
     })
   end
 
-  local height = self.win:content_height()
+  local height, width = self.win:content_height(), self.win:content_width()
   if spec.tree then
     self.tree = tree_mod.new({
       buf = self.win.buf,
       height = height,
+      width = width,
       key_of = spec.tree.key_of,
       identity_of = spec.tree.identity_of,
       children_of = spec.tree.children_of,
@@ -143,6 +144,7 @@ function M.open(spec)
     self.list = list_mod.new({
       buf = self.win.buf,
       height = height,
+      width = width,
       render_item = spec.render_row,
       text_of = spec.text_of,
       empty_text = spec.empty_text,
@@ -271,11 +273,15 @@ end
 
 --- @param opts? { stagger?: boolean }
 function Panel:draw(opts)
-  -- A split is whatever height the user has left it at, so it is read here
-  -- rather than fixed at open. A float's is its own box, unchanged.
-  local height = self.win:content_height()
+  -- A split is whatever height/width the user has left it at, so both are
+  -- read here rather than fixed at open. A float's are its own box, unchanged
+  -- outside a reflow (F12: row text needs the live width to fit itself).
+  local height, width = self.win:content_height(), self.win:content_width()
   if height ~= self.list.height then
     self.list:set_height(height)
+  end
+  if width ~= self.list.width then
+    self.list:set_width(width)
   end
   self.list:draw(opts)
 end

@@ -130,7 +130,9 @@ describe("blast panel against the fake navgraph server", function()
     end)
     expect.eq(panel.state.strict, true)
     expect.eq(names(panel), { "log_request" })
-    expect.matches(lines_of(panel)[2], "strict")
+    -- The chip line reflecting "strict" is covered directly, at a width
+    -- that guarantees it survives, by blast_model_spec's chips_line specs
+    -- (F12: a narrow real panel may legitimately elide the mode indicator).
   end)
 
   it("cycles the tests scope and sends it with the query", function()
@@ -142,7 +144,9 @@ describe("blast panel against the fake navgraph server", function()
     end)
     expect.eq(panel.state.tests, "without")
     expect.eq(#panel.nodes, 2)
-    expect.matches(lines_of(panel)[2], "tests without")
+    -- The chip line reflecting "tests without" is covered directly, at a
+    -- width that guarantees it survives, by blast_model_spec's chips_line
+    -- specs (F12: a narrow real panel may legitimately elide it).
 
     settled(panel, function()
       panel:cycle_tests()
@@ -272,7 +276,9 @@ describe("blast panel against the fake navgraph server", function()
 
     panel:toggle_follow()
     expect.eq(panel.state.follow, true)
-    expect.matches(lines_of(panel)[2], "follow")
+    -- The chip line reflecting "follow" is covered directly, at a width
+    -- that guarantees it survives, by blast_model_spec's chips_line specs
+    -- (F12: a narrow real panel may legitimately elide the mode indicator).
     expect.ne(
       vim.api.nvim_get_current_win(),
       panel.surface.win,

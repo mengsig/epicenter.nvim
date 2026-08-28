@@ -88,6 +88,33 @@ describe("search rows", function()
     expect.eq(lit, "log_request", "the highlight follows the text after trimming")
   end)
 
+  -- F12: at a narrow width, the file elides before the line number or the
+  -- fan-in count ever do.
+  it("elides a long file before a search row ever loses its line or count", function()
+    local long = vim.tbl_extend("force", SYMBOL, {
+      qualified = "OrderService.place",
+      file = "py_fastapi/app/services/order_service.py",
+      callers = 7,
+    })
+    local row = search.render_symbol({ symbol = long, matches = {} }, 1, 34)
+    expect.truthy(vim.fn.strdisplaywidth(row.text) <= 34, "fits: " .. row.text)
+    expect.matches(row.text, "…", "the file was elided")
+    expect.matches(row.text, ":9", "the line survives")
+    expect.matches(row.text, "7$", "the fan%-in count survives")
+  end)
+
+  it("elides a long file before a grep row ever loses the matched line", function()
+    local row = search.render_match({
+      file = "py_fastapi/app/services/order_service.py",
+      line = 10,
+      character = 2,
+      text = "  log_request(method, path)",
+    }, 1, "log_request", 34)
+    expect.truthy(vim.fn.strdisplaywidth(row.text) <= 34, "fits: " .. row.text)
+    expect.matches(row.text, "…", "the file was elided")
+    expect.matches(row.text, "log_request%(method, path%)$", "the matched line survives whole")
+  end)
+
   it("declares both palette commands and their keymaps", function()
     expect.eq(
       vim.tbl_map(function(c)

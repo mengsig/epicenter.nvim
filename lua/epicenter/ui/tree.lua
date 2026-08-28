@@ -56,9 +56,10 @@ end
 local Tree = {}
 Tree.__index = Tree
 
---- @param opts { buf: integer, height: integer, key_of: fun(node): string,
+--- @param opts { buf: integer, height: integer, width?: integer,
+---   key_of: fun(node): string,
 ---   children_of: fun(node): any[], identity_of?: fun(node): string,
----   render_row: fun(row, index): { text: string, spans?: table[] },
+---   render_row: fun(row, index, width): { text: string, spans?: table[] },
 ---   text_of?: fun(row): string }
 function M.new(opts)
   local self = setmetatable({
@@ -71,6 +72,7 @@ function M.new(opts)
   self.list = list.new({
     buf = opts.buf,
     height = opts.height,
+    width = opts.width,
     render_item = opts.render_row,
     text_of = opts.text_of,
     empty_text = opts.empty_text,

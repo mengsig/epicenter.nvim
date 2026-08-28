@@ -52,28 +52,23 @@ local function jump(target, action)
   vim.cmd("normal! zz")
 end
 
-local function append(text, spans, chunk, hl)
-  if chunk == "" then
-    return text
-  end
-  table.insert(spans, { hl = hl, from = #text, to = #text + #chunk })
-  return text .. chunk
-end
-
 --- Row for a `navgraph/search` item: kind icon, qualified name with the
---- matched characters lit, location, fan-in.
+--- matched characters lit, location, fan-in. The file elides before the line
+--- number or the fan-in count ever do (F12).
 --- @param item { symbol: table, matches: integer[] } matches: 0-based byte
 ---   indices into symbol.qualified (contract pinned in protocol.md, not row-relative)
-function M.render_symbol(item)
+--- @param width integer|nil the panel's current width; nil skips fitting
+function M.render_symbol(item, _, width)
   local icons = require("epicenter.ui.icons")
+  local text_mod = require("epicenter.ui.text")
   local symbol = item.symbol
   local spans = {}
   local prefix = " " .. icons.kind(symbol.kind) .. " "
-  local text = prefix .. symbol.qualified
+  local head = prefix .. symbol.qualified
 
   for _, index in ipairs(item.matches or {}) do
     local from = #prefix + index
-    if from < #text then
+    if from < #head then
       table.insert(spans, { hl = "EpicenterMatch", from = from, to = from + 1 })
     end
   end
@@ -82,24 +77,38 @@ function M.render_symbol(item)
   -- enclosing definition's - show where the reference is, not where the
   -- enclosing function starts (F3).
   local line = item.lines and item.lines[1] or symbol.line
-  text = append(text, spans, ("  %s:%d"):format(symbol.file, line), "EpicenterMuted")
-  if (symbol.callers or 0) > 0 then
-    text =
-      append(text, spans, ("  %s%d"):format(icons.ui("fan_in"), symbol.callers), "EpicenterCount")
+  local file = ("  %s"):format(symbol.file)
+  local line_tag = (":%d"):format(line)
+  local count_tag = (symbol.callers or 0) > 0
+      and ("  %s%d"):format(icons.ui("fan_in"), symbol.callers)
+    or ""
+
+  local text, shown_file = text_mod.fit(head, file, line_tag .. count_tag, width)
+  local at = #head
+  table.insert(spans, { hl = "EpicenterMuted", from = at, to = at + #shown_file + #line_tag })
+  if count_tag ~= "" then
+    local count_at = at + #shown_file + #line_tag
+    table.insert(spans, { hl = "EpicenterCount", from = count_at, to = count_at + #count_tag })
   end
   return { text = text, spans = spans }
 end
 
 --- Row for a `navgraph/grep` item: location, the line, and the match lit.
-function M.render_match(item, _, pattern)
-  local spans = {}
-  local text = ""
-  text = append(text, spans, ("  %s:%d"):format(item.file, item.line), "EpicenterMuted")
-  text = text .. "  "
-
-  local body_at = #text
-  text = text .. vim.trim(item.text)
+--- The file elides before the matched line's own text ever does (F12).
+--- @param width integer|nil the panel's current width; nil skips fitting
+function M.render_match(item, _, pattern, width)
+  local text_mod = require("epicenter.ui.text")
+  local head = "  "
+  local line_tag = (":%d"):format(item.line)
+  local body = vim.trim(item.text)
   local leading = #item.text - #item.text:gsub("^%s+", "")
+  local tail = line_tag .. "  " .. body
+
+  local text, shown_file = text_mod.fit(head, item.file, tail, width)
+  local spans = {}
+  table.insert(spans, { hl = "EpicenterMuted", from = #head, to = #head + #shown_file + #line_tag })
+
+  local body_at = #head + #shown_file + #line_tag + 2
   local from = body_at + math.max(0, item.character - leading)
   if pattern and #pattern > 0 and from < #text then
     table.insert(
@@ -211,8 +220,8 @@ local function open_grep_palette(ctx)
         cb(nil, result.items or {}, result.total)
       end, { bufnr = current.bufnr, channel = "grep" })
     end,
-    render_item = function(item, index)
-      return M.render_match(item, index, state.pattern)
+    render_item = function(item, index, width)
+      return M.render_match(item, index, state.pattern, width)
     end,
     preview_of = match_target,
     on_accept = function(item, action)

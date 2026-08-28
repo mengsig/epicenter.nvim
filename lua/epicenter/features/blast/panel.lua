@@ -138,6 +138,13 @@ function Surface:height()
   return vim.api.nvim_win_is_valid(self.win) and vim.api.nvim_win_get_height(self.win) or 1
 end
 
+function Surface:width()
+  if self.kind == "float" then
+    return self.window:content_width()
+  end
+  return vim.api.nvim_win_is_valid(self.win) and vim.api.nvim_win_get_width(self.win) or 1
+end
+
 function Surface:focus()
   if self:valid() then
     vim.api.nvim_set_current_win(self.win)
@@ -533,8 +540,9 @@ function Panel:_body_height()
 end
 
 function Panel:_header(summary)
-  local title = model.title_line(self.meta)
-  local chips = model.chips_line(summary or self.summary, self.state)
+  local width = self.surface:width()
+  local title = model.title_line(self.meta, width)
+  local chips = model.chips_line(summary or self.summary, self.state, width)
   local spans = {}
   for row, rendered in ipairs({ title, chips }) do
     for _, span in ipairs(rendered.spans) do
@@ -645,7 +653,7 @@ function Panel:_paint_chips(summary)
   if not self:valid() or not vim.api.nvim_buf_is_valid(buf) or self.help_open then
     return
   end
-  local chips = model.chips_line(summary, self.state)
+  local chips = model.chips_line(summary, self.state, self.surface:width())
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 1, 2, false, { chips.text })
   vim.bo[buf].modifiable = false

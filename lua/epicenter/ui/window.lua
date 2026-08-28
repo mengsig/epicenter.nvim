@@ -191,6 +191,12 @@ function Window:content_height()
   return self.content
 end
 
+--- Columns a caller may render into, so row text can fit itself rather than
+--- let the window edge silently clip it (F12).
+function Window:content_width()
+  return self.box.width
+end
+
 --- @return epicenter.Box
 function Window:geometry()
   return vim.deepcopy(self.box)
@@ -427,6 +433,13 @@ function Split:content_height()
     return 1
   end
   return math.max(1, vim.api.nvim_win_get_height(self.win))
+end
+
+function Split:content_width()
+  if not self:valid() then
+    return 1
+  end
+  return math.max(1, vim.api.nvim_win_get_width(self.win))
 end
 
 Split.set_lines = Window.set_lines

@@ -93,6 +93,7 @@ function Palette:_apply_layout(box)
     end
   end
   self.list:set_height(boxes.results.height)
+  self.list:set_width(boxes.results.width)
 end
 
 --- Closes and forgets the preview pane once its window has no room; unlike
@@ -375,6 +376,7 @@ function M.open(spec)
   self.list = list_mod.new({
     buf = self.results_win.buf,
     height = boxes.results.height,
+    width = boxes.results.width,
     render_item = spec.render_item,
     empty_text = spec.empty_text or "  type to search",
   })

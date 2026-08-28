@@ -36,6 +36,20 @@ describe("hot spot rows", function()
     expect.matches(rendered.text, "app/server%.lua:9")
   end)
 
+  -- F12: at a narrow width, the file elided to keep the bar/count visible -
+  -- the number the panel exists to show - rather than the window edge
+  -- silently cutting them off.
+  it("elides a long path before it ever loses the bar or the count", function()
+    local long = symbol({
+      qualified = "OrderService.place",
+      file = "py_fastapi/app/services/order_service.py",
+    })
+    local rendered = hot.render_hot({ symbol = long, fanIn = 7 }, 7, 12, 40)
+    expect.truthy(vim.fn.strdisplaywidth(rendered.text) <= 40, "fits: " .. rendered.text)
+    expect.matches(rendered.text, "…", "the path was elided")
+    expect.matches(rendered.text, "7$", "the count survives")
+  end)
+
   it("renders an unused symbol without a bar", function()
     local rendered = hot.render_unused(symbol())
     expect.matches(rendered.text, "M%.handle_request")

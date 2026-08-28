@@ -161,6 +161,15 @@ describe("blast model", function()
     expect.matches(model.title_line({ kind = "blast" }).text, "^  blast radius$")
   end)
 
+  -- F12: at a narrow width, the file elides before the line number does.
+  it("elides a long file before the title ever loses its line number", function()
+    local root = symbol("OrderService.place", "py_fastapi/app/services/order_service.py", 17)
+    local rendered = model.title_line({ kind = "blast", root = root }, 30)
+    expect.truthy(vim.fn.strdisplaywidth(rendered.text) <= 30, "fits: " .. rendered.text)
+    expect.matches(rendered.text, "…", "the file was elided")
+    expect.matches(rendered.text, ":17$", "the line number survives")
+  end)
+
   it("writes the server's summary as chips, with the query mode after them", function()
     local summary = { symbols = 1, files = 1, tests = 0, maxDepth = 1 }
     local state =
@@ -178,6 +187,20 @@ describe("blast model", function()
     expect.matches(loud, "^  2 changed · ")
     expect.matches(loud, "depth 1 · truncated")
     expect.matches(loud, "callees · tests only · strict · follow$")
+  end)
+
+  -- F12: the counts are what the panel is FOR, so a width too narrow for
+  -- both drops the mode indicator whole rather than truncating it mid-word.
+  it("drops the mode indicator rather than truncate it, when the two do not fit", function()
+    local summary = { symbols = 1, files = 1, tests = 0, maxDepth = 1 }
+    local state =
+      { direction = "callers", tests = "with", strict = false, follow = false, depth = 1 }
+    local wide = model.chips_line(summary, state, 200).text
+    expect.matches(wide, "callers · tests with$", "both parts fit at a generous width")
+
+    local narrow = model.chips_line(summary, state, 20).text
+    expect.matches(narrow, "^  1 symbol · 1 file · 0 tests · depth 1$")
+    expect.falsy(narrow:find("callers", 1, true), "the mode indicator was dropped, not cut")
   end)
 
   --- F2: `+` and `-` re-query and repaint. On a graph that is already

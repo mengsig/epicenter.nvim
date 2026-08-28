@@ -297,9 +297,11 @@ function M.render_row(row)
   return { text = text, spans = spans }
 end
 
---- Header line naming what the panel is showing.
+--- Header line naming what the panel is showing. The file elides before the
+--- line number ever does, so a long path never pushes it off the edge (F12).
 --- @param meta { kind: "blast"|"diff", root?: table, ref?: string }
-function M.title_line(meta)
+--- @param width integer|nil the panel's current width; nil skips fitting
+function M.title_line(meta, width)
   local icons = require("epicenter.ui.icons")
   local spans, text = {}, ""
   if meta.kind == "diff" then
@@ -317,19 +319,29 @@ function M.title_line(meta)
       spans = spans,
     }
   end
+  local head = "  " .. icons.kind(root.kind) .. " " .. (root.qualified or root.name or "?")
+  local file = ("  %s"):format(root.file)
+  local line = (":%d"):format(root.line)
+  local text_mod = require("epicenter.ui.text")
+  local _, shown_file = text_mod.fit(head, file, line, width)
+
   text = append(text, spans, "  " .. icons.kind(root.kind) .. " ", "EpicenterAccent")
   text = append(text, spans, root.qualified or root.name or "?", "EpicenterAccent")
   return {
-    text = append(text, spans, ("  %s:%d"):format(root.file, root.line), "EpicenterMuted"),
+    text = append(text, spans, shown_file .. line, "EpicenterMuted"),
     spans = spans,
   }
 end
 
---- The server's summary as chips, plus the query mode the keys drive.
+--- The server's summary as chips, plus the query mode the keys drive. The
+--- counts are what the panel is FOR, so they always show whole; the mode
+--- indicator is dropped outright rather than garbled mid-word when the two
+--- together do not fit (F12).
 --- @param summary { symbols: integer, files: integer, tests: integer, maxDepth: integer,
 ---   truncated?: boolean, changed?: integer }
 --- @param state { direction: string, tests: string, strict: boolean, follow: boolean }
-function M.chips_line(summary, state)
+--- @param width integer|nil the panel's current width; nil skips fitting
+function M.chips_line(summary, state, width)
   local icons = require("epicenter.ui.icons")
   local chips = {}
   if summary.changed then
@@ -361,11 +373,13 @@ function M.chips_line(summary, state)
   end
 
   local spans, text = {}, ""
-  text = append(text, spans, "  " .. table.concat(chips, " · "), "EpicenterCount")
-  return {
-    text = append(text, spans, "    " .. table.concat(mode, " · "), "EpicenterHint"),
-    spans = spans,
-  }
+  local chips_part = "  " .. table.concat(chips, " · ")
+  local mode_part = "    " .. table.concat(mode, " · ")
+  text = append(text, spans, chips_part, "EpicenterCount")
+  if not width or vim.fn.strdisplaywidth(chips_part .. mode_part) <= width then
+    text = append(text, spans, mode_part, "EpicenterHint")
+  end
+  return { text = text, spans = spans }
 end
 
 return M
