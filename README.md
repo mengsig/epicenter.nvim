@@ -257,7 +257,7 @@ What the server knows, and the three keys that change it: `r` rescan,
 ```
 ╭─ · navgraph ───────────────────────────────────────────────────╮
 │                                                                │
-│  epicenter   1.0.0                                             │
+│  epicenter   1.0.1                                             │
 │  root        ~/src/myproject                                   │
 │  server      running · client 1 · navgraph 1.0.0 · protocol 1  │
 │  index       32 files · 330 symbols · 258 edges                │
