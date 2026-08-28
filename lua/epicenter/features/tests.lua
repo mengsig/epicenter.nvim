@@ -264,9 +264,7 @@ local function open_tests(ctx)
     },
   })
 
-  local reason = client.unsupported_reason(ctx.bufnr, "navgraph/tests", "the tests panel")
-  if reason then
-    view.panel:notice("  " .. reason)
+  if client.gate(ctx.bufnr, "navgraph/tests", "the tests panel", view.panel) then
     return view.panel
   end
 

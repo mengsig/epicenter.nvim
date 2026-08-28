@@ -646,3 +646,231 @@ describe("impact against the fake navgraph server", function()
     expect.matches(body(panel), "the working change")
   end)
 end)
+
+--- Both panels are gated on the same v1.1-only method, and both used to say
+--- so with a toast that left the freshly opened panel blank and unexplained.
+--- The gate now writes into the panel itself, the same channel a query error
+--- uses - and it is panel state, re-checked on every re-query (a reindex, a
+--- keypress), not just the open that first showed it: a stand-in v1.0
+--- session proves the blast panel never sends the request on any of those
+--- paths. The review panel issues no request of its own (it renders from
+--- the cached session - see `impact/review.lua`), so only its notice is
+--- worth proving there.
+describe("the protocol 1.1 gate on impact/review", function()
+  local root, buf, panel
+
+  local function body(target)
+    local target_buf = target.surface and target.surface.buf or target.win.buf
+    return table.concat(vim.api.nvim_buf_get_lines(target_buf, 0, -1, false), "\n")
+  end
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(vim.fs.joinpath(root, ".navgraph"), "p")
+    local path = vim.fs.joinpath(root, "old.lua")
+    vim.fn.writefile({ "local function handle() end", "return handle" }, path)
+    vim.cmd.edit(vim.fn.fnameescape(path))
+    buf = vim.api.nvim_get_current_buf()
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.client").stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  --- A v1.0 server: `navgraph/impact` is not in `methods`, so `supports`
+  --- answers false and the panel must not even ask.
+  local function register_v10()
+    local sent = {}
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        table.insert(sent, method)
+        vim.schedule(function()
+          cb({ code = -32601, message = "method not found" }, nil)
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 1, methods = {} } } })
+    return sent
+  end
+
+  it("shows the gate as a persistent line in the blast panel, not a toast", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    expect.eq(sent, {}, "a v1.0 server is never asked navgraph/impact")
+  end)
+
+  it("shows the gate as a persistent line in the review panel, not a toast", function()
+    register_v10()
+    panel = epicenter.run("review", {}, buf)
+    wait(function()
+      return panel ~= nil and panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    -- No wire assertion here: `review.M.open` never issues a request of its
+    -- own (it renders the cached session), so `sent` would stay empty even
+    -- with the gate removed - the notice above is what this test proves.
+  end)
+
+  --- LOW-3: `answered` is documented as the panel's "a query was answered"
+  --- signal - a gate notice must not bump it, since nothing was ever asked.
+  it("a gate notice does not count as an answer", function()
+    register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+    expect.eq(panel.answered, 0, "nothing was asked, so nothing was answered")
+  end)
+
+  --- HIGH-1: the gate used to be a one-shot argument to the FIRST query
+  --- only. A reindex re-queries on a debounce - this proves it still finds
+  --- the gate in place and never puts `navgraph/impact` on the wire.
+  it("keeps the gate through a reindex - a v1.0 server is never re-asked", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+
+    -- Reindexing also wakes unrelated ambient features (outline badges) on
+    -- the same wire - `navgraph/impact` specifically is what must stay off.
+    expect.falsy(
+      vim.tbl_contains(sent, "navgraph/impact"),
+      "a reindex must not send navgraph/impact to a v1.0 server: " .. vim.inspect(sent)
+    )
+    expect.matches(body(panel), "protocol 1.1", "the notice survives the reindex")
+  end)
+
+  --- HIGH-1: every live keypress (+/-/d/t/s) re-queries too - toggle_strict
+  --- stands in for all of them, since they all funnel through `Panel:query`.
+  it("keeps the gate through a keypress - a v1.0 server is never re-asked", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    panel:toggle_strict()
+
+    expect.eq(sent, {}, "a keypress must not send navgraph/impact to a v1.0 server")
+    expect.matches(body(panel), "protocol 1.1", "the notice survives the keypress")
+  end)
+
+  --- LOW-1: `--qf` on a gated buffer used to register a hook that either
+  --- never fired (the flag silently dropped) or fired later once a capable
+  --- session appeared, exporting and closing the panel long after the
+  --- command ran. It must say why, right away, and never fire late.
+  it("--qf on a gated buffer says why instead of silently dropping the flag", function()
+    vim.fn.setqflist({}, "f")
+    register_v10()
+    local notices = {}
+    local toast = require("epicenter.ui.toast")
+    local original = toast.notify
+    toast.notify = function(msg)
+      table.insert(notices, msg)
+    end
+    panel = epicenter.run("impact", { "--qf" }, buf)
+    toast.notify = original
+
+    expect.eq(#notices, 1)
+    expect.matches(notices[1], "protocol 1.1")
+    expect.eq(vim.fn.getqflist(), {}, "nothing to export while gated")
+
+    -- A capable session then appears - the hook must not have been left
+    -- armed, or this reindex would export a stale --qf and close the panel.
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        vim.schedule(function()
+          cb(nil, { roots = {}, summary = {}, changeId = "1" })
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 2, methods = { "navgraph/impact" } } } })
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+    wait(function()
+      return body(panel):find("protocol 1.1", 1, true) == nil
+    end, 5000, "the panel to repaint from a real answer")
+
+    expect.eq(vim.fn.getqflist(), {}, "a later answer must not export a --qf already left behind")
+    expect.truthy(panel:valid(), "and must not close the panel either")
+    vim.fn.setqflist({}, "f")
+  end)
+
+  --- LOW-2: `review export` on a gated buffer used to fall through to
+  --- `open_review`, opening a panel instead of reporting anything about the
+  --- export it was actually asked for.
+  it("review export on a gated buffer reports why instead of opening a panel", function()
+    register_v10()
+    local notices = {}
+    local toast = require("epicenter.ui.toast")
+    local original = toast.notify
+    toast.notify = function(msg)
+      table.insert(notices, msg)
+    end
+    local handle = epicenter.run("review", { "export" }, buf)
+    toast.notify = original
+
+    expect.eq(#notices, 1)
+    expect.matches(notices[1], "protocol 1.1")
+    expect.eq(handle, nil, "export reports the gate rather than opening a panel")
+  end)
+
+  it("clears the gate once a capable session appears, and answers for real", function()
+    local sent = register_v10()
+    panel = epicenter.run("impact", {}, buf)
+    wait(function()
+      return panel:valid() and body(panel):find("protocol 1.1", 1, true) ~= nil
+    end, 5000, "the gate's notice")
+
+    -- A 1.1 server takes over the same root - the recovery this codebase's
+    -- own INFO-2 note called "accidental": this proves it is now deliberate.
+    -- Only `navgraph/impact` succeeds, so an unrelated ambient method (the
+    -- outline badges' reindex fetch) still 32601s exactly as it did above.
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        table.insert(sent, method)
+        vim.schedule(function()
+          if method == "navgraph/impact" then
+            cb(nil, { roots = {}, summary = {}, changeId = "1" })
+          else
+            cb({ code = -32601, message = "method not found" }, nil)
+          end
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 2, methods = { "navgraph/impact" } } } })
+
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+
+    wait(function()
+      return body(panel):find("protocol 1.1", 1, true) == nil
+    end, 5000, "the panel to repaint from a real answer")
+    expect.truthy(
+      vim.tbl_contains(sent, "navgraph/impact"),
+      "the gate clears and the real method goes out: " .. vim.inspect(sent)
+    )
+  end)
+end)

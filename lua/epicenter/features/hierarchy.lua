@@ -41,14 +41,6 @@ local TYPE_GROUPS = {
   { key = "users", label = "users", helper = nil },
 }
 
---- The notice line a panel shows when this buffer's server predates the
---- method - two leading spaces, as every other panel notice has.
---- @return string|nil
-local function unsupported(bufnr, method, what)
-  local reason = require("epicenter.client").unsupported_reason(bufnr, method, what)
-  return reason and ("  " .. reason) or nil
-end
-
 -- Nodes --------------------------------------------------------------------------
 
 --- A hierarchy item's global identity: the definition it names, not the path
@@ -266,9 +258,8 @@ end
 
 local function load_call_root(view)
   local client = require("epicenter.client")
-  local reason = unsupported(view.bufnr, "textDocument/prepareCallHierarchy", "call hierarchy")
-  if reason then
-    return view.panel:notice(reason)
+  if client.gate(view.bufnr, "textDocument/prepareCallHierarchy", "call hierarchy", view.panel) then
+    return
   end
 
   local generation, direction = view.generation, view.direction
@@ -590,9 +581,7 @@ local function open_type_hierarchy(ctx)
   })
   view.tree = view.panel.tree
 
-  local reason = unsupported(ctx.bufnr, "textDocument/prepareTypeHierarchy", "type hierarchy")
-  if reason then
-    view.panel:notice(reason)
+  if client.gate(ctx.bufnr, "textDocument/prepareTypeHierarchy", "type hierarchy", view.panel) then
     return view.panel
   end
 

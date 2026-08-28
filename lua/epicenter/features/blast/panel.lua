@@ -221,12 +221,14 @@ local function initial_state(cfg)
   }
 end
 
---- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer }
+--- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer,
+---   gate_reason?: string a `client.gate_notice` result (already indented) -
+---   held as panel state and re-checked on every query, not just this open }
 --- @return epicenter.blast.Panel
 function M.open(opts)
   local existing = M.current()
   if existing then
-    existing:set_query(opts.kind, opts.target, opts.bufnr)
+    existing:set_query(opts.kind, opts.target, opts.bufnr, opts.gate_reason)
     existing:focus()
     return existing
   end
@@ -255,6 +257,11 @@ function M.open(opts)
     --- Test seam: forwarded to every tween this panel starts.
     animate_opts = {},
     ns = vim.api.nvim_create_namespace("epicenter.blast"),
+    --- Set when the buffer's server predates the protocol `kind` needs.
+    --- Panel state, not a one-shot argument: `query()` re-checks it on every
+    --- path (open, reindex, a keypress) so a gated panel never sends the
+    --- method it names, until a capable session actually appears.
+    gate_reason = opts.gate_reason,
   }, Panel)
 
   self.surface = cfg.blast.layout == "vsplit" and split_surface() or float_surface(" blast ")
@@ -340,9 +347,12 @@ end
 
 --- Points the panel at a new target (a new cursor position, a named symbol, a
 --- diff ref) and re-queries.
-function Panel:set_query(kind, target, bufnr)
+--- @param gate_reason? string a `client.gate_notice` result (already
+---   indented) - replaces any earlier gate, cleared entirely when omitted
+function Panel:set_query(kind, target, bufnr, gate_reason)
   self.kind = kind
   self.target = target
+  self.gate_reason = gate_reason
   self.meta = { kind = kind, ref = target.ref, root = self.meta and self.meta.root or nil }
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
     self.origin_buf = bufnr
@@ -364,6 +374,20 @@ function Panel:query(opts)
   self:_cancel_pending()
   self.generation = self.generation + 1
   local generation = self.generation
+
+  if self.gate_reason then
+    -- Re-checked live rather than trusted as a stale flag: a capable session
+    -- appearing later (a 1.1 server after a reindex) clears the gate right
+    -- here, the one place every re-query path passes through.
+    local client = require("epicenter.client")
+    if client.supports(client.METHODS[self.kind], { bufnr = self.origin_buf }) then
+      self.gate_reason = nil
+    else
+      -- The generation bump above stops any in-flight request's callback
+      -- from overwriting this notice once it lands (F3-style race).
+      return self:notice(self.gate_reason)
+    end
+  end
 
   if self.kind == "diff" then
     local params = model.params(self.state, { ref = self.target.ref or "HEAD" })
@@ -479,9 +503,20 @@ function Panel:_on_result(err, result, opts)
   self:_populated()
 end
 
+--- A query was actually asked and answered, even if the answer is an error -
+--- unlike `notice`, this bumps `answered` (the "settled" signal specs wait on).
 function Panel:_show_message(message)
   self.answered = self.answered + 1
-  self.message = "  " .. message
+  self:notice("  " .. message)
+end
+
+--- Public notice channel: replaces the rows with a calm one-line message, the
+--- same one a failed query shows - used directly by a caller presenting the
+--- protocol gate before any query has run. Does NOT count as an answer:
+--- nothing was ever asked, so `answered` stays put.
+--- @param text string already carries the convention's two-space indent
+function Panel:notice(text)
+  self.message = text
   -- The header names `self.meta.root`. Leaving the PREVIOUS answer's root
   -- there renders a title naming a symbol, a chip line of zeros, and a body
   -- saying there is none - three lines contradicting each other (F3).
