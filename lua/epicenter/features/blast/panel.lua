@@ -76,6 +76,9 @@ local function float_surface(title)
       max_height = ui.max_height,
     })
   end
+  -- Exposed so the panel can size itself down to a message and back (D5);
+  -- `box()` alone stays private to the reflow closure below.
+  surface.full_box = box
   surface.window = window.open({
     box = box(),
     title = title,
@@ -143,6 +146,17 @@ function Surface:width()
     return self.window:content_width()
   end
   return vim.api.nvim_win_is_valid(self.win) and vim.api.nvim_win_get_width(self.win) or 1
+end
+
+--- Resizes a float in place (D5); a no-op for a split, which keeps whatever
+--- height the user gave it (F8) - the same exemption `ui.panel`'s own
+--- content-sizing already makes for a split layout.
+function Surface:resize(box)
+  if self.kind ~= "float" then
+    return
+  end
+  self.window:set_geometry(box)
+  self.target_height = box.height
 end
 
 function Surface:focus()
@@ -535,6 +549,33 @@ end
 
 -- Painting ----------------------------------------------------------------------
 
+--- Shrinks the float to a message-sized box while there is nothing to show
+--- but a one-line answer, and restores the full box the moment there is
+--- more (D5). A stable box is right while nodes are showing - +/-/d/t/j/k
+--- must never resize the panel out from under the cursor - but the same box
+--- for "no symbol under the cursor" sits mostly empty; help always gets the
+--- full box back, since its own line count needs it.
+function Panel:_resize_for_state()
+  if not self.surface.full_box then
+    return
+  end
+  local full = self.surface.full_box()
+  local target = (self.message and not self.help_open)
+      and window.box({
+        width = full.width,
+        height = HEADER_ROWS + 1,
+        max_width = full.width,
+        max_height = full.height,
+      })
+    or full
+  if
+    target.height ~= self.surface.window.box.height
+    or target.width ~= self.surface.window.box.width
+  then
+    self.surface:resize(target)
+  end
+end
+
 function Panel:_body_height()
   return math.max(1, self.surface:height() - HEADER_ROWS)
 end
@@ -605,6 +646,7 @@ function Panel:_paint(opts)
   if not self:valid() then
     return
   end
+  self:_resize_for_state()
   local header = self:_header()
   if self.help_open then
     self:_write(header, { lines = M.HELP, spans = {} }, #M.HELP)

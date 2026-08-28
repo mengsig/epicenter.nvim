@@ -164,6 +164,40 @@ describe("blast panel against the fake navgraph server", function()
     expect.eq(panel.nodes, {})
   end)
 
+  -- D5: the panel is a stable box while nodes are showing - resizing on
+  -- every +/-/d/t/j/k would be jittery - but the SAME box for a one-line
+  -- "no symbol" answer sat in a ~28-row float with nothing in it. Re-queries
+  -- a position in the SAME buffer, never re-editing a file while the float
+  -- is the current window - that would edit the panel's own float buffer.
+  it("shrinks to the message once there is nothing to show but one (#D5)", function()
+    panel = epicenter.run("blast", {}, buf)
+    settled(panel)
+    local full_height = panel.surface.window.box.height
+    expect.truthy(full_height > 10, "the normal box is the full ui.height: " .. full_height)
+
+    settled(panel, function()
+      -- app/server.lua:8 is blank - the same "genuinely no symbol" position
+      -- the existing spec above already uses.
+      panel:set_query(
+        "blast",
+        { uri = vim.uri_from_bufnr(buf), position = { line = 7, character = 0 } },
+        buf
+      )
+    end)
+    expect.matches(body(panel), "no symbol under the cursor")
+    expect.eq(panel.surface.window.box.height, 4, "shrunk to header + one message row")
+
+    -- Back to a real answer: the full box returns.
+    settled(panel, function()
+      panel:set_query(
+        "blast",
+        { uri = vim.uri_from_bufnr(buf), position = { line = 4, character = 0 } },
+        buf
+      )
+    end)
+    expect.eq(panel.surface.window.box.height, full_height, "restored once there is content again")
+  end)
+
   it("jumps to the selected row and yanks its location", function()
     panel = epicenter.run("blast", {}, buf)
     settled(panel)
