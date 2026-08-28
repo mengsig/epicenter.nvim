@@ -46,9 +46,36 @@ function M.render_unused(symbol)
   }
 end
 
---- Widest bar in a hot-spots list. The contract carries no max/total and
---- ranks by connectivity - NOT by `fanIn` alone - so `items[1]` is not
---- reliably the largest; scaling to it flattens every row above it to full.
+--- Hot spots in the order the panel actually presents them: by `fanIn`
+--- descending, the number each row prints and each bar is scaled to.
+---
+--- The contract ranks by connectivity, which is `fanInExact` and more besides
+--- - a real answer put a 7 last, below four rows of 2, 1, 1, 1, so the bar
+--- chart read as broken and "ranked by fan-in" was untrue (F9). Ranking here
+--- rather than dropping the claim keeps the number, the bar and the order the
+--- same story. Stable: ties keep the server's own tie-break. Pure.
+--- @param items { fanIn?: integer }[]
+--- @return table[] a new list
+function M.rank(items)
+  local decorated = {}
+  for index, item in ipairs(items or {}) do
+    table.insert(decorated, { item = item, index = index })
+  end
+  table.sort(decorated, function(a, b)
+    local left, right = a.item.fanIn or 0, b.item.fanIn or 0
+    if left ~= right then
+      return left > right
+    end
+    return a.index < b.index
+  end)
+  return vim.tbl_map(function(entry)
+    return entry.item
+  end, decorated)
+end
+
+--- Widest bar in a hot-spots list - `M.rank`'s first row, found by scanning so
+--- an unranked list still scales correctly rather than flattening every row
+--- above `items[1]` to full.
 --- @param items { fanIn: integer }[]
 --- @return integer
 function M.bar_scale(items)
@@ -82,7 +109,7 @@ local function open_hot(ctx)
         view.panel:notice("  " .. (err.message or "navgraph did not answer"))
         return
       end
-      local items = result.items or {}
+      local items = M.rank(result.items)
       view.max = M.bar_scale(items)
       view.panel:set_items(items, { stagger = true })
       view.panel:set_footer((" %d · %s "):format(#items, view.scope))

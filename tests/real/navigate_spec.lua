@@ -170,29 +170,49 @@ describe("real navgraph: navigation panels", function()
     end
   end)
 
-  it("ranks hot spots by real fan-in", function()
+  --- F9: the panel prints `fanIn` on every row and scales every bar to it, so
+  --- the rows have to be ordered by it. The real server ranks by connectivity
+  --- instead, which is a different key - so this asserts both halves: the
+  --- server's own order is NOT fan-in order (or the case proves nothing), and
+  --- the panel's is.
+  it("ranks hot spots by the fan-in it prints, whatever order the server sent", function()
+    local hot = require("epicenter.features.hot")
+    local _, answer = support.request(root, "navgraph/hot", { path = "py_fastapi", limit = 30 })
+    local sent = vim.tbl_map(function(item)
+      return item.fanIn
+    end, answer.items)
+    local server_ranked_by_fan_in = true
+    for index = 2, #sent do
+      server_ranked_by_fan_in = server_ranked_by_fan_in and sent[index - 1] >= sent[index]
+    end
+    expect.eq(
+      server_ranked_by_fan_in,
+      false,
+      "the server already ranks by fan-in here, so this case proves nothing: " .. vim.inspect(sent)
+    )
+
     local panel = epicenter.run("hot", { "py_fastapi" }, buf)
     opened = panel
     local items = wait(function()
       return panel.list:count() > 0 and panel.list:items() or nil
     end, 20000, "hot rows")
     expect.truthy(items[1].fanIn > 0, "the busiest symbol has callers")
-    -- The contract ranks by connectivity, and `fanInExact` (heuristic edges
-    -- excluded) is the key the real server actually orders on - the panel's
-    -- bar scale must therefore not assume items[1] is the widest.
-    for index = 2, #items do
+
+    local shown = vim.tbl_map(function(item)
+      return item.fanIn
+    end, items)
+    for index = 2, #shown do
       expect.truthy(
-        items[index - 1].fanInExact >= items[index].fanInExact,
-        "hot spots arrive ranked by exact fan-in"
+        shown[index - 1] >= shown[index],
+        "the longest bar must be first: " .. vim.inspect(shown)
       )
     end
-    expect.eq(
-      require("epicenter.features.hot").bar_scale(items),
-      math.max(unpack(vim.tbl_map(function(item)
-        return item.fanIn
-      end, items))),
-      "the bars scale to the real maximum, not to items[1]"
-    )
+    expect.eq(hot.bar_scale(items), shown[1], "the bars scale to the row at the top")
+    -- Same set of rows, only reordered.
+    table.sort(sent, function(a, b)
+      return a > b
+    end)
+    expect.eq(shown, sent, "ranking must not drop or invent a row")
   end)
 
   it("lists real zero-caller definitions as removal candidates", function()

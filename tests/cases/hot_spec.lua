@@ -193,6 +193,58 @@ describe("hot bar scale", function()
   end)
 end)
 
+--- F9: the panel prints `fanIn` and scales each bar to it, so the order has to
+--- be `fanIn` too. The server's own ranking is by connectivity - a real answer
+--- put a 7 at the bottom, under four rows of 2, 1, 1, 1 - which drew a bar
+--- chart that read as broken and made "ranked by fan-in" untrue.
+describe("hot spot ranking (F9)", function()
+  local function fan_ins(items)
+    return vim.tbl_map(function(item)
+      return item.fanIn
+    end, hot.rank(items))
+  end
+
+  it("puts the longest bar first", function()
+    expect.eq(
+      fan_ins({
+        { fanIn = 2, symbol = { qualified = "place" } },
+        { fanIn = 1, symbol = { qualified = "resolve" } },
+        { fanIn = 1, symbol = { qualified = "append" } },
+        { fanIn = 0, symbol = { qualified = "init" } },
+        { fanIn = 7, symbol = { qualified = "get" } },
+      }),
+      { 7, 2, 1, 1, 0 }
+    )
+  end)
+
+  it("keeps the server's own order within a tie", function()
+    local ranked = hot.rank({
+      { fanIn = 1, symbol = { qualified = "second" } },
+      { fanIn = 3, symbol = { qualified = "first" } },
+      { fanIn = 1, symbol = { qualified = "third" } },
+      { fanIn = 1, symbol = { qualified = "fourth" } },
+    })
+    expect.eq(
+      vim.tbl_map(function(item)
+        return item.symbol.qualified
+      end, ranked),
+      { "first", "second", "third", "fourth" }
+    )
+  end)
+
+  it("treats a missing fanIn as none, and an empty answer as empty", function()
+    expect.eq(fan_ins({ { symbol = {} }, { fanIn = 4, symbol = {} } }), { 4, nil })
+    expect.eq(hot.rank({}), {})
+    expect.eq(hot.rank(nil), {})
+  end)
+
+  it("does not mutate the answer it was handed", function()
+    local items = { { fanIn = 1 }, { fanIn = 5 } }
+    hot.rank(items)
+    expect.eq(items[1].fanIn, 1, "the caller's list is left alone")
+  end)
+end)
+
 describe("hot graph export message (F2)", function()
   it("reports flat success when the graph was not capped", function()
     local message, level =
