@@ -185,19 +185,10 @@ describe("documentation stays in sync", function()
   end)
 
   it("links every committed screenshot, and links nothing that is missing", function()
-    local linked = {}
-    for asset in readme:gmatch("%(assets/([%w%-%.]+)%)") do
-      linked[asset] = true
-      expect.truthy(
-        vim.uv.fs_stat(vim.fs.joinpath(repo, "assets", asset)) ~= nil,
-        "README links assets/" .. asset .. ", which is not in the repo"
-      )
-    end
-    for _, path in ipairs(vim.fn.glob(repo .. "/assets/*", false, true)) do
-      local name = vim.fs.basename(path)
-      expect.truthy(linked[name], "assets/" .. name .. " is committed but nothing links it")
-    end
-    expect.truthy(next(linked) ~= nil, "the README must show at least one screenshot")
+    -- Shared with `make docs-check` (tests/docs_check_lib.lua, F9) so this
+    -- exact check runs under the target named for it, not only `make test`.
+    local problems = require("docs_check_lib").check_assets(repo)
+    expect.eq(problems, {}, table.concat(problems, "\n"))
   end)
 
   it("qualifies every <C-k> mention with the panel it belongs to (F11)", function()
@@ -307,5 +298,33 @@ describe("the generated doc tables", function()
     end, "does not own")
     specs[1].option_docs = next(original) and original or nil
     registry.reset()
+  end)
+end)
+
+describe("make docs-check catches a missing asset (F9)", function()
+  -- The reviewer's exact repro: with an asset moved away, `make docs-check`
+  -- exited 0 while `make test` exited 1 - the target named for this check
+  -- did not run it. Drives the real entrypoint (docs_check_lib.M.run, what
+  -- tests/docs_check.lua calls) end to end, not a reimplementation of it.
+  local lib = require("docs_check_lib")
+  local asset = vim.fs.joinpath(repo, "assets", "search.svg")
+  local moved = asset .. ".moved-for-test"
+
+  it("fails when a README-linked asset is missing from the repo", function()
+    assert(vim.uv.fs_stat(asset), "fixture requires assets/search.svg to exist before the test")
+    assert(os.rename(asset, moved))
+
+    local ok, problems = lib.run(repo, false)
+
+    assert(os.rename(moved, asset))
+
+    expect.eq(ok, false)
+    local joined = table.concat(problems, "\n")
+    expect.matches(joined, "search%.svg, which is not in the repo")
+  end)
+
+  it("passes when README and assets/ agree, as they do right now", function()
+    local ok, problems = lib.run(repo, false)
+    expect.eq(ok, true, table.concat(problems, "\n"))
   end)
 end)
