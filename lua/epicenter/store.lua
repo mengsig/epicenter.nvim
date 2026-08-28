@@ -11,6 +11,11 @@ M.VERSION = 1
 --- Overridden only by `M.set_root`.
 local base = nil
 
+--- Disambiguates temp files from more than one `write` call landing in the
+--- same instance before the first has renamed (M2: the pid alone is unique
+--- per Neovim instance, but not per call).
+local temp_seq = 0
+
 local function dir_for(kind)
   return vim.fs.joinpath(base or vim.fn.stdpath("state"), "epicenter", kind)
 end
@@ -71,7 +76,11 @@ function M.write(kind, root, value)
   -- Written beside the real file and renamed over it. Writing in place would
   -- leave a truncated file after a crash mid-write, and `read` reports that
   -- as "nothing was ever stored" - every approval in the project, gone.
-  local temp = path .. ".tmp"
+  -- The name is per-writer: a name shared across instances (M2) let one
+  -- instance's write silently land under another's "successful" rename -
+  -- the loser reported ok=true while what it published was never its own data.
+  temp_seq = temp_seq + 1
+  local temp = ("%s.%d.%d.tmp"):format(path, vim.fn.getpid(), temp_seq)
   if vim.fn.writefile({ encoded }, temp) ~= 0 then
     return false, ("could not write %s"):format(temp)
   end
