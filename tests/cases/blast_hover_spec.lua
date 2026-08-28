@@ -261,6 +261,20 @@ describe("hover card against the fake navgraph server", function()
     expect.matches(text, "M%.start")
   end)
 
+  -- F10 parity (dockmaster decision): `K` gets the SAME enclosing-definition
+  -- fallback blast has - a cursor inside a body, off any identifier, resolves
+  -- to the enclosing definition rather than the raw position (which
+  -- `navgraph/callers` cannot resolve).
+  it("describes the enclosing definition from inside its body", function()
+    -- Line 11 is `  return config.route(method, path)`, indented, inside
+    -- M.handle_request; `return` is a keyword, not any definition's name.
+    vim.api.nvim_win_set_cursor(0, { 11, 0 })
+    card = opened()
+    expect.truthy(card:valid())
+    local text = table.concat(vim.api.nvim_buf_get_lines(card.win.buf, 0, -1, false), "\n")
+    expect.matches(text, "M%.handle_request")
+  end)
+
   it("focuses the card on a second hover", function()
     card = opened()
     local same = require("epicenter").run("hover", {}, buf)

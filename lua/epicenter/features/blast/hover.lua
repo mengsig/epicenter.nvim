@@ -161,7 +161,6 @@ function M.open(bufnr)
 
   local client = require("epicenter.client")
   local blast = require("epicenter.features.blast")
-  local target = blast.cursor_target(bufnr)
 
   local self = setmetatable({
     origin_buf = bufnr,
@@ -172,17 +171,28 @@ function M.open(bufnr)
   }, Card)
   current = self
 
-  -- One request: `navgraph/callers` answers with the symbol itself and its
-  -- callers in a single `Node` tree. There is no `limit` param - the card caps
-  -- the list itself.
-  self.pending = client.callers({
-    uri = target.uri,
-    position = target.position,
-    depth = 1,
-  }, function(err, result)
-    vim.schedule(function()
-      self:_show(err, result)
-    end)
+  -- Resolve the cursor first: on a name it passes straight through, anywhere
+  -- else in a body it re-asks by the enclosing definition's disambiguated
+  -- name (F10 parity) - so `K` answers from a body line the same way blast
+  -- does.
+  self.pending = blast.resolve_target(blast.cursor_target(bufnr), function(err, target)
+    if err or not target then
+      return vim.schedule(function()
+        self:_show(err, nil)
+      end)
+    end
+    -- One request: `navgraph/callers` answers with the symbol itself and its
+    -- callers in a single `Node` tree. There is no `limit` param - the card
+    -- caps the list itself.
+    self.pending = client.callers(
+      vim.tbl_extend("force", target, { depth = 1 }),
+      function(err2, result)
+        vim.schedule(function()
+          self:_show(err2, result)
+        end)
+      end,
+      { bufnr = bufnr, channel = "hover" }
+    )
   end, { bufnr = bufnr, channel = "hover" })
 
   return self

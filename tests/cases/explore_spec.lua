@@ -310,6 +310,20 @@ describe("explorer against the fake navgraph server", function()
     end, 10000, "cursor-rooted tree")
   end)
 
+  -- F10 parity (dockmaster decision): the explorer root gets the SAME
+  -- enclosing-definition fallback blast has - a cursor inside a body, off any
+  -- identifier, resolves to the enclosing definition's disambiguated name
+  -- rather than the raw position (which `navgraph/callers` cannot resolve).
+  it("roots the tree at the enclosing definition from inside its body", function()
+    -- Line 11 is `  return config.route(method, path)`, indented, inside
+    -- M.handle_request; `return` is a keyword, not any definition's name.
+    vim.api.nvim_win_set_cursor(0, { 11, 0 })
+    panel = require("epicenter").run("callers", {}, buf)
+    wait(function()
+      return panel.list:count() > 0 and panel:current().node.name == "M.handle_request"
+    end, 10000, "body-line-rooted tree")
+  end)
+
   it("fetches the next level only when the row is expanded", function()
     panel = require("epicenter").run("callers", { "log_request" }, buf)
     wait_rows(2, "first level")

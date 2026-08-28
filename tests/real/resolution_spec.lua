@@ -102,6 +102,131 @@ describe("real navgraph: resolving what the cursor points at", function()
   end)
 end)
 
+--- Dockmaster decision: `K`, `:Epicenter callers`/`callees` and the explorer
+--- root get the SAME enclosing-definition fallback blast has - "works
+--- anywhere in a body" must hold for every cursor-targeted feature, not just
+--- blast (F10).
+describe("real navgraph: hover and the callers/callees explorer resolve the same way", function()
+  local root, card, panel
+
+  before_each(function()
+    require("epicenter.config").reset()
+    epicenter.setup({ ui = { icons = "ascii" }, animate = false, lsp = { auto_start = false } })
+    require("epicenter.ui.theme").apply()
+    root = root or support.start_real()
+  end)
+
+  after_each(function()
+    if card then
+      card:close()
+      card = nil
+    end
+    if panel then
+      panel:close()
+      panel = nil
+    end
+  end)
+
+  local function open_at(relative, line, column)
+    vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(root, relative)))
+    vim.api.nvim_win_set_cursor(0, { line, column })
+    return vim.api.nvim_get_current_buf()
+  end
+
+  local function card_lines()
+    local lines = wait(function()
+      if not (card and card:valid()) then
+        return nil
+      end
+      local text = vim.api.nvim_buf_get_lines(card.win.buf, 0, -1, false)
+      return #text > 1 and text or nil
+    end, 20000, "hover card content")
+    return table.concat(lines, "\n")
+  end
+
+  it("hovers the enclosing definition from inside an indented Python body", function()
+    -- Same body line as the blast case above: a local's name, not the
+    -- definition's own.
+    card = epicenter.run("hover", {}, open_at(PY, 25, 8))
+    local joined = card_lines()
+    expect.matches(joined, "place")
+    expect.matches(joined, "place_order", "the card lists a real caller")
+  end)
+
+  it("hovers the enclosing definition from inside an indented Zig body", function()
+    card = epicenter.run("hover", {}, open_at(ZIG, 31, 12))
+    local joined = card_lines()
+    expect.matches(joined, "total")
+    expect.matches(joined, "summarize", "the card lists a real caller")
+  end)
+
+  it("still says so where hover finds genuinely nothing", function()
+    -- A blank line inside the class body, same as the blast case above.
+    card = epicenter.run("hover", {}, open_at(PY, 30, 0))
+    wait(function()
+      return card.closed == true
+    end, 20000, "the card to close with no symbol")
+  end)
+
+  local function rows(target)
+    return vim.tbl_map(function(row)
+      return row.node.name
+    end, target.list:items())
+  end
+
+  local function loaded(target)
+    return wait(function()
+      return target.list:count() > 0 and rows(target) or nil
+    end, 20000, "explorer rows")
+  end
+
+  it("opens callers of the enclosing definition from inside an indented Python body", function()
+    panel = epicenter.run("callers", {}, open_at(PY, 25, 8))
+    local listed = loaded(panel)
+    expect.eq(listed[1], "OrderService.place", vim.inspect(listed))
+    expect.truthy(#listed > 1, "place has real callers: " .. vim.inspect(listed))
+  end)
+
+  it("opens callees of the enclosing definition from inside an indented Python body", function()
+    panel = epicenter.run("callees", {}, open_at(PY, 25, 8))
+    local listed = loaded(panel)
+    expect.eq(listed[1], "OrderService.place", vim.inspect(listed))
+    expect.truthy(
+      vim.tbl_contains(listed, "OrderService._append_line"),
+      "a real callee is missing: " .. vim.inspect(listed)
+    )
+  end)
+
+  it("opens callers of the enclosing definition from inside an indented Zig body", function()
+    panel = epicenter.run("callers", {}, open_at(ZIG, 31, 12))
+    local listed = loaded(panel)
+    expect.eq(listed[1], "Report.total", vim.inspect(listed))
+    expect.truthy(
+      vim.tbl_contains(listed, "summarize"),
+      "the real caller is missing: " .. vim.inspect(listed)
+    )
+  end)
+
+  it("opens callees of the enclosing definition from inside an indented Zig body", function()
+    -- summarize's own body, `const sum = report.total();` - column 4 is the
+    -- `const` keyword, not any definition's own name.
+    panel = epicenter.run("callees", {}, open_at(ZIG, 48, 4))
+    local listed = loaded(panel)
+    expect.eq(listed[1], "summarize", vim.inspect(listed))
+    expect.truthy(
+      vim.tbl_contains(listed, "Report.total"),
+      "a real callee is missing: " .. vim.inspect(listed)
+    )
+  end)
+
+  it("still says so where the explorer root finds genuinely nothing", function()
+    panel = epicenter.run("callers", {}, open_at(PY, 30, 0))
+    wait(function()
+      return panel.list.empty_text == "  no symbol to explore here"
+    end, 20000, "the explorer to report no symbol")
+  end)
+end)
+
 --- The divergence the two-lane design exists to catch: the fake used to
 --- resolve a Target by LINE alone, so a position the real server answers with
 --- `-32001` resolved perfectly offline and every blast spec passed while the

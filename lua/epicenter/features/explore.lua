@@ -218,6 +218,10 @@ local function request_params(view, ref)
   }
   if type(ref) == "string" then
     params.symbol = ref
+  elseif ref.symbol then
+    -- The F10 enclosing-fallback shape `resolve_target` returns from a body
+    -- position: a disambiguated `qualified@file` name, not a raw position.
+    params.symbol = ref.symbol
   else
     params.uri = ref.uri
     params.position = ref.position
@@ -352,15 +356,46 @@ local function load_root(view, ref)
   end)
 end
 
+--- Resolves the root the panel explores from, once, and reuses it for every
+--- reload (`r`/`s`/`t`) rather than wherever the cursor has since moved: an
+--- explicit name passes straight through, a bare cursor position resolves
+--- exactly the way blast and hover do (F10 parity) - on a name it goes
+--- through as-is, anywhere else in a body it re-asks by the enclosing
+--- definition's disambiguated name.
+--- @param view table
+--- @param explicit string|nil `ctx.args[1]`
+--- @param cb fun(ref: table|string)
+local function ensure_ref(view, explicit, cb)
+  if view.ref then
+    return cb(view.ref)
+  end
+  if explicit then
+    view.ref = explicit
+    return cb(view.ref)
+  end
+  local blast = require("epicenter.features.blast")
+  blast.resolve_target(blast.cursor_target(view.bufnr), function(err, target)
+    if not view.panel:valid() then
+      return
+    end
+    if err then
+      return view.panel:notice("  " .. (err.message or "navgraph did not answer"))
+    end
+    if not target then
+      return view.panel:notice("  no symbol to explore here")
+    end
+    view.ref = target
+    cb(view.ref)
+  end, { bufnr = view.bufnr, channel = "explore:" .. view.direction .. ":resolve" })
+end
+
 --- @param direction "callers"|"callees"
 local function open(direction, ctx)
   local cfg = require("epicenter.config").get()
   local events = require("epicenter.events")
   local panel_mod = require("epicenter.ui.panel")
 
-  -- Shared with the blast panel and the hover card, so all three aim a cursor
-  -- target at the same column (F10).
-  local ref = ctx.args[1] or require("epicenter.features.blast").cursor_target(ctx.bufnr)
+  local explicit = ctx.args[1]
 
   local view = {
     direction = direction,
@@ -369,13 +404,16 @@ local function open(direction, ctx)
     strict = false,
     tests = cfg.lsp.init_options.tests,
     root = nil,
+    ref = nil,
   }
 
   local function reload(self)
     view.root = nil
     self:set_roots({})
     self:set_footer(M.footer(view, 0))
-    load_root(view, ref)
+    ensure_ref(view, explicit, function(ref)
+      load_root(view, ref)
+    end)
   end
 
   view.panel = panel_mod.open({
@@ -463,7 +501,9 @@ local function open(direction, ctx)
     end
   end)
 
-  load_root(view, ref)
+  ensure_ref(view, explicit, function(ref)
+    load_root(view, ref)
+  end)
   return view.panel
 end
 

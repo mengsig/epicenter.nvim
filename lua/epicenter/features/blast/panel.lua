@@ -360,13 +360,11 @@ function Panel:_superseded(generation)
 end
 
 --- Turns a cursor position into a symbol before querying, so the header can
---- name the root and a position with no definition says so.
+--- name the root and a position with no definition says so. Shared with the
+--- hover card and the callers/callees explorer (F10 parity).
 function Panel:_resolve_cursor(opts, generation)
-  local client = require("epicenter.client")
-  self.pending = client.symbol_at({
-    uri = self.target.uri,
-    position = self.target.position,
-  }, function(err, result)
+  local blast = require("epicenter.features.blast")
+  self.pending = blast.resolve_target(self.target, function(err, target)
     self.pending = nil
     vim.schedule(function()
       if self:_superseded(generation) then
@@ -375,22 +373,10 @@ function Panel:_resolve_cursor(opts, generation)
       if err then
         return self:_show_message(err.message or "navgraph did not answer")
       end
-      -- On a name, hand the position straight back so the server applies its
-      -- own resolution rules. Anywhere else in a body the cursor is not on a
-      -- definition's name, and NO column of the enclosing definition's line is
-      -- reliably one either - re-ask by that definition's disambiguated name
-      -- instead, so `<leader>ee` works anywhere in a body (F10).
-      local resolved = result and result.symbol
-      if resolved and resolved ~= vim.NIL then
-        local target = { uri = self.target.uri, position = self.target.position }
-        return self:_request("blast", model.params(self.state, target), opts, generation)
-      end
-      local enclosing = result and result.enclosing
-      local name = enclosing ~= vim.NIL and client.symbol_ref(enclosing) or nil
-      if not name then
+      if not target then
         return self:_show_message("no symbol under the cursor")
       end
-      self:_request("blast", model.params(self.state, { symbol = name }), opts, generation)
+      self:_request("blast", model.params(self.state, target), opts, generation)
     end)
   end, { bufnr = self.origin_buf, channel = CHANNEL })
 end

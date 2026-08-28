@@ -74,6 +74,32 @@ function M.cursor_target(bufnr)
   }
 end
 
+--- Turns a raw cursor target into one the server can resolve: on a name it
+--- passes straight through, anywhere else in a body it re-asks by the
+--- enclosing definition's disambiguated name (F10) - the fallback every
+--- cursor-targeted feature shares (blast, hover, callers/callees), so
+--- "works anywhere in a body" holds everywhere the cursor drives a query.
+--- @param target { uri: string, position: table } from `cursor_target`
+--- @param cb fun(err: table|nil, resolved: table|nil) `resolved` is nil, with
+---   no error, when the cursor genuinely names nothing
+--- @param opts? table request opts (bufnr, channel)
+--- @return { cancel: fun() }
+function M.resolve_target(target, cb, opts)
+  local client = require("epicenter.client")
+  return client.symbol_at({ uri = target.uri, position = target.position }, function(err, result)
+    if err then
+      return cb(err, nil)
+    end
+    local resolved = result and result.symbol
+    if resolved and resolved ~= vim.NIL then
+      return cb(nil, { uri = target.uri, position = target.position })
+    end
+    local enclosing = result and result.enclosing
+    local name = enclosing ~= vim.NIL and client.symbol_ref(enclosing) or nil
+    cb(nil, name and { symbol = name } or nil)
+  end, opts)
+end
+
 --- `model.target_column` against a buffer line, for the callers that hold a
 --- (bufnr, line, column) rather than the text.
 --- @param line integer 0-based
