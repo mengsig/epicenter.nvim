@@ -309,7 +309,7 @@ end
 
 --- Header line naming what the panel is showing. The file elides before the
 --- line number ever does, so a long path never pushes it off the edge (F12).
---- @param meta { kind: "blast"|"diff", root?: table, ref?: string }
+--- @param meta { kind: "blast"|"diff"|"impact", root?: table, ref?: string, hunks?: integer }
 --- @param width integer|nil the panel's current width; nil skips fitting
 function M.title_line(meta, width)
   local icons = require("epicenter.ui.icons")
@@ -317,6 +317,19 @@ function M.title_line(meta, width)
   if meta.kind == "diff" then
     text = append(text, spans, "  changes vs ", "EpicenterMuted")
     return { text = append(text, spans, meta.ref or "HEAD", "EpicenterAccent"), spans = spans }
+  end
+  if meta.kind == "impact" then
+    text = append(text, spans, "  the working change", "EpicenterAccent")
+    local hunks = meta.hunks
+    if hunks then
+      text = append(
+        text,
+        spans,
+        (" · %d hunk%s"):format(hunks, hunks == 1 and "" or "s"),
+        "EpicenterMuted"
+      )
+    end
+    return { text = text, spans = spans }
   end
 
   local root = meta.root

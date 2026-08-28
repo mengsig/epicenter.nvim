@@ -99,7 +99,15 @@ function M.tween(opts)
   local budget = opts.frame_budget_ms or cfg.animation.frame_budget_ms
   local interval = math.max(1, math.floor(1000 / (opts.fps or cfg.animation.fps)))
   local start = clock()
-  local skip_next = false
+  local skips_left = 0
+
+  -- The floor a slow terminal must never fall below BY OUR OWN skipping,
+  -- not by the redraw cost itself: skipping more ticks than this after a
+  -- slow frame would only add delay a real render already forces, with no
+  -- upside - so the skip count is capped at whatever still lets a painted
+  -- frame occur at least every `min_frame_ms` (30fps) worth of ticks.
+  local min_frame_ms = 1000 / 30
+  local max_skips = math.max(0, math.floor(min_frame_ms / interval) - 1)
 
   local function finish(completed)
     if finished then
@@ -117,9 +125,11 @@ function M.tween(opts)
       return
     end
     local t = math.min(1, (clock() - start) / duration)
-    -- An over-budget frame drops the next one rather than queueing behind it.
-    if skip_next and t < 1 then
-      skip_next = false
+    -- An over-budget frame drops ticks rather than queueing behind them - the
+    -- count scales with how far over budget it ran, capped by `max_skips` so
+    -- skipping itself never pushes the achievable rate below 30fps.
+    if skips_left > 0 and t < 1 then
+      skips_left = skips_left - 1
       return
     end
     local frame_start = clock()
@@ -132,7 +142,8 @@ function M.tween(opts)
       end)
       return
     end
-    skip_next = (clock() - frame_start) > budget
+    local cost = clock() - frame_start
+    skips_left = cost > budget and math.min(max_skips, math.floor(cost / interval)) or 0
     if t >= 1 then
       finish(true)
     end

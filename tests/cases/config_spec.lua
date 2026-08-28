@@ -82,6 +82,19 @@ describe("config", function()
     end, "tests must be one of")
   end)
 
+  it("enforces the shape of theme.accent, so setup cannot die inside nvim_get_hl", function()
+    for _, accent in ipairs({ "auto", "mono", "#7aa2f7", "Function", "@lsp.type.class" }) do
+      expect.eq(config.setup({ theme = { accent = accent } }).theme.accent, accent)
+    end
+    -- "#f00" is the obvious shorthand, and it used to take setup() and every
+    -- later :colorscheme down with an "Highlight id out of bounds".
+    for _, accent in ipairs({ "#f00", "#7aa2f7 ", "my accent", "" }) do
+      expect.errors(function()
+        config.setup({ theme = { accent = accent } })
+      end, "theme%.accent must be")
+    end
+  end)
+
   it("enforces numeric ranges", function()
     expect.errors(function()
       config.setup({ animation = { open_ms = 0 } })

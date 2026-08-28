@@ -53,6 +53,9 @@ local HELP = {
   "  <C-v>       open in a vertical split",
   "  <C-x>       open in a split",
   "  <C-n>/<C-p> next / previous result",
+  "  <Tab>       add / remove this row from the selection",
+  "  <C-q>       send the rows to the quickfix list",
+  "  <C-l>       send the rows to the location list",
   "  <C-y>       yank file:line",
   "  ?           toggle this help (normal mode)",
   "  <Esc>       close",
@@ -149,7 +152,10 @@ function Palette:_set_footer()
   local shown = self.list:count()
   local left = shown == total and ("%d"):format(total) or ("%d/%d"):format(shown, total)
   local mode = self.spec.mode_label and self.spec.mode_label(self.state) or nil
-  self.results_win:set_footer((" %s%s "):format(left, mode and (" · " .. mode) or ""))
+  local armed = self.armed_export
+      and (" · <CR> → " .. (self.armed_export == "loclist" and "loclist" or "quickfix"))
+    or ""
+  self.results_win:set_footer((" %s%s%s "):format(left, mode and (" · " .. mode) or "", armed))
 end
 
 function Palette:_update_preview()
@@ -185,6 +191,40 @@ function Palette:_on_results(err, items, total)
   self:_update_preview()
 end
 
+--- Arms the `--qf`/`--loc` command flag. A palette is live: at the moment the
+--- flag is given there is no result set yet, and the empty-query answer `open`
+--- ends with is not one the user asked for. So the flag redirects `<CR>` -
+--- accept sends the rows on screen to `list` instead of jumping to one.
+--- @param list "quickfix"|"loclist"
+function Palette:arm_export(list)
+  self.armed_export = list
+  self:_set_footer()
+end
+
+--- The rows an export sends: the `<Tab>` multi-selection, or every row the
+--- current query matched.
+--- @return epicenter.qf.Row[]
+function Palette:export_rows()
+  local out = {}
+  for index, item in ipairs(self.list:marked_or_all()) do
+    local target = self.spec.preview_of and self.spec.preview_of(item) or nil
+    if target then
+      table.insert(out, { target = target, text = self.spec.render_item(item, index).text })
+    end
+  end
+  return out
+end
+
+--- @param list "quickfix"|"loclist"
+function Palette:export(list)
+  local rows = self:export_rows()
+  local title = vim.trim(self.spec.title or "epicenter")
+  self:close({ motion = false })
+  vim.schedule(function()
+    require("epicenter.ui.qf").send_and_notify({ rows = rows, list = list, title = title })
+  end)
+end
+
 function Palette:query(text)
   if not self.open then
     return
@@ -217,13 +257,29 @@ function Palette:move(delta)
   self:_update_preview()
 end
 
+--- Renames the palette without reopening it - a mode switch that changes
+--- what the rows ARE has to change what the box calls itself.
+function Palette:set_title(title)
+  self.results_win:set_title(title)
+end
+
+--- `help_lines` may be a function of the state, for a palette whose keys
+--- depend on the mode it is in.
+function Palette:_help_lines()
+  local lines = self.spec.help_lines
+  if type(lines) == "function" then
+    return lines(self.state)
+  end
+  return lines or HELP
+end
+
 function Palette:toggle_help()
   if not self.preview then
     return
   end
   self.help_open = not self.help_open
   if self.help_open then
-    self.preview_win:set_lines(self.spec.help_lines or HELP)
+    self.preview_win:set_lines(self:_help_lines())
   else
     self.preview.shown = nil
     self:_update_preview()
@@ -231,6 +287,11 @@ function Palette:toggle_help()
 end
 
 function Palette:accept(action)
+  -- M4: the flag arms <CR> only (README/vimdoc), not <C-t>/<C-v>/<C-x> - a
+  -- nil action (the default) is <CR>'s own "edit" too.
+  if self.armed_export and (action == nil or action == "edit") then
+    return self:export(self.armed_export)
+  end
   local item = self.list:current()
   if not item then
     return
@@ -302,6 +363,16 @@ function Palette:_install_keys()
   map("n", "k", function()
     self:move(-1)
   end)
+  map({ "i", "n" }, "<Tab>", function()
+    self.list:toggle_mark()
+    self:move(1)
+  end)
+  map({ "i", "n" }, "<C-q>", function()
+    self:export("quickfix")
+  end)
+  map({ "i", "n" }, "<C-l>", function()
+    self:export("loclist")
+  end)
   map({ "i", "n" }, "<C-y>", function()
     local item = self.list:current()
     local target = item and self.spec.preview_of and self.spec.preview_of(item)
@@ -338,11 +409,15 @@ end
 --- @param spec { title: string, prompt_prefix?: string, debounce_ms?: integer,
 ---   state?: table, source: fun(query: string, state: table, cb: fun(err, items, total)),
 ---   render_item: fun(item, index): { text: string, spans?: table[] },
+---   mark_key?: fun(item): any what a `<Tab>` mark survives a re-populate
+---     under (M3); every `source` answer is a fresh item list, so the default
+---     mark key (the item table's own identity) drops every mark on it,
 ---   preview_of?: fun(item): { path: string, line: integer, end_line?: integer }|nil,
 ---   on_accept: fun(item, action: "edit"|"tab"|"vsplit"|"split"),
 ---   keys?: table<string, fun(palette: epicenter.Palette)>,
 ---   mode_label?: fun(state: table): string, empty_text?: string, on_close?: fun(),
----   help_lines?: string[] shown by `?`; defaults to the shared HELP block,
+---   help_lines?: string[]|fun(state: table): string[] shown by `?`;
+---     defaults to the shared HELP block,
 ---   columns?: integer, lines?: integer - test-only editor-grid override,
 ---   see `Palette:_box`; production callers must leave these nil }
 --- @return epicenter.Palette
@@ -381,7 +456,7 @@ function M.open(spec)
   end
   self.prompt_win = window.open({
     box = boxes.prompt,
-    footer = " ↵ jump · ^t/^v/^x open · ^n/^p move · ? help ",
+    footer = " ↵ jump · ^q quickfix · ^n/^p move · ? help ",
     enter = true,
     zindex = 110,
     on_close = function()
@@ -407,6 +482,7 @@ function M.open(spec)
     width = boxes.results.width,
     render_item = spec.render_item,
     empty_text = spec.empty_text or "  type to search",
+    mark_key = spec.mark_key,
   })
 
   self.prompt = prompt_mod.new({

@@ -1,5 +1,92 @@
 # Changelog
 
+## 1.1.0 — 2026-08-28
+
+Everything the protocol 1.1 addendum adds, and the flow around it: getting a
+result set out of the editor, seeing what a change already broke, and the two
+questions an agent asks about a symbol.
+
+### Flow
+
+- **Quickfix and location list** — `<C-q>` / `<C-l>` inside any panel or
+  palette send the current rows (or the `<Tab>` multi-selection) to the
+  quickfix or location list; every subcommand that produces rows also takes
+  `--qf` / `--loc` directly, e.g. `:Epicenter blast --qf`.
+- **Peek** (`:Epicenter peek`, `<leader>eP`, or `o` inside any panel) — the
+  definition under the cursor in a float that does not take focus. `<CR>`
+  goes there, `q` dismisses it, and so does moving the cursor.
+- **Resizing and moving a panel** — `+`/`-`/`<`/`>`/`<C-arrow>` on every float
+  panel built on the shared kit, remembered per panel type under
+  `stdpath("state")` so it reopens at the size you left it, across a restart.
+- **Palette upgrades** — `<C-space>` cycles the search palette through
+  symbols → grep → references without losing what you typed; symbols you
+  have jumped to before rank first, per project; `<C-y>` yanks `file:line`.
+- **`:Epicenter tour`** — a minute with the whole plugin, a few notes each
+  with the panel they are talking about open beside them. Mentioned once, on
+  a first run, and never runs without asking.
+
+### The new panels
+
+- **Breadcrumbs and statusline** — `require("epicenter").breadcrumbs()` for
+  a winbar, `require("epicenter").statusline()` for a `⌁ 12 ← · 4 →`
+  fan-in/out fragment. Both read a cache and debounce one request per cursor
+  line change; zero cost with the server down.
+- **Call hierarchy** (`:Epicenter hierarchy`, `<leader>eH`) and **type
+  hierarchy** (`:Epicenter types`, `<leader>eT`) — incoming/outgoing calls in
+  one lazy tree, `d` flips direction; supertypes, subtypes, implementors and
+  now **users** — who uses this type as a param, return, field, local,
+  extends, implements, annotation or generic — the type panel's fourth
+  group, from the custom `navgraph/types` rather than a standard LSP method.
+  Both ride methods any editor gets from protocol 1.1, not just this one.
+- **LLM context** (`:Epicenter context [symbol] [--budget N]`, `<leader>ey`)
+  — one symbol packaged for a model: signature, doc, body, callers, callees,
+  types and tests, as markdown on `+`, trimmed to a token budget by dropping
+  bodies first, then tests, then types, then callees. `:Epicenter where`
+  answers the reverse question — what a line (or a pasted stack-trace frame)
+  is inside of.
+- **Tests** (`:Epicenter tests`, `<leader>et`) — every test from which the
+  symbol under the cursor is reachable, grouped by file, `dN` for how many
+  calls away; `r` runs the test under the cursor through a per-language
+  runner template, output in a scratch split, never blocking.
+- **Impact** (always on) and **impact review** (`:Epicenter review`,
+  `<leader>ea`) — the working change's blast radius, live: a calm inline
+  marker on every impacted line, a statusline fragment, and a review panel
+  that ticks each impacted symbol off (`a`/`A`/`u`) with approvals keyed to
+  the exact code that earned them AND to the change they were given for, so
+  editing either clears the tick - "reviewed" never survives into a change
+  nobody has looked at. `:Epicenter review export` copies a markdown
+  checklist to `+`.
+- **Telescope extension** — optional: `require("telescope").load_extension
+  ("epicenter")` gets `.symbols()`, `.grep()` and `.blast()`, the same server
+  calls the built-in palette and blast panel use, Telescope's own UI.
+  Nothing here loads unless Telescope does the loading.
+
+### Polish
+
+- **Theme** — `theme.accent`: `"auto"` (the existing derivation), `"mono"`
+  (one flat palette, no extra hue), or a literal `#rrggbb` / highlight group.
+- **Motion under load** — a frame that blows its budget skips ahead by
+  however many ticks the overrun costs, capped so the skip itself never
+  drops the achievable rate below 30fps; a single fixed skip (the 1.0
+  behaviour) only happened to hold that floor at the default 60fps.
+- **`:Epicenter` completion** covers every new flag and subcommand argument.
+- **Fix**: a project root reached through a symlink (macOS's own `/var` ->
+  `/private/var` tempdir, or a symlinked checkout) could key its server
+  record under two different strings and miss its own live session,
+  surfacing as a false "navgraph is not running". Root and root-relative
+  paths now resolve symlinks consistently everywhere they are computed.
+
+### Neovim support and testing
+
+Neovim 0.10, 0.11 and 0.12. Both lanes gained the addendum's shapes:
+`tests/fake/v11.lua` speaks `navgraph/tests`, `navgraph/types`,
+`navgraph/impact`, `navgraph/context`, `navgraph/where` and the standard
+call-/type-hierarchy methods, contract-checked the same way the v1.0 methods
+are; every v1.1 feature is gated behind `client.supports()`, so a v1.0
+server is never sent a method it would answer `-32601` to — it gets a "needs
+protocol 1.1" notice instead, and `make test-real` against a v1.0 server
+skips those cases with that same reason rather than failing.
+
 ## 1.0.1 — 2026-08-28
 
 Fixes `:Epicenter install` always falling back to a ~100s source build: the

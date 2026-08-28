@@ -164,6 +164,7 @@ local function symbol_palette(bufnr, title, opts)
     prompt_prefix = " " .. icons.ui("search") .. " ",
     state = { bufnr = bufnr },
     render_item = search.render_symbol,
+    mark_key = search.symbol_key,
     preview_of = function(item)
       return {
         path = vim.uri_to_fname(item.symbol.uri),
@@ -219,7 +220,9 @@ end
 --- `from`/`to` are re-resolved through `find` (bottom of this file) once
 --- every ambiguous side has a chosen candidate, so the re-query goes through
 --- the exact same path a fresh `:Epicenter path` call would.
-local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+--- @param rerun fun(handle) the walk that finally runs, handed back so an
+---   export flag registered on the FIRST handle still lands on its rows.
+local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to, rerun)
   if #ambiguous_from > 0 then
     return pick_candidate(
       bufnr,
@@ -232,11 +235,11 @@ local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
             (" %s is ambiguous - pick one "):format(label(to)),
             ambiguous_to,
             function(picked_to)
-              find(bufnr, endpoint(picked_from), endpoint(picked_to))
+              rerun(find(bufnr, endpoint(picked_from), endpoint(picked_to)))
             end
           )
         else
-          find(bufnr, endpoint(picked_from), to)
+          rerun(find(bufnr, endpoint(picked_from), to))
         end
       end
     )
@@ -246,7 +249,7 @@ local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
     (" %s is ambiguous - pick one "):format(label(to)),
     ambiguous_to,
     function(picked_to)
-      find(bufnr, from, endpoint(picked_to))
+      rerun(find(bufnr, from, endpoint(picked_to)))
     end
   )
 end
@@ -254,7 +257,8 @@ end
 --- @param result { path: table[], ambiguousFrom: table[], ambiguousTo: table[] }
 ---   `path` is a flat Symbol[], empty when no chain exists; the ambiguous
 ---   arrays carry same-name candidates the walk was never run against (F1).
-local function show(result, from, to, previous_win, bufnr)
+--- @param rerun fun(handle) see `disambiguate`
+local function show(result, from, to, previous_win, bufnr, rerun)
   local ambiguous_from = result.ambiguousFrom or {}
   local ambiguous_to = result.ambiguousTo or {}
   -- An endpoint already sent as `name@file` that comes back ambiguous is one
@@ -268,7 +272,7 @@ local function show(result, from, to, previous_win, bufnr)
     return message_window(stuck_lines(label(to), ambiguous_to))
   end
   if #ambiguous_from > 0 or #ambiguous_to > 0 then
-    return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+    return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to, rerun)
   end
 
   local steps = result.path or {}
@@ -325,16 +329,78 @@ local function show(result, from, to, previous_win, bufnr)
   return win
 end
 
+--- The chain as quickfix rows. Pure.
+--- @param steps table[] a flat Symbol[]
+--- @return epicenter.qf.Row[]
+function M.export_rows(steps)
+  local out = {}
+  for _, symbol in ipairs(steps or {}) do
+    table.insert(out, {
+      target = {
+        path = vim.uri_to_fname(symbol.uri),
+        line = symbol.line,
+        end_line = symbol.endLine,
+      },
+      text = ("%s  %s:%d"):format(symbol.qualified, symbol.file, symbol.line),
+    })
+  end
+  return out
+end
+
 function find(bufnr, from, to)
   local client = require("epicenter.client")
   local previous_win = vim.api.nvim_get_current_win()
-  local handle = { win = nil }
+  local handle = { win = nil, steps = {}, populate_hooks = {} }
+
+  --- The `--qf`/`--loc` seam every panel offers. A path is settled only once
+  --- the walk actually ran: an ambiguous endpoint reopens the picker instead,
+  --- and firing here would report "nothing to send" over an open question.
+  function handle:on_populate(fn)
+    table.insert(self.populate_hooks, fn)
+  end
+
+  --- The walk re-ran after a picker narrowed an endpoint. This handle is the
+  --- one the `--qf`/`--loc` flag was registered on, so it takes over the new
+  --- one's window and rows rather than letting them fall on the floor.
+  function handle:adopt(other)
+    other:on_populate(function()
+      self.win, self.steps = other.win, other.steps
+      for _, fn in ipairs(self.populate_hooks) do
+        fn(self)
+      end
+    end)
+  end
+
+  function handle:export(list)
+    if self.win then
+      self.win:close()
+    end
+    local rows = M.export_rows(self.steps)
+    vim.schedule(function()
+      require("epicenter.ui.qf").send_and_notify({
+        rows = rows,
+        list = list,
+        title = ("epicenter path: %s -> %s"):format(label(from), label(to)),
+      })
+    end)
+  end
+
   client.path({ from = from, to = to }, function(err, result)
     if err then
       require("epicenter").notify(err.message or "navgraph did not answer", "error")
       return
     end
-    handle.win = show(result or {}, from, to, previous_win, bufnr)
+    result = result or {}
+    handle.win = show(result, from, to, previous_win, bufnr, function(other)
+      handle:adopt(other)
+    end)
+    handle.steps = result.path or {}
+    local ambiguous = #(result.ambiguousFrom or {}) > 0 or #(result.ambiguousTo or {}) > 0
+    if not ambiguous then
+      for _, fn in ipairs(handle.populate_hooks) do
+        fn(handle)
+      end
+    end
   end, { bufnr = bufnr, channel = "path" })
   return handle
 end
@@ -363,21 +429,59 @@ local function pick(bufnr, title, on_pick)
   })
 end
 
+--- Stands in for the path handle while its endpoints are still being picked,
+--- so an export flag lands on the PATH's rows rather than the picker's.
+local function relay(picker)
+  local stand_in = { picker = picker, target = nil, populate_hooks = {} }
+
+  function stand_in.on_populate(_, fn)
+    table.insert(stand_in.populate_hooks, fn)
+  end
+
+  function stand_in.export(_, list)
+    if stand_in.target then
+      stand_in.target:export(list)
+    end
+  end
+
+  function stand_in.close()
+    if picker and picker.close then
+      picker:close()
+    end
+  end
+
+  --- Adopts the real handle once the walk finally runs.
+  function stand_in.adopt(_, handle)
+    stand_in.target = handle
+    for _, fn in ipairs(stand_in.populate_hooks) do
+      handle:on_populate(function()
+        fn(stand_in)
+      end)
+    end
+  end
+
+  return stand_in
+end
+
 local function run(ctx)
   local from, to = ctx.args[1], ctx.args[2]
   if from and to then
     return find(ctx.bufnr, from, to)
   end
+
+  local deferred
   if from then
-    return pick(ctx.bufnr, " path to ", function(picked)
-      find(ctx.bufnr, from, picked)
-    end)
+    deferred = relay(pick(ctx.bufnr, " path to ", function(picked)
+      deferred:adopt(find(ctx.bufnr, from, picked))
+    end))
+    return deferred
   end
-  return pick(ctx.bufnr, " path from ", function(start)
+  deferred = relay(pick(ctx.bufnr, " path from ", function(start)
     pick(ctx.bufnr, " path to ", function(finish)
-      find(ctx.bufnr, start, finish)
+      deferred:adopt(find(ctx.bufnr, start, finish))
     end)
-  end)
+  end))
+  return deferred
 end
 
 M.name = "path"
@@ -392,7 +496,7 @@ M.option_docs = {
 }
 
 M.commands = {
-  { name = "path", desc = "Call chain between two symbols", run = run },
+  { name = "path", desc = "Call chain between two symbols", run = run, rows = true },
 }
 
 M.keymaps = {

@@ -6,6 +6,14 @@ local function target_of(symbol)
   return { path = vim.uri_to_fname(symbol.uri), line = symbol.line, end_line = symbol.endLine }
 end
 
+--- What "the same row" means for a `<Tab>` mark (M3): both panels below are
+--- flat, freshly-populated item lists on every load - without this, the
+--- default mark key (the item table's own identity) drops every mark the
+--- moment a fresh answer replaces the list.
+local function symbol_key(symbol)
+  return ("%s#%s@%d"):format(symbol.uri, symbol.qualified, symbol.line)
+end
+
 --- Row for a hot spot: the symbol, its location, and a bar scaled to the
 --- busiest symbol in the list. The path elides before the bar/count ever
 --- do, so a narrow panel never silently loses the number it exists to show
@@ -134,6 +142,9 @@ local function open_hot(ctx)
     text_of = function(item)
       return item.symbol.qualified
     end,
+    mark_key = function(item)
+      return symbol_key(item.symbol)
+    end,
     target_of = function(item)
       return target_of(item.symbol)
     end,
@@ -188,6 +199,9 @@ local function open_unused(ctx)
     end,
     text_of = function(item)
       return item.symbol.qualified
+    end,
+    mark_key = function(item)
+      return symbol_key(item.symbol)
     end,
     target_of = function(item)
       return target_of(item.symbol)
@@ -255,9 +269,19 @@ M.options = {
 }
 
 M.commands = {
-  { name = "hot", desc = "Most depended-on symbols, ranked by fan-in", run = open_hot },
-  { name = "unused", desc = "Symbols nothing in the index reaches", run = open_unused },
-  { name = "graph", desc = "Write the call graph to a file and open it", run = export_graph },
+  {
+    name = "hot",
+    desc = "Most depended-on symbols, by fan-in",
+    run = open_hot,
+    rows = true,
+  },
+  {
+    name = "unused",
+    desc = "Symbols nothing in the index reaches",
+    run = open_unused,
+    rows = true,
+  },
+  { name = "graph", desc = "Write the call graph and open it", run = export_graph },
 }
 
 M.keymaps = {

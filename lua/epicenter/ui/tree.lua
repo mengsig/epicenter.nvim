@@ -76,6 +76,11 @@ function M.new(opts)
     render_item = opts.render_row,
     text_of = opts.text_of,
     empty_text = opts.empty_text,
+    -- Expanding a node re-flattens into fresh row tables; a mark belongs to
+    -- the ROW, which `key_of` already names.
+    mark_key = function(row)
+      return row.key
+    end,
   })
   return self
 end

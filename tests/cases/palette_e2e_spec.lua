@@ -1,5 +1,6 @@
 local support = require("support")
 local epicenter = require("epicenter")
+local search = require("epicenter.features.search")
 
 --- Opens a fixture file so the palette resolves the fixture root.
 local function open_fixture(root, relative)
@@ -98,7 +99,7 @@ describe("search palette against the fake navgraph server", function()
     local p = epicenter.run("search", {}, buf)
     p:query("zzzznotasymbol")
     wait(function()
-      return p.list:count() == 0 and results_lines(p)[1]:match("no symbols match") ~= nil
+      return p.list:count() == 0 and results_lines(p)[1]:match("no matches") ~= nil
     end, 10000, "empty state")
     p:close()
   end)
@@ -139,7 +140,7 @@ describe("search palette against the fake navgraph server", function()
 
   it("jumps to the use site in refs mode, not the enclosing definition (F3)", function()
     local p = epicenter.run("search", {}, buf)
-    p.state.refs = true
+    p.state.mode = "refs"
     p:query("log_request")
     wait(function()
       return p.list:count() > 0
@@ -161,12 +162,13 @@ describe("search palette against the fake navgraph server", function()
     expect.matches(vim.api.nvim_get_current_line(), "log_request%(method, path%)")
   end)
 
-  it("shows each palette's own keys in the in-app help, not the other's", function()
+  it("shows the keys of the mode it is in, not the other modes'", function()
     local p = epicenter.run("search", {}, buf)
     p:toggle_help()
     local search_help = table.concat(preview_lines(p), "\n")
-    expect.matches(search_help, "toggle reference mode")
     expect.matches(search_help, "cycle the kind filter")
+    expect.matches(search_help, "symbols %-> grep %-> references")
+    expect.falsy(search_help:match("toggle regex"), "symbols mode has no <C-r>")
     p:close()
 
     local buf2 = open_fixture(root, "app/server.lua")
@@ -179,6 +181,63 @@ describe("search palette against the fake navgraph server", function()
       "grep has no <C-k>, its help must not claim one"
     )
     p2:close()
+  end)
+
+  it("cycles symbols -> grep -> references on <C-space>, keeping the query", function()
+    local p = epicenter.run("search", {}, buf)
+    p:query("log_request")
+    wait(function()
+      return p.list:count() > 0
+    end, 10000, "symbol results")
+
+    search.cycle_mode(p)
+    expect.eq(p.state.mode, "grep")
+    wait(function()
+      return p.list:count() > 0 and results_lines(p)[1]:match("%.lua:%d+") ~= nil
+    end, 10000, "grep results for the same query")
+    expect.matches(vim.api.nvim_win_get_config(p.results_win.win).title[1][1], "grep")
+
+    search.cycle_mode(p)
+    expect.eq(p.state.mode, "refs")
+    wait(function()
+      return p.list:count() > 0 and p.list:current().lines ~= nil
+    end, 10000, "reference results for the same query")
+
+    search.cycle_mode(p)
+    expect.eq(p.state.mode, "symbols", "three modes, then back round")
+    p:close()
+  end)
+
+  it("ranks a recently picked symbol first, and remembers it across a restart", function()
+    local state_dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(state_dir, "p")
+    require("epicenter.store").set_root(state_dir)
+
+    expect.eq(search.recent(root), {}, "nothing picked yet")
+    expect.eq(search.promote({ "b", "c" }, "a"), { "a", "b", "c" })
+    expect.eq(search.promote({ "a", "b" }, "b"), { "b", "a" }, "a repeat pick moves to the front")
+
+    local p = epicenter.run("search", {}, buf)
+    p:query("request")
+    wait(function()
+      return p.list:count() > 1
+    end, 10000, "symbol results")
+    -- Pick the SECOND row, so ranking it first next time is a real change.
+    local second = p.list:items()[2].symbol.qualified
+    p.list:select(2)
+    p:accept("edit")
+    wait(function()
+      return vim.tbl_contains(search.recent(root), second)
+    end, 5000, "the remembered pick")
+
+    local p2 = epicenter.run("search", {}, buf)
+    p2:query("request")
+    wait(function()
+      return p2.list:count() > 1
+    end, 10000, "symbol results again")
+    expect.eq(p2.list:items()[1].symbol.qualified, second, "the recent pick ranks first")
+    p2:close()
+    require("epicenter.store").set_root(nil)
   end)
 
   -- F15: the prompt opens in insert mode, and <Esc> used to close outright -

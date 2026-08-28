@@ -1,5 +1,5 @@
---- `docs/lsp.md` v1 as data: one params shape and one result shape per
---- `navgraph/*` method, plus the shared `Symbol`/`Node`/`Edge` shapes.
+--- `docs/lsp.md` v1 (plus the v1.1 addendum) as data: one params shape and one
+--- result shape per method, plus the shared `Symbol`/`Node`/`Edge` shapes.
 --- The vendored copy of that document sits beside this file.
 ---
 --- Requests are checked STRICTLY - an unknown or ill-typed param is an error,
@@ -9,6 +9,9 @@
 local M = {}
 
 M.VERSION = 1
+--- The addendum this schema also covers. Every v1.1 method is gated behind
+--- `epicenter.client.supports`, so a v1.0 server is never sent one.
+M.MINOR = 1
 
 -- Field specs -----------------------------------------------------------------
 --
@@ -50,8 +53,18 @@ local POSITION = object({
   character = required(int()),
 })
 
+local RANGE = object({
+  start = required(POSITION),
+  ["end"] = required(POSITION),
+})
+
 --- Symbol, as `docs/lsp.md` "Shared result shapes" defines it. `doc` is the
 --- only optional member: a definition with no doc comment omits it.
+--- v1.1 adds `contentHash`, the key clients store per-site state under. It
+--- stays OPTIONAL here for the same reason `protocolMinor` does: a v1.0
+--- server answers every shared method without it, and response checking is
+--- forward-compatible, not version-gated. Every v1.1-only method that keys
+--- state on a hash requires its own copy of it.
 local SYMBOL = object({
   id = required(int()),
   name = required(str()),
@@ -68,6 +81,7 @@ local SYMBOL = object({
   callees = required(int()),
   exported = required(bool()),
   test = required(bool()),
+  contentHash = str(),
 })
 
 --- Node is recursive; `children` is patched in below.
@@ -109,9 +123,16 @@ local BLAST_RESULT = object({
   summary = required(SUMMARY),
 })
 
+--- v1.1 adds `protocolMinor` and `backend`; both optional, since a v1.0
+--- server answers `navgraph/status` without them.
 local STATUS_RESULT = object({
   root = required(str()),
   protocolVersion = required(int()),
+  protocolMinor = int(),
+  backend = object({
+    default = required(str()),
+    languages = required({ kind = "table" }),
+  }),
   version = required(str()),
   files = required(int()),
   symbols = required(int()),
@@ -145,6 +166,36 @@ local function params(...)
   return vim.tbl_extend("error", {}, ...)
 end
 
+-- v1.1 shapes ------------------------------------------------------------------
+
+--- The `data` a `CallHierarchyItem`/`TypeHierarchyItem` carries back, so a
+--- follow-up request names the same definition the server resolved.
+local HIERARCHY_DATA = object({
+  id = required(int()),
+  qualified = required(str()),
+  file = required(str()),
+  exact = bool(),
+})
+
+--- `CallHierarchyItem` and `TypeHierarchyItem` are the same shape.
+local HIERARCHY_ITEM = object({
+  name = required(str()),
+  kind = required(int()),
+  uri = required(str()),
+  range = required(RANGE),
+  selectionRange = required(RANGE),
+  detail = str(),
+  data = required(HIERARCHY_DATA),
+})
+
+local LOCATION = object({ uri = required(str()), range = required(RANGE) })
+
+--- `{ textDocument: { uri }, position }`, the standard LSP request shape.
+local TEXT_DOCUMENT_POSITION = {
+  textDocument = required(object({ uri = required(str()) })),
+  position = required(POSITION),
+}
+
 -- The method table ------------------------------------------------------------
 
 --- @class epicenter.contract.Method
@@ -159,6 +210,9 @@ M.METHODS = {
     result = STATUS_RESULT,
   },
 
+  -- v1.1 adds `range` and `breadcrumbs`. Both stay OPTIONAL here: a v1.0
+  -- server answers this method without them, and the contract's response
+  -- checking is forward-compatible, not version-gated.
   ["navgraph/symbolAt"] = {
     params = { uri = required(str()), position = required(POSITION) },
     result = object({
@@ -166,6 +220,8 @@ M.METHODS = {
       symbol = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
       enclosing = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
       candidates = required(list_of(SYMBOL)),
+      range = vim.tbl_extend("force", RANGE, { nullable = true }),
+      breadcrumbs = list_of(SYMBOL),
     }),
   },
 
@@ -175,6 +231,8 @@ M.METHODS = {
       kinds = list_of(str()),
       refs = bool(),
       limit = int(),
+      -- v1.1: client-supplied qualified names that rank first.
+      recent = list_of(str()),
     }),
     result = object({
       items = required(list_of(object({
@@ -375,6 +433,168 @@ M.METHODS = {
   ["navgraph/rescan"] = {
     params = { full = bool() },
     result = STATUS_RESULT,
+  },
+
+  -- v1.1 ----------------------------------------------------------------------
+
+  ["navgraph/tests"] = {
+    target = "required",
+    params = params(SCOPE, TARGET, { limit = int() }),
+    result = object({
+      symbol = required(SYMBOL),
+      tests = required(list_of(object({
+        symbol = required(SYMBOL),
+        depth = required(int()),
+        via = required(list_of(int())),
+      }))),
+      -- "Every list method reports `truncated`" - but the addendum does not
+      -- say where, and navgraph reports it inside the summary. Both spots
+      -- are accepted; a client reads whichever is there.
+      summary = required(object({
+        count = required(int()),
+        maxDepth = required(int()),
+        truncated = bool(),
+      })),
+      truncated = bool(),
+    }),
+  },
+
+  ["navgraph/types"] = {
+    target = "required",
+    params = params(SCOPE, TARGET, { limit = int() }),
+    result = object({
+      symbol = required(SYMBOL),
+      supertypes = required(list_of(SYMBOL)),
+      subtypes = required(list_of(SYMBOL)),
+      implementors = required(list_of(SYMBOL)),
+      users = required(list_of(object({
+        symbol = required(SYMBOL),
+        kind = required(str({
+          enum = {
+            "param",
+            "return",
+            "field",
+            "local",
+            "extends",
+            "implements",
+            "annotation",
+            "generic",
+          },
+        })),
+      }))),
+      truncated = bool(),
+    }),
+  },
+
+  -- No `target` rule: "the whole working change" is the call with no target
+  -- at all, which is the common one.
+  ["navgraph/impact"] = {
+    params = params(SCOPE, {
+      uri = str(),
+      range = RANGE,
+      ref = str(),
+      depth = int(),
+      direction = DIRECTION,
+      limit = int(),
+    }),
+    result = object({
+      roots = required(list_of(SYMBOL)),
+      nodes = required(list_of(object({
+        symbol = required(SYMBOL),
+        depth = required(int()),
+        via = required(list_of(int())),
+        exact = required(bool()),
+        contentHash = required(str()),
+      }))),
+      edges = required(list_of(EDGE)),
+      summary = required(SUMMARY),
+      --- Hash of the whole working change: client state scoped to one change.
+      changeId = required(str()),
+      hunks = required(list_of(object({
+        uri = required(str()),
+        range = required(RANGE),
+        roots = required(list_of(SYMBOL)),
+      }))),
+      -- The blast summary already carries the walk's own `truncated`; a
+      -- top-level copy is accepted but not demanded.
+      truncated = bool(),
+    }),
+  },
+
+  --- Everything an editing agent needs about one symbol, in one call,
+  --- trimmed to `budget` tokens.
+  ["navgraph/context"] = {
+    target = "required",
+    params = params(TARGET, {
+      budget = int(),
+      include = list_of(str({
+        enum = { "callers", "callees", "types", "tests", "body" },
+      })),
+    }),
+    result = object({
+      symbol = required(SYMBOL),
+      definition = required(object({ text = required(str()), range = required(RANGE) })),
+      signature = required(str()),
+      doc = str(),
+      callers = required(list_of(SYMBOL)),
+      callees = required(list_of(SYMBOL)),
+      types = required(list_of(SYMBOL)),
+      tests = required(list_of(SYMBOL)),
+      truncated = required(bool()),
+      tokensEstimate = required(int()),
+    }),
+  },
+
+  --- The symbol enclosing a line - a stack-trace or diff-hunk lookup, which
+  --- is a LINE, not a cursor position, so no `position` here.
+  ["navgraph/where"] = {
+    params = { uri = required(str()), line = required(int()) },
+    result = object({
+      enclosing = required(vim.tbl_extend("force", SYMBOL, { nullable = true })),
+      breadcrumbs = required(list_of(SYMBOL)),
+      file = required(str()),
+    }),
+  },
+
+  ["textDocument/prepareCallHierarchy"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["callHierarchy/incomingCalls"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(object({
+      from = required(HIERARCHY_ITEM),
+      fromRanges = required(list_of(RANGE)),
+    })),
+  },
+
+  ["callHierarchy/outgoingCalls"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(object({
+      to = required(HIERARCHY_ITEM),
+      fromRanges = required(list_of(RANGE)),
+    })),
+  },
+
+  ["textDocument/prepareTypeHierarchy"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["typeHierarchy/supertypes"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["typeHierarchy/subtypes"] = {
+    params = { item = required(HIERARCHY_ITEM) },
+    result = list_of(HIERARCHY_ITEM),
+  },
+
+  ["textDocument/implementation"] = {
+    params = TEXT_DOCUMENT_POSITION,
+    result = list_of(LOCATION),
   },
 
   ["navgraph/graph"] = {

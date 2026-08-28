@@ -13,7 +13,22 @@ end
 
 describe("fake index", function()
   it("scans every fixture source", function()
-    expect.eq(built.files, { "app/config.lua", "app/handlers.py", "app/server.lua" })
+    expect.eq(built.files, {
+      "app/config.lua",
+      "app/handlers.py",
+      "app/server.lua",
+      "app/test_flow.py",
+    })
+  end)
+
+  it("marks a definition in a test file as a test", function()
+    expect.eq(by_qualified("FlowCase.test_dispatch").test, true)
+    expect.eq(by_qualified("dispatch").test, false)
+  end)
+
+  it("records the base classes a class header declares (v1.1 type hierarchy)", function()
+    expect.eq(built.bases[by_qualified("FlowCase").id], { "BaseCase" })
+    expect.eq(built.bases[by_qualified("BaseCase").id], {})
   end)
 
   it("qualifies lua and python definitions", function()

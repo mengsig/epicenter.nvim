@@ -157,3 +157,36 @@ describe("client supported files", function()
     end
   end)
 end)
+
+describe("client.supports on a standard LSP capability", function()
+  local root
+
+  before_each(function()
+    root = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(root, "p")
+  end)
+
+  after_each(function()
+    client.stop(root)
+    vim.fn.delete(root, "rf")
+  end)
+
+  local function announce(value)
+    client.register_session(root, client.session(fake_rpc().rpc), {
+      callHierarchyProvider = value,
+      experimental = { navgraph = { protocolVersion = 1, protocolMinor = 1, methods = {} } },
+    })
+    return client.supports("textDocument/prepareCallHierarchy", { root = root })
+  end
+
+  it("reads an announced capability as supported", function()
+    expect.eq(announce(true), true)
+    expect.eq(announce({ workDoneProgress = false }), true, "an options table announces it too")
+  end)
+
+  it("reads a declined capability as unsupported", function()
+    expect.eq(announce(false), false, "`false` declines the capability")
+    expect.eq(announce(vim.NIL), false, "a JSON null declines it too")
+    expect.eq(announce(nil), false, "absent means unsupported")
+  end)
+end)

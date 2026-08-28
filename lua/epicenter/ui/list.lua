@@ -30,17 +30,20 @@ end
 --- @field empty_text? string
 --- @field width? integer display columns available - nil where the caller
 ---   never set one, so a `render_item` ignoring its third argument still works
+--- @field marked? table<any, boolean> the `<Tab>` selection, keyed by
+---   `mark_key(item)`
+--- @field mark_key? fun(item: any): any defaults to the item itself
 
 --- Renders the visible slice. Pure.
 --- @param state epicenter.ListState
---- @return { lines: string[], spans: table[], selected_row: integer|nil }
+--- @return { lines: string[], spans: table[], selected_row: integer|nil, marked_rows: integer[] }
 function M.render(state)
   local total = #state.items
   if total == 0 then
-    return { lines = { state.empty_text or "" }, spans = {}, selected_row = nil }
+    return { lines = { state.empty_text or "" }, spans = {}, selected_row = nil, marked_rows = {} }
   end
 
-  local lines, spans = {}, {}
+  local lines, spans, marked_rows = {}, {}, {}
   local last = math.min(total, state.top + state.height - 1)
   for i = state.top, last do
     local row = i - state.top
@@ -49,22 +52,33 @@ function M.render(state)
     for _, span in ipairs(rendered.spans or {}) do
       table.insert(spans, { row = row, hl = span.hl, from = span.from, to = span.to })
     end
+    local mark_key = state.mark_key or M.item_key
+    if state.marked and state.marked[mark_key(state.items[i])] then
+      table.insert(marked_rows, row)
+    end
   end
 
   local selected_row = nil
   if state.selected and state.selected >= state.top and state.selected <= last then
     selected_row = state.selected - state.top
   end
-  return { lines = lines, spans = spans, selected_row = selected_row }
+  return { lines = lines, spans = spans, selected_row = selected_row, marked_rows = marked_rows }
 end
 
 --- @class epicenter.List
 local List = {}
 List.__index = List
 
+--- What "the same row" means for a `<Tab>` mark. The item itself by default.
+--- @param item any
+function M.item_key(item)
+  return item
+end
+
 --- @param opts { buf: integer, height: integer, width?: integer,
 ---   render_item: fun(item, index, width): { text: string, spans?: table[] },
----   text_of?: fun(item): string, empty_text?: string, on_select?: fun(item, index) }
+---   text_of?: fun(item): string, empty_text?: string, on_select?: fun(item, index),
+---   mark_key?: fun(item): any }
 function M.new(opts)
   return setmetatable({
     buf = opts.buf,
@@ -75,6 +89,7 @@ function M.new(opts)
     text_of = opts.text_of or tostring,
     empty_text = opts.empty_text or "  no results",
     on_select = opts.on_select,
+    mark_key = opts.mark_key or M.item_key,
     all = {},
     view = {},
     filter = "",
@@ -82,6 +97,9 @@ function M.new(opts)
     top = 1,
     reveal = nil,
     revealed = false,
+    --- `<Tab>`-toggled rows, keyed by `mark_key`: an index would drift the
+    --- moment a filter reorders the view.
+    marked = {},
   }, List)
 end
 
@@ -97,7 +115,19 @@ local function apply_filter(self)
 end
 
 function List:set_items(items)
+  local was_marked = self.marked
   self.all = items or {}
+  -- A mark survives rows that are still here under a different table - a
+  -- tree re-flattens every row on an expand, and dropping the selection
+  -- there silently exported everything. A genuinely fresh result set carries
+  -- none of the old keys, so it still starts with nothing selected.
+  self.marked = {}
+  for _, item in ipairs(self.all) do
+    local key = self.mark_key(item)
+    if was_marked[key] then
+      self.marked[key] = true
+    end
+  end
   apply_filter(self)
   self.selected = math.min(math.max(1, self.selected), math.max(1, #self.view))
   self.top = M.scroll(#self.view, self.height, self.selected, 1)
@@ -146,6 +176,37 @@ function List:select(index)
   end
 end
 
+--- Toggles the current row's `<Tab>` mark.
+--- @return boolean marked the row's new state, false when there is no row
+function List:toggle_mark()
+  local item = self:current()
+  if item == nil then
+    return false
+  end
+  local key = self.mark_key(item)
+  local marked = not self.marked[key]
+  self.marked[key] = marked or nil
+  return marked
+end
+
+function List:clear_marks()
+  self.marked = {}
+end
+
+--- The `<Tab>` multi-selection in view order, or - when nothing is marked -
+--- every row currently shown. What "these rows" means for an export, with no
+--- mode for the user to remember.
+--- @return any[]
+function List:marked_or_all()
+  local out = {}
+  for _, item in ipairs(self.view) do
+    if self.marked[self.mark_key(item)] then
+      table.insert(out, item)
+    end
+  end
+  return #out > 0 and out or self.view
+end
+
 --- Moves by `delta`, wrapping at both ends (a palette should never dead-end).
 function List:move(delta)
   local total = #self.view
@@ -165,6 +226,8 @@ function List:state()
     selected = self.selected,
     render_item = self.render_item,
     empty_text = self.empty_text,
+    marked = self.marked,
+    mark_key = self.mark_key,
   }
 end
 
@@ -191,6 +254,23 @@ local function paint(self, rendered, rows)
     vim.api.nvim_buf_set_extmark(self.buf, self.ns, rendered.selected_row, 0, {
       line_hl_group = "EpicenterSelection",
     })
+  end
+  -- A mark overlays the row's first cell rather than inserting one: every
+  -- row's own spans are byte offsets into text that must not shift.
+  local glyph = require("epicenter.ui.icons").ui("marked")
+  for _, row in ipairs(rendered.marked_rows or {}) do
+    if row < #lines then
+      -- A marked row that failed to draw its glyph reads as unmarked, and
+      -- the export then sends rows the user cannot see are selected.
+      local ok, err = pcall(vim.api.nvim_buf_set_extmark, self.buf, self.ns, row, 0, {
+        virt_text = { { glyph, "EpicenterAccent" } },
+        virt_text_pos = "overlay",
+        strict = false,
+      })
+      if not ok then
+        require("epicenter.log").warn("could not mark row %d: %s", row, err)
+      end
+    end
   end
 end
 

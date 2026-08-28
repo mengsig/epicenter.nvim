@@ -54,6 +54,23 @@ local function scan_lua(lines)
   return found
 end
 
+--- Base classes named in a `class Foo(Bar, Baz):` header. The fake's
+--- stand-in for the resolver's base/impl tables (v1.1 type hierarchy).
+--- @return string[]
+local function bases_of(line)
+  local inside = line:match("^%s*class%s+[%w_]+%s*%((.-)%)")
+  if not inside then
+    return {}
+  end
+  local names = {}
+  for name in inside:gmatch("[%w_]+") do
+    if name ~= "object" then
+      table.insert(names, name)
+    end
+  end
+  return names
+end
+
 local function scan_python(lines)
   local found = {}
   local class, class_indent = nil, 0
@@ -68,6 +85,7 @@ local function scan_python(lines)
         line = i,
         sig = vim.trim(line),
         exported = not class_name:match("^_"),
+        bases = bases_of(line),
       })
     else
       -- `async def` is a definition too - the real indexer sees it, so a
@@ -102,6 +120,22 @@ local SCANNERS = { lua = scan_lua, python = scan_python }
 --- unsaved buffer text and takes precedence over the file on disk.
 --- @param root string
 --- @param overlays? table<string, string>
+--- v1.1 `contentHash`: a stable hash of a definition's source text with
+--- whitespace normalised, so a reformat does not read as a code change.
+--- Short on purpose - it is an identity key clients store, not a digest.
+--- @param lines string[]|nil the file's lines
+--- @return string
+function M.content_hash(lines, first, last)
+  local body = {}
+  for i = first, math.min(last, #(lines or {})) do
+    local text = vim.trim((lines[i]:gsub("%s+", " ")))
+    if text ~= "" then
+      table.insert(body, text)
+    end
+  end
+  return vim.fn.sha256(table.concat(body, "\n")):sub(1, 16)
+end
+
 function M.build(root, overlays)
   overlays = overlays or {}
   local started = uv.hrtime()
@@ -115,6 +149,8 @@ function M.build(root, overlays)
   table.sort(files)
 
   local sources, symbols = {}, {}
+  --- symbol id -> the base-class names its header declared.
+  local bases = {}
   local next_id = 0
 
   for _, file in ipairs(files) do
@@ -126,6 +162,7 @@ function M.build(root, overlays)
       local found = SCANNERS[language](lines)
       for i, def in ipairs(found) do
         next_id = next_id + 1
+        bases[next_id] = def.bases or {}
         table.insert(symbols, {
           id = next_id,
           name = def.name,
@@ -146,6 +183,12 @@ function M.build(root, overlays)
     end
   end
 
+  -- v1.1 `contentHash`: needs endLine, so it waits for the whole file's
+  -- definitions to be scanned.
+  for _, symbol in ipairs(symbols) do
+    symbol.contentHash = M.content_hash(sources[symbol.file], symbol.line, symbol.endLine)
+  end
+
   -- Fan-in: call sites of each name outside its own definition line.
   for _, symbol in ipairs(symbols) do
     local pattern = "%f[%w_]" .. symbol.name .. "%s*%("
@@ -163,6 +206,7 @@ function M.build(root, overlays)
     files = files,
     sources = sources,
     symbols = symbols,
+    bases = bases,
     ms = math.floor((uv.hrtime() - started) / 1e6),
   }
 end
@@ -204,6 +248,27 @@ function M.word_at(index, file, line, column)
     -- One past the end still counts: a cursor just after a name is on it.
     if column >= first and column <= last + 1 then
       return text:sub(first, last)
+    end
+    from = last + 1
+  end
+end
+
+--- Byte span of the identifier under `column` (1-based) on `line` of `file`,
+--- as 1-based inclusive offsets. `nil` when the column is not on one.
+--- @return integer|nil from, integer|nil to
+function M.word_span(index, file, line, column)
+  local text = (index.sources[file] or {})[line]
+  if not text then
+    return nil, nil
+  end
+  local from = 1
+  while true do
+    local first, last = text:find("[%w_]+", from)
+    if not first then
+      return nil, nil
+    end
+    if column >= first and column <= last + 1 then
+      return first, last
     end
     from = last + 1
   end
@@ -257,17 +322,32 @@ end
 --- Ranks: exact > prefix > word boundary > subsequence; ties by fan-in then
 --- by the shorter path. Mirrors the `navgraph/search` contract.
 --- @param opts { query: string, kinds?: string[], limit?: integer }
+--- v1.1 `recent`: the client's own recently picked names, newest first.
+--- A match in that list outranks every other match, and a newer pick
+--- outranks an older one. Pure.
+--- @param recent string[]|nil
+--- @return table<string, integer> qualified name -> its score bonus
+local function recency_bonus(recent)
+  local bonus = {}
+  for index, qualified in ipairs(recent or {}) do
+    bonus[qualified] = 100000 - index
+  end
+  return bonus
+end
+
 function M.search(index, opts)
   local query = opts.query or ""
+  local bonus = recency_bonus(opts.recent)
   local items = {}
   for _, symbol in ipairs(index.symbols) do
     local allowed = not opts.kinds or #opts.kinds == 0 or vim.tbl_contains(opts.kinds, symbol.kind)
     if allowed then
       local matches = query == "" and {} or M.fuzzy(symbol.qualified, query)
       if matches then
+        local base = query == "" and symbol.callers or score(symbol.qualified, query, matches)
         table.insert(items, {
           symbol = symbol,
-          score = query == "" and symbol.callers or score(symbol.qualified, query, matches),
+          score = base + (bonus[symbol.qualified] or 0),
           matches = matches,
         })
       end

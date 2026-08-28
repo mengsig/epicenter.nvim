@@ -115,6 +115,11 @@ including the edits you have not saved.
 
 `<C-r>` switches the query to a regex.
 
+It is one palette in three modes — `<C-space>` cycles **symbols → grep →
+references** without losing what you have typed, and the box renames itself as
+you go. Symbols you have jumped to before rank first, per project, remembered
+under `stdpath("state")`.
+
 ### Blast radius — `:Epicenter blast`, `<leader>ee`
 
 What breaks if you change this. The panel is a live query: it stays open, and
@@ -172,6 +177,141 @@ and asks the server only for that level, `h` collapses it.
 │     ? POST /api/users py_fastapi/app/routes/users.py:24                    │
 ╰────────────────────────────────────────────────────────────────────────────╯
 ```
+
+### Peek — `:Epicenter peek`, `<leader>eP`
+
+The definition under the cursor in a float that does **not** take focus. `<CR>`
+goes there, `q` dismisses it, and so does moving the cursor. Both keys are
+borrowed from the buffer underneath and handed straight back.
+
+```
+╭─ py_fastapi/app/models.py:28 ──────────────────────────────────────────────╮
+│ def normalize_email(raw: str) -> str:                                      │
+│     return raw.strip().lower()                                             │
+╰──────────────────────── <CR> go · q dismiss ───────────────────────────────╯
+```
+
+The same component answers `o` inside every panel — there it takes focus,
+because the panel already holds the cursor.
+
+### Breadcrumbs and statusline
+
+Two one-line components for your own bars. Both read a cache on every redraw
+and ask the server at most once per line the cursor reaches; with no server
+running for the project both are empty and nothing is sent.
+
+```lua
+-- the enclosing chain, outermost first
+vim.wo.winbar = "%{v:lua.require'epicenter'.breadcrumbs()}"
+-- fan-in / fan-out of whatever the cursor is inside:  ⌁ 12 ← · 4 →
+vim.o.statusline = "%f %{v:lua.require'epicenter'.statusline()}"
+```
+
+`crumbs = { winbar = true }` installs the winbar on every code window for you —
+it never overwrites a winbar you set yourself. `:Epicenter crumbs` toggles it
+in one window.
+
+### Call hierarchy — `:Epicenter hierarchy`, `<leader>eH`
+
+Who calls the symbol under the cursor, as a lazy tree: `l` fetches the next
+level, `d` flips the whole tree to what it calls instead.
+
+```
+╭─ incoming calls · M.handle_request ────────────────────────────────────────╮
+│ v me M.handle_request  app/server.lua:9                                    │
+│     fn M.start         app/server.lua:14  2x                               │
+╰────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Type hierarchy — `:Epicenter types`, `<leader>eT`
+
+Supertypes, subtypes, implementors and users of the type under the cursor, in
+four groups. A supertype expands upward, a subtype downward; implementors and
+users are leaves, each tagged with how it uses the type (`as param`,
+`as field`, ...).
+
+Supertypes/subtypes/implementors ride the standard LSP call- and
+type-hierarchy methods the v1.1 protocol adds — any editor gets them, not just
+this one. Users comes from `navgraph/types`, a custom addition, so it is only
+asked for once the server announces that method — against an older server the
+other three groups still show, and against one with no method at all the panel
+says so and sends nothing.
+
+### LLM context — `:Epicenter context`, `<leader>ey`
+
+One symbol, packaged for a model: signature, doc, body, callers, callees,
+types and tests, each with its `file:line`, as markdown on the `+` register.
+A toast reports the token estimate.
+
+```
+context for OrderService.place yanked · ~734 tokens
+```
+
+`--budget 800` trims the bundle to fit — bodies go first, then tests, then
+types, then callees, and the markdown says it was trimmed. `--qf` puts the
+same members in the quickfix list.
+
+`:Epicenter where app/services/order_service.py:112` answers the reverse
+question — which definition a line is inside of, with the chain that reaches
+it. Paste a stack-trace frame straight in.
+
+### Tests — `:Epicenter tests`, `<leader>et`
+
+Which tests reach the symbol under the cursor, grouped by file — the coverage
+walk run backwards. `dN` is how many calls away the target is, so a `d1` and a
+`d4` do not look like the same assurance.
+
+```
+╭─ tests · UserService.fetch ────────────────────────────────────────────────╮
+│ v tests/test_users.py (2)                                                  │
+│     te test_get_user      tests/test_users.py:6    d1                      │
+│     te test_update_email  tests/test_users.py:20   d2                      │
+╰─ 2 · max depth 2 · r run ──────────────────────────────────────────────────╯
+```
+
+`r` runs the test under the cursor. The command is a per-language template —
+`%f` is the file, `%s` the test's name, each shell-escaped as it is
+substituted, so do not quote them yourself — and its output streams into a
+scratch split without blocking the editor.
+
+```lua
+tests = { runner = { python = "pytest %f::%s", elixir = "mix test %f" } }
+```
+
+### Impact — always on, `:Epicenter impact`, `<leader>ei`
+
+While anything is unsaved, every definition your change reaches carries a calm
+note at the end of its line and a graded mark in the gutter. Save, and it all
+goes away — with no working change there is nothing to ask about, so nothing is
+asked.
+
+```
+def render_invoice(order):        ⌁ affected · order_service.py:112
+    total = price_of(order)       ⌁ affected · order_service.py:112
+```
+
+`:Epicenter impact` opens the blast panel rooted at the changed hunks instead
+of at one symbol.
+
+### Impact review — `:Epicenter review`, `<leader>ea`
+
+The same impact as a list you can work through: grouped by changed hunk, each
+row showing where it is, how many calls away, and `?` for a heuristic edge.
+
+```
+╭─ impact review · 3/12 reviewed ────────────────────────────────────────────╮
+│ v app/services/order_service.py:112 (4)                                    │
+│   + fn render_invoice   app/routes/orders.py:44   d1                       │
+│     fn export_orders    app/routes/orders.py:88   d2  ?                    │
+╰─ a approve · A file · u undo · e export ───────────────────────────────────╯
+```
+
+`a` approves a row, `A` the whole file, `u` undoes one. Approvals survive a
+restart and are keyed to the definition's source, so editing that code brings
+it back unreviewed while everything else stays ticked. `e` (or
+`:Epicenter review export`) copies a markdown checklist for the PR
+description, and `require("epicenter").impact()` puts `impact 3/12 reviewed`
+in your statusline.
 
 ### Call path — `:Epicenter path`, `<leader>ep`
 
@@ -257,9 +397,9 @@ What the server knows, and the three keys that change it: `r` rescan,
 ```
 ╭─ · navgraph ───────────────────────────────────────────────────╮
 │                                                                │
-│  epicenter   1.0.1                                             │
+│  epicenter   1.1.0                                             │
 │  root        ~/src/myproject                                   │
-│  server      running · client 1 · navgraph 1.0.0 · protocol 1  │
+│  server      running · client 1 · navgraph 1.1.0 · protocol 1  │
 │  index       32 files · 330 symbols · 258 edges                │
 │  overlays    1 open                                            │
 │  last index  1ms  2026-08-28T01:52:44Z                         │
@@ -275,10 +415,33 @@ What the server knows, and the three keys that change it: `r` rescan,
 ╰────────────────── r rescan · R restart · l log · q close ──────╯
 ```
 
+### Tour — `:Epicenter tour`
+
+A minute with the whole plugin: a few notes, each with the panel it is talking
+about open beside it, on the buffer you are in. Running it again stops it.
+
+Nothing starts on its own — the first time a project is indexed, one notice
+says the tour exists, once ever. `tour = { offer = false }` turns even that
+off.
+
 ### Graph — `:Epicenter graph`
 
 Writes the call graph to an HTML file under the project's `.navgraph/` and
 opens it.
+
+### Telescope
+
+Optional: `require("telescope").load_extension("epicenter")`, then
+
+```lua
+require("telescope").extensions.epicenter.symbols()  -- live, server-ranked
+require("telescope").extensions.epicenter.grep()     -- live, repo-wide
+require("telescope").extensions.epicenter.blast()    -- one fetch at the cursor
+```
+
+Same server calls as the built-in palette and blast panel — Telescope's own
+picker UI, sorter and previewer instead. Nothing here loads unless Telescope
+does the loading; a session without it never touches this code.
 
 ### Badges
 
@@ -309,24 +472,43 @@ The same surfaces out of a real 120x36 terminal, regenerated by
 
 ![The outline sidebar on the left and the status dashboard over it](assets/outline-status.svg)
 
+**Type hierarchy**, the `users` group open — who uses this type, and how:
+
+![The type hierarchy panel with supertypes, subtypes, implementors and users](assets/hierarchy.svg)
+
+**Tests reaching a symbol**, grouped by file:
+
+![The tests panel listing the tests that reach the symbol under the cursor](assets/tests.svg)
+
+**Impact review**, the working change's blast radius ticked off row by row:
+
+![The impact review panel beside the source, with an affected-line marker](assets/review.svg)
+
 ## Keymaps
 
 One prefix, `<leader>e` by default (`keymaps = false` installs none).
 
 <!-- registry:keymaps -->
-| Key          | Command              | Does                                       |
-| ------------ | -------------------- | ------------------------------------------ |
-| `<leader>es` | `:Epicenter search`  | Fuzzy symbol search across the project     |
-| `<leader>eg` | `:Epicenter grep`    | Repo-wide text search, unsaved edits too   |
-| `<leader>ee` | `:Epicenter blast`   | Blast radius of the symbol at the cursor   |
-| `<leader>ek` | `:Epicenter hover`   | What this symbol is, and who calls it      |
-| `<leader>ed` | `:Epicenter diff`    | Impact of the changes since a git ref      |
-| `<leader>ec` | `:Epicenter callers` | Who calls the symbol under the cursor      |
-| `<leader>eC` | `:Epicenter callees` | What the symbol under the cursor calls     |
-| `<leader>ep` | `:Epicenter path`    | Call chain between two symbols             |
-| `<leader>eo` | `:Epicenter outline` | Live symbol outline of the current buffer  |
-| `<leader>eh` | `:Epicenter hot`     | Most depended-on symbols, ranked by fan-in |
-| `<leader>ex` | `:Epicenter status`  | Dashboard: index, server, languages, log   |
+| Key          | Command                | Does                                     |
+| ------------ | ---------------------- | ---------------------------------------- |
+| `<leader>es` | `:Epicenter search`    | Fuzzy symbol search across the project   |
+| `<leader>eg` | `:Epicenter grep`      | Repo-wide text search, unsaved edits too |
+| `<leader>ee` | `:Epicenter blast`     | Blast radius of the symbol at the cursor |
+| `<leader>ek` | `:Epicenter hover`     | What this symbol is, and who calls it    |
+| `<leader>ed` | `:Epicenter diff`      | Impact of the changes since a git ref    |
+| `<leader>ec` | `:Epicenter callers`   | Who calls the symbol under the cursor    |
+| `<leader>eC` | `:Epicenter callees`   | What the symbol under the cursor calls   |
+| `<leader>eP` | `:Epicenter peek`      | Read the definition under the cursor     |
+| `<leader>eH` | `:Epicenter hierarchy` | Call hierarchy at the cursor             |
+| `<leader>eT` | `:Epicenter types`     | Type hierarchy, and who uses this type   |
+| `<leader>ey` | `:Epicenter context`   | Yank a symbol's context bundle           |
+| `<leader>et` | `:Epicenter tests`     | Tests that reach this symbol             |
+| `<leader>ei` | `:Epicenter impact`    | Blast radius of the working change       |
+| `<leader>ea` | `:Epicenter review`    | Review the working change's impact       |
+| `<leader>ep` | `:Epicenter path`      | Call chain between two symbols           |
+| `<leader>eo` | `:Epicenter outline`   | Live symbol outline of this buffer       |
+| `<leader>eh` | `:Epicenter hot`       | Most depended-on symbols, by fan-in      |
+| `<leader>ex` | `:Epicenter status`    | Dashboard: index, server, languages, log |
 <!-- /registry:keymaps -->
 
 Inside the palette:
@@ -348,28 +530,68 @@ Inside the palette:
 `:Epicenter <subcommand>`, with completion.
 
 <!-- registry:commands -->
-| Subcommand | Does                                       |
-| ---------- | ------------------------------------------ |
-| `search`   | Fuzzy symbol search across the project     |
-| `grep`     | Repo-wide text search, unsaved edits too   |
-| `blast`    | Blast radius of the symbol at the cursor   |
-| `hover`    | What this symbol is, and who calls it      |
-| `diff`     | Impact of the changes since a git ref      |
-| `callers`  | Who calls the symbol under the cursor      |
-| `callees`  | What the symbol under the cursor calls     |
-| `path`     | Call chain between two symbols             |
-| `outline`  | Live symbol outline of the current buffer  |
-| `hot`      | Most depended-on symbols, ranked by fan-in |
-| `unused`   | Symbols nothing in the index reaches       |
-| `graph`    | Write the call graph to a file and open it |
-| `status`   | Dashboard: index, server, languages, log   |
-| `install`  | Download or build the navgraph binary      |
-| `restart`  | Restart the server for this project        |
-| `rescan`   | Re-stat every file and rebuild the index   |
-| `log`      | Open the epicenter log                     |
+| Subcommand  | Does                                     |
+| ----------- | ---------------------------------------- |
+| `search`    | Fuzzy symbol search across the project   |
+| `grep`      | Repo-wide text search, unsaved edits too |
+| `blast`     | Blast radius of the symbol at the cursor |
+| `hover`     | What this symbol is, and who calls it    |
+| `diff`      | Impact of the changes since a git ref    |
+| `callers`   | Who calls the symbol under the cursor    |
+| `callees`   | What the symbol under the cursor calls   |
+| `peek`      | Read the definition under the cursor     |
+| `crumbs`    | Toggle the breadcrumb winbar here        |
+| `hierarchy` | Call hierarchy at the cursor             |
+| `types`     | Type hierarchy, and who uses this type   |
+| `context`   | Yank a symbol's context bundle           |
+| `where`     | What encloses this line                  |
+| `tests`     | Tests that reach this symbol             |
+| `impact`    | Blast radius of the working change       |
+| `review`    | Review the working change's impact       |
+| `path`      | Call chain between two symbols           |
+| `outline`   | Live symbol outline of this buffer       |
+| `hot`       | Most depended-on symbols, by fan-in      |
+| `unused`    | Symbols nothing in the index reaches     |
+| `graph`     | Write the call graph and open it         |
+| `tour`      | A minute with the whole plugin           |
+| `status`    | Dashboard: index, server, languages, log |
+| `install`   | Download or build the navgraph binary    |
+| `restart`   | Restart the server for this project      |
+| `rescan`    | Re-stat every file and rebuild the index |
+| `log`       | Open the epicenter log                   |
 <!-- /registry:commands -->
 
 Every subcommand ships today; none are pending.
+
+### Resizing and moving a panel
+
+`+`/`-` grow/shrink, `<`/`>` narrow/widen, `<C-arrow>` moves — shared by every
+float panel built on this plugin's panel kit. A resize is remembered per
+**panel type**, not per project, under `stdpath("state")`, so `:Epicenter
+callers` reopens at the size you last left it, across a restart, even in a
+different project. A vsplit (outline) keeps its own window's size instead —
+nothing to remember there. The blast panel owns its window separately and
+already spends `+`/`-` on query depth, so it does not have this.
+
+### To the quickfix list
+
+Every subcommand that produces rows takes `--qf` or `--loc`, sending the result
+set to the quickfix list (or this window's location list) instead of leaving it
+in a panel — the list opens ready for `:cnext`.
+
+```vim
+:Epicenter blast --qf
+:Epicenter callers M.handle --loc
+```
+
+On a live palette (`search`, `grep`) there is no result set until you have
+typed one, so the flag arms `<CR>` instead: accepting sends the rows on screen
+to the list rather than jumping to one.
+
+Inside any panel or palette, `<C-q>` and `<C-l>` do the same thing. `<Tab>`
+toggles a row into a multi-selection first: with a selection `<C-q>` sends only
+those rows, with none it sends every row on screen. Each entry carries `file`,
+`line`, `col` and the row's own text.
 
 ### Inside the blast panel
 
@@ -379,6 +601,8 @@ Every subcommand ships today; none are pending.
 | `<C-v>` / `<C-t>` | Open in a vertical split / a new tab                  |
 | `o`            | Toggle a peek at it without leaving the panel             |
 | `y`            | Yank `file:line`                                         |
+| `<Tab>`        | Add / remove the row from the selection                  |
+| `<C-q>` / `<C-l>` | Send the rows to the quickfix / location list         |
 | `+` / `-`      | Deeper / shallower (re-queries; the chip names the depth asked for when the graph fell short) |
 | `d`            | Flip callers ↔ callees                                   |
 | `t`            | Cycle the tests scope (with → without → only)            |
@@ -396,7 +620,7 @@ hover card too.
 ### Inside the callers/callees tree
 
 (and every other results panel - outline, hot, unused - which share the same
-`j`/`k`/`gg`/`G`/`<CR>`/`o`/`y`/`/`/`?`/`q` keys)
+`j`/`k`/`gg`/`G`/`<CR>`/`o`/`y`/`<Tab>`/`<C-q>`/`/`/`?`/`q` keys)
 
 | Key                     | Does                                           |
 | ----------------------- | ----------------------------------------------- |
@@ -406,6 +630,8 @@ hover card too.
 | `<C-v>` / `<C-t>`       | Open in a vertical split / a new tab           |
 | `o`                     | Peek at the definition without leaving the panel |
 | `y`                     | Yank `file:line`                               |
+| `<Tab>`                 | Add / remove the row from the selection        |
+| `<C-q>` / `<C-l>`       | Send the rows to the quickfix / location list  |
 | `r`                     | Toggle reference edges                         |
 | `s`                     | Strict mode - drop the `?` (heuristic) edges   |
 | `t`                     | Cycle the test scope: with / without / only    |
@@ -442,11 +668,19 @@ require("epicenter").setup({
     strict = false,                         -- drop name-resolved (heuristic) edges
     tests = "with",                         -- "with" | "without" | "only"
   },
+  crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
   explore = { debounce_ms = 100 },          -- quiet time after a reindex before rows refetch
   grep = { debounce_ms = 60, limit = 200 },
   highlights = {},                          -- e.g. { EpicenterAccent = { fg = "#7aa2f7" } }
   hot = { bar_width = 12, limit = 30 },
   hover = { callers = 5, max_width = 80 },
+  impact = {
+    debounce_ms = 400,
+    depth = 2,
+    enabled = true,                         -- the whole ambient surface, marks and all
+    inline = true,                          -- end-of-line markers on impacted definitions
+    marker = "affected",                    -- the word those markers carry
+  },
   keymaps = { prefix = "<leader>e" },       -- or false, to install none
   log = { file = nil, level = "warn" },     -- file defaults to stdpath("state")/epicenter.log
   lsp = {
@@ -473,6 +707,20 @@ require("epicenter").setup({
   path = { step_ms = 45 },                  -- time each rung of the path ladder takes to draw
   ripples = true,                           -- mark the impacted lines while a panel is open
   search = { debounce_ms = 40, limit = 50 },
+  tests = {
+    limit = 100,                            -- most tests asked for
+    runner = {                              -- per language: %f is the file, %s the test's name
+      go = "go test -run %s ./...",
+      javascript = "npx vitest run %f -t %s",
+      lua = "busted %f",
+      python = "pytest %f::%s",
+      rust = "cargo test %s",
+      typescript = "npx vitest run %f -t %s",
+      zig = "zig test %f",
+    },
+  },
+  theme = { accent = "auto" },
+  tour = { offer = true },
   ui = {
     border = "rounded",
     height = 0.8,                           -- fraction of the editor when <= 1, else cells
@@ -504,6 +752,15 @@ hierarchy. Every group is overridable through `highlights`:
 The blast panel adds `EpicenterRipple1`, `EpicenterRipple2` and
 `EpicenterRipple3` — the ring grades of the inline marks, derived from the
 accent over the *editor* background rather than the float background.
+
+`theme.accent` decides where that one accent comes from: `"auto"` (default)
+takes it from the colourscheme's `Function`/`Title`; `"mono"` drops it
+entirely, for the calmest, flattest palette; anything else is a literal
+`"#rrggbb"` or the name of a highlight group to borrow `fg` from.
+
+```lua
+require("epicenter").setup({ theme = { accent = "mono" } })
+```
 
 ## How it relates to NavGraph
 

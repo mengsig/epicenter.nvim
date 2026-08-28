@@ -150,4 +150,21 @@ describe("tree object", function()
     t:set_roots({ node("a", { node("a1") }) }, { expand_roots = true })
     expect.eq(t.list:count(), 2)
   end)
+
+  it("keeps a <Tab> mark across an expand, and drops it on a new result set", function()
+    t:set_roots({ node("a", { node("a1"), node("a2") }), node("b") })
+    t.list:select(2)
+    expect.eq(t.list:toggle_mark(), true)
+    expect.eq(#t.list:marked_or_all(), 1, "one row marked")
+
+    -- Expanding re-flattens every row into a fresh table.
+    t.list:select(1)
+    t:set_open(true)
+    expect.eq(t.list:count(), 4)
+    expect.eq(#t.list:marked_or_all(), 1, "the mark is still on the row it was put on")
+    expect.eq(t.list:marked_or_all()[1].node.name, "b")
+
+    t:set_roots({ node("x"), node("y") })
+    expect.eq(#t.list:marked_or_all(), 2, "a genuinely fresh result set starts unmarked")
+  end)
 end)

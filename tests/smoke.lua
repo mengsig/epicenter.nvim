@@ -43,11 +43,21 @@ local EXPECTED_COMMANDS = {
   "diff",
   "callers",
   "callees",
+  "peek",
+  "crumbs",
+  "hierarchy",
+  "types",
+  "context",
+  "where",
+  "tests",
+  "impact",
+  "review",
   "path",
   "outline",
   "hot",
   "unused",
   "graph",
+  "tour",
   "status",
   "install",
   "restart",
@@ -231,7 +241,7 @@ local dashboard = require("epicenter").run("status", {}, source)
 wait_for("dashboard reported the index", function()
   return table
     .concat(vim.api.nvim_buf_get_lines(dashboard.buf, 0, -1, false), "\n")
-    :match("3 files") ~= nil
+    :match("4 files") ~= nil
 end)
 dashboard:close()
 -- === end ep-explore wave ===
@@ -251,7 +261,7 @@ local peeked = require("epicenter.ui.panel").peek({
   path = vim.fs.joinpath(root, "app/server.lua"),
   line = 9,
 })
-local peek_border = vim.api.nvim_win_get_config(peeked.win).border
+local peek_border = vim.api.nvim_win_get_config(peeked.win.win).border
 check(
   "a float keeps its own border under &winborder=double",
   peek_border == "rounded" or (type(peek_border) == "table" and peek_border[1] == "\226\149\173"),
@@ -259,10 +269,10 @@ check(
 )
 check(
   "a float keeps its own winblend under &winblend=40",
-  vim.wo[peeked.win].winblend == 0,
-  tostring(vim.wo[peeked.win].winblend)
+  vim.wo[peeked.win.win].winblend == 0,
+  tostring(vim.wo[peeked.win.win].winblend)
 )
-peeked:close({ motion = false })
+peeked:close()
 wait_for("peek closed", function()
   return not peeked:valid()
 end, 3000)

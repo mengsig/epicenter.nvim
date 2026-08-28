@@ -4,7 +4,6 @@
 local M = {}
 
 local list_mod = require("epicenter.ui.list")
-local preview_mod = require("epicenter.ui.preview")
 local tree_mod = require("epicenter.ui.tree")
 local window = require("epicenter.ui.window")
 
@@ -63,26 +62,83 @@ local function box_for_count(count)
   })
 end
 
---- A throwaway float showing the target's source. Any of q/<Esc>/<CR> closes it.
+--- The source of `target`, without leaving the panel. One component with the
+--- `gp` peek (`ui.peek`); focused here, because the panel holds the cursor
+--- and `q` has to reach the float.
 --- @param target epicenter.Target
---- @return epicenter.Window
-function M.peek(target)
-  local box = M.box(0.7)
-  local win = window.open({
-    box = box,
-    title = (" %s:%d "):format(vim.fn.fnamemodify(target.path, ":~:."), target.line),
-    footer = " q close ",
-    enter = true,
-    zindex = 150,
-  })
-  preview_mod.new({ buf = win.buf, win = win.win, height = box.height }):show(target)
-  win:reveal()
-  for _, lhs in ipairs({ "q", "<Esc>", "<CR>" }) do
-    vim.keymap.set("n", lhs, function()
-      win:close()
-    end, { buffer = win.buf, nowait = true, silent = true })
+--- @param origin_win? integer where `<CR>` should open the file - the window
+---   the reader came from, never the panel's own float.
+--- @return epicenter.Peek
+function M.peek(target, origin_win)
+  return require("epicenter.ui.peek").open(target, { focus = true, origin_win = origin_win })
+end
+
+-- Remembered layout -------------------------------------------------------------
+-- Terminal/window preference, not project data: one geometry per panel TYPE
+-- (`spec.filetype`), independent of which project it was resized in - so
+-- `store`'s per-root keying is deliberately not used here.
+-- N1: deliberately not a real path - `store.path` runs it through
+-- `root.normalize` (`uv.fs_realpath`), which fails for a nonexistent name
+-- and keys this file the same everywhere. A real `panel-layout` directory
+-- in the cwd would make the slug (and this remembered geometry) cwd-dependent.
+local LAYOUT_ROOT = "panel-layout"
+local MIN_WIDTH, MIN_HEIGHT = 20, 3
+local RESIZE_STEP, MOVE_STEP = 4, 1
+
+--- Remembering a geometry is a read-modify-write of a state file, and `+`
+--- held at typematic rate is ~30 keypresses a second. Nudges accumulate here
+--- and are written once the keys stop - or when the panel closes, or on the
+--- way out of Neovim, whichever comes first.
+local PERSIST_MS = 250
+local pending_layout = {}
+local persist_timer = nil
+local persist_group = nil
+
+--- A failure to save is a log line, not a toast: the panel still works, it
+--- just reopens at the default size next time.
+local function flush_layout()
+  if persist_timer then
+    persist_timer:stop()
   end
-  return win
+  if next(pending_layout) == nil then
+    return
+  end
+  local store = require("epicenter.store")
+  local stored = store.read("panel_layout", LAYOUT_ROOT)
+  for filetype, box in pairs(pending_layout) do
+    stored[filetype] = { width = box.width, height = box.height, row = box.row, col = box.col }
+  end
+  local ok, err = store.write("panel_layout", LAYOUT_ROOT, stored)
+  if ok then
+    -- Cleared only on success (L7): a failed write must leave the nudges
+    -- for the next flush to retry, or they and `remembered_box` lose them.
+    pending_layout = {}
+  else
+    require("epicenter.log").warn("could not remember panel geometry: %s", err)
+  end
+end
+
+--- The geometry this panel type reopens at: a nudge not yet written out is
+--- still the truth about it.
+--- @param filetype string
+--- @return epicenter.Box|nil
+local function remembered_box(filetype)
+  local box = pending_layout[filetype]
+    or require("epicenter.store").read("panel_layout", LAYOUT_ROOT)[filetype]
+  return box and window.clamp(box) or nil
+end
+
+--- @param filetype string
+--- @param box epicenter.Box
+local function remember_box(filetype, box)
+  pending_layout[filetype] = box
+  persist_timer = persist_timer or (vim.uv or vim.loop).new_timer()
+  persist_timer:stop()
+  persist_timer:start(PERSIST_MS, 0, vim.schedule_wrap(flush_layout))
+  if not persist_group then
+    persist_group = vim.api.nvim_create_augroup("EpicenterPanelLayout", { clear = true })
+    vim.api.nvim_create_autocmd("VimLeavePre", { group = persist_group, callback = flush_layout })
+  end
 end
 
 --- @class epicenter.Panel
@@ -94,6 +150,9 @@ Panel.__index = Panel
 ---   enter?: boolean, zindex?: integer, reflow?: fun(): epicenter.Box,
 ---   render_row: fun(row, index): { text: string, spans?: table[] },
 ---   text_of?: fun(row): string, empty_text?: string,
+---   mark_key?: fun(row): any what a `<Tab>` mark survives a re-populate under;
+---     a tree panel keys off its own row instead (see `tree.lua`), so this is
+---     read only when `tree` is nil,
 ---   tree?: { key_of: fun(node): string, children_of: fun(node): any[],
 ---     identity_of?: fun(node): string },
 ---   target_of?: fun(row): epicenter.Target|nil, hints?: table<string, string>,
@@ -101,20 +160,27 @@ Panel.__index = Panel
 ---   on_filter?: fun(query: string) }
 --- @return epicenter.Panel
 function M.open(spec)
-  local box = spec.box or M.box()
+  -- A split already takes only the height the user left it at (F8); an
+  -- explicit box is the caller's own choice (e.g. a fixed dashboard) -
+  -- neither resizes/moves interactively or remembers a geometry.
+  local resizable = spec.layout ~= "vsplit" and not spec.box
+  local remembered = resizable and remembered_box(spec.filetype)
+  local box = spec.box or remembered or M.box()
   local self = setmetatable({
     spec = spec,
     open = true,
     help_open = false,
     previous_win = vim.api.nvim_get_current_win(),
-    -- A split already takes only the height the user left it at (F8); an
-    -- explicit box is the caller's own choice. Everything else sizes to its
-    -- row count rather than sitting in `ui.height` regardless of it (F13).
-    size_to_content = spec.layout ~= "vsplit" and not spec.box,
+    resizable = resizable,
+    -- A remembered size is the user's own explicit choice - it must not be
+    -- overridden by the next redraw's content-fit (F13's default behaviour,
+    -- kept for any panel the user has never resized).
+    size_to_content = resizable and not remembered,
   }, Panel)
 
   local function on_close()
     self.open = false
+    flush_layout()
     if spec.on_close then
       spec.on_close()
     end
@@ -166,6 +232,7 @@ function M.open(spec)
       render_item = spec.render_row,
       text_of = spec.text_of,
       empty_text = spec.empty_text,
+      mark_key = spec.mark_key,
     })
   end
 
@@ -177,6 +244,67 @@ end
 function Panel:target()
   local row = self.list:current()
   return row and self.spec.target_of and self.spec.target_of(row) or nil
+end
+
+--- The rows an export sends: the `<Tab>` multi-selection, or everything on
+--- screen. Each carries the target it jumps to and the text it shows, so the
+--- quickfix list reads exactly like the panel did.
+--- @return epicenter.qf.Row[]
+function Panel:export_rows()
+  if not self.spec.target_of then
+    return {}
+  end
+  local out = {}
+  for index, row in ipairs(self.list:marked_or_all()) do
+    local target = self.spec.target_of(row)
+    if target then
+      table.insert(out, { target = target, text = self.spec.render_row(row, index).text })
+    end
+  end
+  return out
+end
+
+--- Sends the rows to the quickfix or location list and closes: the panel has
+--- done its job once the result set is somewhere `:cnext` can walk it.
+--- @param list "quickfix"|"loclist"
+function Panel:export(list)
+  local rows = self:export_rows()
+  local title = vim.trim(self.spec.title or "epicenter")
+  self:close()
+  vim.schedule(function()
+    require("epicenter.ui.qf").send_and_notify({ rows = rows, list = list, title = title })
+  end)
+end
+
+--- SETTLED: the panel has rows, or it has said there are none. A bare
+--- `set_items({})` is a reload clearing the old answer, not an answer.
+function Panel:settled()
+  return self.list:count() > 0 or self.noticed == true
+end
+
+--- Registers a callback for each result set the panel receives. Used by the
+--- `--qf`/`--loc` command flags, which have to act on rows that only arrive
+--- once the server answers.
+---
+--- A panel that filled itself synchronously has already settled by the time
+--- the flag registers, so `fn` runs now: waiting would skip the answer the
+--- user asked for and then fire on whatever a later reindex repainted.
+--- @param fn fun(panel: epicenter.Panel)
+function Panel:on_populate(fn)
+  if self:settled() then
+    return fn(self)
+  end
+  self.populate_hooks = self.populate_hooks or {}
+  table.insert(self.populate_hooks, fn)
+end
+
+function Panel:_populated()
+  if not self:settled() then
+    return
+  end
+  for _, fn in ipairs(self.populate_hooks or {}) do
+    fn(self)
+  end
 end
 
 --- Lines for the `?` overlay: every key this panel actually answers to, so
@@ -197,6 +325,9 @@ function Panel:_help_lines()
     add("<C-t>", "open in a new tab")
     add("o", "peek without leaving the panel")
     add("y", "yank file:line")
+    add("<Tab>", "add / remove this row from the selection")
+    add("<C-q>", "send the rows to the quickfix list")
+    add("<C-l>", "send the rows to the location list")
   end
   add("j, k", "next / previous row")
   if self.tree then
@@ -204,6 +335,11 @@ function Panel:_help_lines()
   end
   add("gg, G", "top / bottom")
   add("/", "filter by name")
+  if self.resizable then
+    add("+, -", "grow / shrink")
+    add("<, >", "narrower / wider")
+    add("<C-arrow>", "move")
+  end
   for lhs, hint in pairs(self.spec.hints or {}) do
     add(lhs, hint)
   end
@@ -219,6 +355,30 @@ function Panel:_toggle_help()
     self.win:set_lines(self:_help_lines())
   else
     self:draw()
+  end
+end
+
+--- Resizes/moves a resizable float, clamped to the editor grid, and
+--- remembers the result under its panel type - the user's own explicit
+--- choice, so a later redraw stops fitting height to content (F13's default
+--- only holds until the panel has actually been touched).
+--- @param delta { width?: integer, height?: integer, row?: integer, col?: integer }
+function Panel:_nudge(delta)
+  if not self.resizable or not self:valid() then
+    return
+  end
+  local box = self.win:geometry()
+  local next_box = window.clamp({
+    width = math.max(MIN_WIDTH, box.width + (delta.width or 0)),
+    height = math.max(MIN_HEIGHT, box.height + (delta.height or 0)),
+    row = box.row + (delta.row or 0),
+    col = box.col + (delta.col or 0),
+  })
+  self.size_to_content = false
+  self.win:set_geometry(next_box)
+  self:draw()
+  if self.spec.filetype then
+    remember_box(self.spec.filetype, next_box)
   end
 end
 
@@ -242,7 +402,7 @@ function Panel:_install_keys()
     actions["o"] = function()
       local target = self:target()
       if target then
-        M.peek(target)
+        M.peek(target, self.previous_win)
       end
     end
     actions["y"] = function()
@@ -250,6 +410,46 @@ function Panel:_install_keys()
       if target then
         M.yank(target)
       end
+    end
+    actions["<Tab>"] = function()
+      self.list:toggle_mark()
+      self.list:move(1)
+      self:draw()
+    end
+    actions["<C-q>"] = function()
+      self:export("quickfix")
+    end
+    actions["<C-l>"] = function()
+      self:export("loclist")
+    end
+  end
+
+  if self.resizable then
+    actions["+"] = function()
+      self:_nudge({ height = RESIZE_STEP })
+    end
+    actions["-"] = function()
+      self:_nudge({ height = -RESIZE_STEP })
+    end
+    actions[">"] = function()
+      self:_nudge({ width = RESIZE_STEP })
+    end
+    -- A literal `<` must be spelled `<lt>` as a mapping lhs, or Neovim reads
+    -- it as the start of a special-key sequence.
+    actions["<lt>"] = function()
+      self:_nudge({ width = -RESIZE_STEP })
+    end
+    actions["<C-Up>"] = function()
+      self:_nudge({ row = -MOVE_STEP })
+    end
+    actions["<C-Down>"] = function()
+      self:_nudge({ row = MOVE_STEP })
+    end
+    actions["<C-Left>"] = function()
+      self:_nudge({ col = -MOVE_STEP })
+    end
+    actions["<C-Right>"] = function()
+      self:_nudge({ col = MOVE_STEP })
     end
   end
 
@@ -311,14 +511,19 @@ function Panel:draw(opts)
 end
 
 function Panel:set_items(items, opts)
+  if items and #items > 0 then
+    self.noticed = false
+  end
   self.list:set_items(items)
   self:draw(opts)
+  self:_populated()
 end
 
 function Panel:set_roots(roots, opts)
   assert(self.tree, "panel was not opened as a tree")
   self.tree:set_roots(roots, opts)
   self:draw()
+  self:_populated()
 end
 
 --- Re-renders the tree after its nodes changed, keeping the selected row.
@@ -338,6 +543,7 @@ end
 --- Replaces the rows with a calm one-line message (a failure is not a crash).
 function Panel:notice(text)
   self.list.empty_text = text
+  self.noticed = true
   self:set_items({})
 end
 

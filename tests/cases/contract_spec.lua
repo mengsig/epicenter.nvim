@@ -16,6 +16,8 @@ local UNCALLED = {
   ["navgraph/events"] = true,
   ["navgraph/imports"] = true,
   ["navgraph/importers"] = true,
+  -- v1.1 helpers whose panels land in the next wave.
+  ["navgraph/types"] = true,
 }
 
 local function symbol(over)
@@ -34,6 +36,7 @@ local function symbol(over)
     callees = 1,
     exported = true,
     test = false,
+    contentHash = "0123456789abcdef",
   }, over or {})
 end
 
@@ -108,6 +111,71 @@ local ANSWERS = {
 }
 ANSWERS["navgraph/rescan"] = ANSWERS["navgraph/status"]
 
+--- v1.1: the standard LSP hierarchy methods. `data` is what lets a follow-up
+--- request name the same definition the server resolved.
+local function hierarchy_item()
+  return {
+    name = "handle",
+    kind = 12,
+    uri = "file:///proj/app/server.lua",
+    range = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 8, character = 0 },
+    },
+    selectionRange = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 2, character = 6 },
+    },
+    data = { id = 1, qualified = "M.handle", file = "app/server.lua" },
+  }
+end
+
+ANSWERS["textDocument/prepareCallHierarchy"] = { hierarchy_item() }
+ANSWERS["callHierarchy/incomingCalls"] = {
+  { from = hierarchy_item(), fromRanges = {} },
+}
+ANSWERS["callHierarchy/outgoingCalls"] = {
+  { to = hierarchy_item(), fromRanges = {} },
+}
+ANSWERS["textDocument/prepareTypeHierarchy"] = { hierarchy_item() }
+ANSWERS["typeHierarchy/supertypes"] = {}
+ANSWERS["typeHierarchy/subtypes"] = {}
+ANSWERS["textDocument/implementation"] = {}
+
+ANSWERS["navgraph/context"] = {
+  symbol = symbol(),
+  definition = {
+    text = "function M.handle() end",
+    range = {
+      start = { line = 2, character = 0 },
+      ["end"] = { line = 8, character = 0 },
+    },
+  },
+  signature = "function M.handle()",
+  callers = {},
+  callees = {},
+  types = {},
+  tests = {},
+  truncated = false,
+  tokensEstimate = 12,
+}
+ANSWERS["navgraph/impact"] = vim.tbl_extend("force", EMPTY_BLAST, {
+  hunks = {},
+  changeId = "deadbeefdeadbeef",
+  truncated = false,
+})
+ANSWERS["navgraph/tests"] = {
+  symbol = symbol(),
+  tests = {},
+  summary = { count = 0, maxDepth = 0 },
+  truncated = false,
+}
+ANSWERS["navgraph/where"] = {
+  enclosing = symbol(),
+  breadcrumbs = { symbol() },
+  file = "app/server.lua",
+}
+
 --- A session that records what a feature sent and answers from ANSWERS, so
 --- chained requests (symbolAt -> blast) reach their second call.
 local function recorder()
@@ -154,6 +222,18 @@ local DRIVEN = {
   { "diff", { "origin/main" } },
   { "callers", {} },
   { "callees", {} },
+  { "peek", {} },
+  { "crumbs", {} },
+  { "hierarchy", {} },
+  { "hierarchy", { "outgoing" } },
+  { "types", {} },
+  { "context", {} },
+  { "context", { "M.handle", "--budget", "500" } },
+  { "where", {} },
+  { "where", { "app/server.lua:4" } },
+  { "tests", {} },
+  { "impact", {} },
+  { "review", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },
@@ -223,7 +303,26 @@ describe("every feature builds contract-shaped requests", function()
     buf = vim.api.nvim_get_current_buf()
     root = require("epicenter.root").find(buf)
     session = recorder()
-    client.register_session(root, session)
+    -- A v1.1 handshake: without it every v1.1-gated feature would correctly
+    -- refuse to send, and this spec would prove nothing about their requests.
+    client.register_session(root, session, {
+      callHierarchyProvider = true,
+      typeHierarchyProvider = true,
+      implementationProvider = true,
+      experimental = {
+        navgraph = {
+          protocolVersion = 1,
+          protocolMinor = 1,
+          methods = {
+            "navgraph/impact",
+            "navgraph/tests",
+            "navgraph/types",
+            "navgraph/context",
+            "navgraph/where",
+          },
+        },
+      },
+    })
 
     opened = {}
     ui_open = vim.ui.open
@@ -296,7 +395,9 @@ describe("every feature builds contract-shaped requests", function()
   end)
 
   it("covers every ready subcommand, or names why not", function()
-    local skipped = { install = true, log = true, restart = true }
+    -- `tour` is not driven here: it opens the OTHER commands on timers, and
+    -- every one of them is already driven above.
+    local skipped = { install = true, log = true, restart = true, tour = true }
     local driven = {}
     for _, entry in ipairs(DRIVEN) do
       driven[entry[1]] = true

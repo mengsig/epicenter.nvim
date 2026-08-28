@@ -43,6 +43,9 @@ M.HELP = {
   "  keys",
   "",
   "  <CR>       jump to the symbol",
+  "  <Tab>      add / remove this row from the selection",
+  "  <C-Q>      send the rows to the quickfix list",
+  "  <C-L>      send the rows to the location list",
   "  <C-V>      open in a vertical split",
   "  <C-T>      open in a new tab",
   "  o          toggle a peek at it without leaving the panel",
@@ -82,7 +85,7 @@ local function float_surface(title)
   surface.window = window.open({
     box = box(),
     title = title,
-    footer = " ? keys · q close ",
+    footer = " ^q quickfix · ? keys · q close ",
     enter = true,
     reflow = function()
       local next_box = box()
@@ -218,7 +221,7 @@ local function initial_state(cfg)
   }
 end
 
---- @param opts { kind: "blast"|"diff", target: table, bufnr?: integer }
+--- @param opts { kind: "blast"|"diff"|"impact", target: table, bufnr?: integer }
 --- @return epicenter.blast.Panel
 function M.open(opts)
   local existing = M.current()
@@ -241,6 +244,8 @@ function M.open(opts)
     meta = { kind = opts.kind, ref = opts.target.ref },
     selected = 1,
     top = 1,
+    --- `<Tab>`-toggled rows, keyed by the row table itself.
+    marked = {},
     help_open = false,
     empty_text = "  nothing impacted",
     --- Bumped every time a query is answered - the panel's "settled" signal.
@@ -364,6 +369,10 @@ function Panel:query(opts)
     local params = model.params(self.state, { ref = self.target.ref or "HEAD" })
     return self:_request("diff", params, opts, generation)
   end
+  -- The working change has no target at all: the hunks ARE the roots.
+  if self.kind == "impact" then
+    return self:_request("impact", model.params(self.state, {}), opts, generation)
+  end
   if self.target.symbol then
     return self:_request("blast", model.params(self.state, self.target), opts, generation)
   end
@@ -418,6 +427,11 @@ end
 --- `navgraph/diff` wraps a blast result; `navgraph/blast` is one.
 --- @return table blast payload, integer|nil changed-symbol count
 local function unwrap(kind, result)
+  -- An impact answer IS a blast result (plus hunks); its roots are the
+  -- changed definitions, exactly as a diff's are.
+  if kind == "impact" then
+    return result, #(result.roots or {})
+  end
   if kind ~= "diff" then
     return result, nil
   end
@@ -444,7 +458,12 @@ function Panel:_on_result(err, result, opts)
   self.message = nil
   local blast, changed = unwrap(self.kind, result)
   local roots = blast.roots or {}
-  self.meta = { kind = self.kind, root = roots[1], ref = result.ref or self.target.ref }
+  self.meta = {
+    kind = self.kind,
+    root = roots[1],
+    ref = result.ref or self.target.ref,
+    hunks = result.hunks and #result.hunks or nil,
+  }
 
   local summary = vim.tbl_extend("force", model.empty_summary(), blast.summary or {})
   summary.changed = changed
@@ -457,6 +476,7 @@ function Panel:_on_result(err, result, opts)
     self:_paint({ stagger = not opts.realtime })
   end
   ripples.apply(self.nodes)
+  self:_populated()
 end
 
 function Panel:_show_message(message)
@@ -469,12 +489,15 @@ function Panel:_show_message(message)
   self:_set_nodes({}, model.empty_summary())
   self:_paint()
   ripples.apply({})
+  self:_populated()
 end
 
 --- @param summary table the server's blast summary for `nodes`
 function Panel:_set_nodes(nodes, summary)
   self.nodes = nodes
   self.rows = model.rows(nodes)
+  -- Fresh row tables: a mark kept here would point at rows that are gone.
+  self.marked = {}
   self.summary = summary or self.summary
   self:_clamp_selection()
 end
@@ -638,6 +661,16 @@ function Panel:_write(header, rendered, shown)
       })
     end
   end
+  local glyph = require("epicenter.ui.icons").ui("marked")
+  for _, offset in ipairs(rendered.marked_rows or {}) do
+    if offset < #body then
+      pcall(vim.api.nvim_buf_set_extmark, buf, self.ns, HEADER_ROWS + offset, 0, {
+        virt_text = { { glyph, "EpicenterAccent" } },
+        virt_text_pos = "overlay",
+        strict = false,
+      })
+    end
+  end
 end
 
 --- @param opts? { stagger?: boolean }
@@ -662,6 +695,7 @@ function Panel:_paint(opts)
     selected = self.selected,
     render_item = model.render_row,
     empty_text = self.message or self.empty_text,
+    marked = self.marked,
   })
 
   if self.reveal_tween then
@@ -824,6 +858,60 @@ function Panel:yank()
   end
 end
 
+--- Toggles the current row's `<Tab>` mark and steps on, so a selection is
+--- built by holding one key.
+function Panel:toggle_mark()
+  local row = self.rows[self.selected]
+  if not row or row.kind ~= "node" then
+    return
+  end
+  self.marked[row] = not self.marked[row] or nil
+  self:move(1)
+end
+
+--- The rows an export sends: the `<Tab>` selection, or every impacted symbol.
+--- @return epicenter.qf.Row[]
+function Panel:export_rows()
+  local chosen = {}
+  for _, row in ipairs(self.rows) do
+    if row.kind == "node" and (next(self.marked) == nil or self.marked[row]) then
+      table.insert(chosen, row)
+    end
+  end
+  local out = {}
+  for index, row in ipairs(chosen) do
+    local target = model.target(row)
+    if target then
+      table.insert(out, { target = target, text = model.render_row(row, index).text })
+    end
+  end
+  return out
+end
+
+--- @param list_kind "quickfix"|"loclist"
+function Panel:export(list_kind)
+  local rows = self:export_rows()
+  local title = ("epicenter %s"):format(self.kind)
+  self:close()
+  vim.schedule(function()
+    require("epicenter.ui.qf").send_and_notify({ rows = rows, list = list_kind, title = title })
+  end)
+end
+
+--- Registers a callback for each answered query, for the `--qf`/`--loc`
+--- command flags: the rows only exist once the server has answered.
+--- @param fn fun(panel: epicenter.blast.Panel)
+function Panel:on_populate(fn)
+  self.populate_hooks = self.populate_hooks or {}
+  table.insert(self.populate_hooks, fn)
+end
+
+function Panel:_populated()
+  for _, fn in ipairs(self.populate_hooks or {}) do
+    fn(self)
+  end
+end
+
 function Panel:set_depth(delta)
   local max = require("epicenter.config").get().blast.max_depth
   local next_depth = model.clamp_depth(self.state.depth + delta, max)
@@ -908,6 +996,15 @@ function Panel:_install_keys()
   end)
   map("y", function()
     self:yank()
+  end)
+  map("<Tab>", function()
+    self:toggle_mark()
+  end)
+  map("<C-q>", function()
+    self:export("quickfix")
+  end)
+  map("<C-l>", function()
+    self:export("loclist")
   end)
   map("/", function()
     self:_filter()

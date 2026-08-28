@@ -233,3 +233,291 @@ describe("panel sizes to its content", function()
   -- production (a Split panel resized to content here would error there
   -- rather than pass) - no standalone case needed to duplicate that split.
 end)
+
+--- M3: `71235f9`'s <Tab> mark-preservation fix keyed marks by `mark_key(item)`,
+--- but only `ui.tree` supplied one - a non-tree (flat) panel fell back to the
+--- item table's own identity, so any `set_items` re-populate with
+--- equal-but-fresh tables (any feature that reloads from a fresh answer)
+--- dropped every mark silently.
+describe("flat panel <Tab> marks survive a re-populate when mark_key is set (M3)", function()
+  local panel
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+  end)
+
+  it("keeps the mark on the same logical row, and drops it on a genuinely new one", function()
+    panel = panel_mod.open({
+      title = " test ",
+      render_row = function(item)
+        return { text = item.name }
+      end,
+      mark_key = function(item)
+        return item.id
+      end,
+    })
+    panel:set_items({ { id = "a", name = "one" }, { id = "b", name = "two" } })
+    panel.list:select(1)
+    expect.eq(panel.list:toggle_mark(), true)
+    expect.eq(#panel.list:marked_or_all(), 1, "one row marked")
+
+    -- Re-populate with fresh tables carrying the same logical rows.
+    panel:set_items({ { id = "a", name = "one" }, { id = "b", name = "two" } })
+    expect.eq(#panel.list:marked_or_all(), 1, "the mark survives a re-populate of the same rows")
+    expect.eq(panel.list:marked_or_all()[1].id, "a")
+
+    -- A genuinely different result set carries none of the old keys.
+    panel:set_items({ { id = "x", name = "three" }, { id = "y", name = "four" } })
+    expect.eq(#panel.list:marked_or_all(), 2, "a genuinely fresh result set starts unmarked")
+  end)
+end)
+
+--- Deliverable 10: every panel remembers its size/position per session -
+--- keyed by panel TYPE (`filetype`), a terminal preference rather than
+--- project data, so `store.set_root` isolates it the same way frecency does.
+describe("panel remembers its size and position", function()
+  local panel, state_dir
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ ui = { icons = "ascii" }, animate = false })
+    state_dir = vim.fs.normalize(vim.fn.tempname())
+    vim.fn.mkdir(state_dir, "p")
+    require("epicenter.store").set_root(state_dir)
+  end)
+
+  after_each(function()
+    if panel and panel:valid() then
+      panel:close()
+    end
+    panel = nil
+    require("epicenter.store").set_root(nil)
+  end)
+
+  local function open_panel(filetype)
+    return panel_mod.open({
+      title = " test ",
+      filetype = filetype,
+      render_row = function(item)
+        return { text = item.name }
+      end,
+    })
+  end
+
+  local function press(p, lhs)
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(p.win.buf, "n")) do
+      if map.lhs == lhs and map.callback then
+        return map.callback()
+      end
+    end
+    error("no mapping for " .. lhs)
+  end
+
+  it("grows/shrinks/widens/narrows on +/-/</>, clamped to a minimum", function()
+    panel = open_panel("epicenter-remember-a")
+    panel:set_items({ { name = "one" } })
+    local before = panel.win:geometry()
+
+    press(panel, "+")
+    expect.eq(panel.win:geometry().height, before.height + 4)
+    press(panel, "-")
+    press(panel, "-")
+    expect.truthy(panel.win:geometry().height >= 3, "never shrinks below the floor")
+
+    local width_before = panel.win:geometry().width
+    press(panel, ">")
+    expect.eq(panel.win:geometry().width, width_before + 4)
+    press(panel, "<lt>")
+    expect.eq(panel.win:geometry().width, width_before)
+  end)
+
+  it("moves on <C-arrow>, clamped inside the editor grid", function()
+    panel = open_panel("epicenter-remember-b")
+    panel:set_items({ { name = "one" } })
+    local before = panel.win:geometry()
+
+    press(panel, "<C-Right>")
+    expect.eq(panel.win:geometry().col, before.col + 1)
+    press(panel, "<C-Down>")
+    expect.eq(panel.win:geometry().row, before.row + 1)
+  end)
+
+  it("reopens at the resized geometry, not the default, for the same panel type", function()
+    panel = open_panel("epicenter-remember-c")
+    panel:set_items({ { name = "one" } })
+    press(panel, "+")
+    press(panel, ">")
+    local resized = panel.win:geometry()
+    panel:close()
+
+    panel = open_panel("epicenter-remember-c")
+    expect.eq(panel.win:geometry().width, resized.width)
+    expect.eq(panel.win:geometry().height, resized.height)
+  end)
+
+  it(
+    "a resize wins over the content-fit default from then on (F13 stays the default until touched)",
+    function()
+      panel = open_panel("epicenter-remember-d")
+      panel:set_items({ { name = "one" } })
+      local before_resize = panel.win.box.height
+      press(panel, "+")
+      local resized_height = panel.win.box.height
+      expect.truthy(resized_height > before_resize)
+
+      -- A large result set would normally grow the float back to the default
+      -- height (F13) - not once the user has picked their own.
+      local items = {}
+      for i = 1, panel_mod.box().height + 50 do
+        table.insert(items, { name = "item" .. i })
+      end
+      panel:set_items(items)
+      expect.eq(panel.win.box.height, resized_height, "the manual size persists across new rows")
+    end
+  )
+
+  it("resizes from the settled geometry while the open animation is still running", function()
+    -- The suite runs with motion off; this is the one case that needs a real
+    -- tween, so it turns motion on for itself and hands it back.
+    local reduce = vim.g.epicenter_reduce_motion
+    vim.g.epicenter_reduce_motion = false
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({
+      ui = { icons = "ascii" },
+      animate = true,
+      animation = { open_ms = 400 },
+    })
+
+    local ok, err = pcall(function()
+      panel = open_panel("epicenter-remember-f")
+      local items = {}
+      for i = 1, 30 do
+        items[i] = { name = "item" .. i }
+      end
+      panel:set_items(items)
+
+      -- The reveal owns the geometry: `box` is the frame on screen, and the
+      -- logical size is where the tween is going.
+      local settled = panel.win:geometry()
+      expect.truthy(panel.win.reveal_target ~= nil, "a tween is running")
+      wait(function()
+        return panel.win.box.height ~= settled.height
+      end, 2000, "a scaled frame on screen")
+
+      press(panel, "+")
+      wait(function()
+        return panel.win.reveal_target == nil
+      end, 4000, "the tween to settle")
+      expect.eq(
+        panel.win:geometry().height,
+        settled.height + 4,
+        "one step up from the settled box, not from the mid-tween one"
+      )
+    end)
+
+    vim.g.epicenter_reduce_motion = reduce
+    if not ok then
+      error(err, 0)
+    end
+  end)
+
+  it("writes the remembered geometry once for a burst of keypresses", function()
+    local store = require("epicenter.store")
+    local writes = 0
+    local original = store.write
+    store.write = function(...)
+      writes = writes + 1
+      return original(...)
+    end
+
+    panel = open_panel("epicenter-remember-g")
+    panel:set_items({ { name = "one" } })
+    for _ = 1, 10 do
+      press(panel, "+")
+    end
+    expect.eq(writes, 0, "nothing is written while the key is still going")
+
+    local resized = panel.win:geometry()
+    panel:close()
+    expect.eq(writes, 1, "one write, on the way out")
+    store.write = original
+
+    panel = open_panel("epicenter-remember-g")
+    expect.eq(panel.win:geometry().height, resized.height, "and the burst's result is what lands")
+  end)
+
+  it("keeps a nudge for the next flush when a write fails, rather than losing it (L7)", function()
+    local store = require("epicenter.store")
+    local original = store.write
+    local fail_next = true
+    store.write = function(...)
+      if fail_next then
+        fail_next = false
+        return false, "boom"
+      end
+      return original(...)
+    end
+
+    panel = open_panel("epicenter-remember-h")
+    panel:set_items({ { name = "one" } })
+    press(panel, "+")
+    local resized = panel.win:geometry()
+    -- The panel's own close flushes immediately: the first (failing) write.
+    panel:close()
+    store.write = original
+
+    -- flush_layout has no per-panel scope: closing ANY panel (even one with
+    -- no nudge of its own) flushes whatever is still pending - the earlier
+    -- nudge, if the failed write above did not already lose it.
+    local other = open_panel("epicenter-remember-h2")
+    other:set_items({ { name = "one" } })
+    other:close()
+
+    panel = open_panel("epicenter-remember-h")
+    expect.eq(panel.win:geometry().height, resized.height, "the earlier nudge survived and landed")
+  end)
+
+  it("does not remember geometry for an explicit box or a vsplit panel", function()
+    panel = panel_mod.open({
+      title = " test ",
+      filetype = "epicenter-remember-e",
+      box = { row = 0, col = 0, width = 40, height = 20 },
+      render_row = function(item)
+        return { text = item.name }
+      end,
+    })
+    panel:set_items({ { name = "one" } })
+    expect.falsy(panel.resizable, "an explicit box opts out of resize/remember")
+    for _, map in ipairs(vim.api.nvim_buf_get_keymap(panel.win.buf, "n")) do
+      expect.truthy(map.lhs ~= "+", "no resize key installed")
+    end
+  end)
+end)
+
+describe("window.clamp", function()
+  local window = require("epicenter.ui.window")
+
+  it("leaves a box that already fits alone", function()
+    local box = { row = 1, col = 2, width = 40, height = 10 }
+    expect.eq(window.clamp(box, { columns = 100, lines = 40 }), box)
+  end)
+
+  it("shrinks width/height to the grid and pulls row/col back in range", function()
+    local clamped = window.clamp(
+      { row = 90, col = 90, width = 200, height = 100 },
+      { columns = 100, lines = 40 }
+    )
+    expect.eq(clamped.width, 100)
+    expect.eq(clamped.height, 40)
+    expect.eq(clamped.row, 0)
+    expect.eq(clamped.col, 0)
+  end)
+end)

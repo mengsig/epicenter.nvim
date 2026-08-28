@@ -5,7 +5,9 @@ local function tmptree(paths)
   for _, p in ipairs(paths) do
     vim.fn.mkdir(vim.fs.joinpath(base, p), "p")
   end
-  return vim.fs.normalize(base)
+  -- root.find_from resolves symlinks (a macOS tempdir traverses one); the
+  -- expected value here must be in that same canonical form to compare.
+  return root.normalize(base)
 end
 
 describe("root", function()
@@ -43,7 +45,25 @@ describe("root", function()
   it("falls back to cwd for a nameless buffer", function()
     local buf = vim.api.nvim_create_buf(false, true)
     local found = root.find(buf, { ".navgraph-nonexistent-marker" })
-    expect.eq(found, vim.fs.normalize(vim.uv.cwd()))
+    expect.eq(found, root.normalize(vim.uv.cwd()))
     vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  -- Regression: macOS's tempdir traverses a symlink (/var -> /private/var);
+  -- Neovim resolves it for a buffer name, tempname() does not - macOS CI only.
+  it("resolves a symlinked path to the same root as its real target", function()
+    local base = tmptree({ "real/.navgraph" })
+    local alias = vim.fs.joinpath(base, "alias")
+    local ok = (vim.uv or vim.loop).fs_symlink(vim.fs.joinpath(base, "real"), alias)
+    if not ok then
+      return -- e.g. no symlink permission in this sandbox; not what this test targets
+    end
+    local via_alias = root.find_from(alias, { ".navgraph" })
+    local via_real = root.find_from(vim.fs.joinpath(base, "real"), { ".navgraph" })
+    expect.eq(via_alias, via_real)
+  end)
+
+  it("normalize resolves symlinks and tolerates a path that does not exist", function()
+    expect.eq(root.normalize("/no/such/path/at/all"), vim.fs.normalize("/no/such/path/at/all"))
   end)
 end)

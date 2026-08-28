@@ -213,6 +213,7 @@ M.commands = {
   {
     name = "blast",
     desc = "Blast radius of the symbol at the cursor",
+    rows = true,
     run = function(ctx)
       local name = ctx.args[1]
       return require("epicenter.features.blast.panel").open({
@@ -232,6 +233,7 @@ M.commands = {
   {
     name = "diff",
     desc = "Impact of the changes since a git ref",
+    rows = true,
     run = function(ctx)
       return require("epicenter.features.blast.panel").open({
         kind = "diff",

@@ -128,6 +128,56 @@ describe("the fake answers the real navgraph/* shapes", function()
     end
   )
 
+  it("carries contentHash on every Symbol, and re-hashes edited source", function()
+    local err, result = support.request(root, "navgraph/callers", { symbol = "log_request" })
+    expect.eq(err, nil)
+    expect.matches(result.root.symbol.contentHash, "^%x+$")
+    for _, child in ipairs(result.root.children) do
+      expect.matches(child.symbol.contentHash, "^%x+$", "a nested Symbol carries one too")
+    end
+  end)
+
+  it("scopes navgraph/impact to one change, hunk by hunk", function()
+    local err, result = support.request(root, "navgraph/impact", { depth = 1 })
+    expect.eq(err, nil)
+    expect.matches(result.changeId, "^%x+$")
+    expect.eq(type(result.hunks), "table")
+    for _, node in ipairs(result.nodes) do
+      expect.eq(node.contentHash, node.symbol.contentHash)
+    end
+  end)
+
+  it("navgraph/context trims to the budget, body first", function()
+    local err, full =
+      support.request(root, "navgraph/context", { symbol = "M.handle_request", budget = 4000 })
+    expect.eq(err, nil)
+    expect.truthy(#full.definition.text > 0, "a roomy budget keeps the body")
+    expect.falsy(full.truncated)
+
+    local _, tight =
+      support.request(root, "navgraph/context", { symbol = "M.handle_request", budget = 1 })
+    expect.eq(tight.definition.text, "", "the body is dropped first")
+    expect.truthy(tight.truncated)
+    expect.eq(tight.signature, full.signature, "the signature is the floor, never dropped")
+  end)
+
+  it("navgraph/context honours include, and navgraph/where answers by line", function()
+    local _, only = support.request(
+      root,
+      "navgraph/context",
+      { symbol = "M.handle_request", include = { "callers" } }
+    )
+    expect.eq(only.callees, {})
+    expect.eq(only.definition.text, "")
+    expect.truthy(#only.callers > 0)
+
+    local uri = vim.uri_from_fname(vim.fs.joinpath(root, "app/server.lua"))
+    local err, where = support.request(root, "navgraph/where", { uri = uri, line = 14 })
+    expect.eq(err, nil)
+    expect.eq(where.enclosing.qualified, "M.start")
+    expect.eq(where.file, "app/server.lua")
+  end)
+
   it("navgraph/status keys languages by language tag, not file extension", function()
     local err, result = support.request(root, "navgraph/status", {})
     expect.eq(err, nil)
@@ -138,7 +188,10 @@ describe("the fake answers the real navgraph/* shapes", function()
   it("navgraph/status carries exactly the contract's fields, no invented pid (F2)", function()
     local err, result = support.request(root, "navgraph/status", {})
     expect.eq(err, nil)
+    -- v1 plus what v1.1 adds, and nothing else - `pid` in particular is not
+    -- something this method reports (F2).
     expect.eq(keys_of(result), {
+      "backend",
       "cache",
       "edges",
       "files",
@@ -146,10 +199,13 @@ describe("the fake answers the real navgraph/* shapes", function()
       "languages",
       "lastIndexMs",
       "overlays",
+      "protocolMinor",
       "protocolVersion",
       "root",
       "symbols",
       "version",
     })
+    expect.eq(result.protocolMinor, 1)
+    expect.eq(result.backend.default, "auto")
   end)
 end)

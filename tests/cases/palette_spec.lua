@@ -126,6 +126,140 @@ describe("palette query staleness", function()
   end)
 end)
 
+--- M3: `71235f9`'s <Tab> mark-preservation fix keyed marks by `mark_key(item)`,
+--- but only `ui.tree` supplied one - a palette fell back to the item table's
+--- own identity, so any re-populate with equal-but-fresh tables (a live
+--- source answers fresh every time) dropped every mark silently.
+describe("palette <Tab> marks survive a re-populate when mark_key is set (M3)", function()
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+  end)
+
+  --- Same three logical rows, a fresh table each time `source` answers -
+  --- exactly what a live search does on every keystroke.
+  local function three_rows()
+    return { { id = "a" }, { id = "b" }, { id = "c" } }
+  end
+
+  it("keeps the mark on the same logical row, and drops it on a genuinely new one", function()
+    local p = palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        cb(nil, three_rows(), 3)
+      end,
+      render_item = function(item)
+        return { text = item.id }
+      end,
+      mark_key = function(item)
+        return item.id
+      end,
+      empty_text = "  no matches",
+    })
+    p:query("x")
+    vim.wait(50, function()
+      return p.list:count() == 3
+    end)
+
+    p.list:select(1)
+    expect.eq(p.list:toggle_mark(), true)
+    expect.eq(#p.list:marked_or_all(), 1, "one row marked")
+
+    -- Re-populate with fresh tables carrying the same logical rows (id "a").
+    -- The count stays 3 either way, so this waits unconditionally rather
+    -- than on a predicate that was already true before the refresh ran.
+    p:refresh()
+    vim.wait(50)
+    expect.eq(#p.list:marked_or_all(), 1, "the mark survives a re-populate of the same rows")
+    expect.eq(p.list:marked_or_all()[1].id, "a")
+
+    -- A genuinely different result set carries none of the old keys.
+    p.spec.source = function(_, _, cb)
+      cb(nil, { { id = "x" }, { id = "y" } }, 2)
+    end
+    p:refresh()
+    vim.wait(50, function()
+      return p.list:count() == 2
+    end)
+    expect.eq(#p.list:marked_or_all(), 2, "a genuinely fresh result set starts unmarked")
+    p:close()
+  end)
+end)
+
+--- M4: an armed --qf/--loc used to hijack every ACTIONS entry (`<CR>`,
+--- `<C-t>`, `<C-v>`, `<C-x>`) - `Palette:accept` exported whenever
+--- `armed_export` was set, regardless of which key sent it there. Both the
+--- footer and the README/vimdoc promise `<CR>` only.
+describe("an armed export claims <CR> only (M4)", function()
+  local qf = require("epicenter.ui.qf")
+  local original_send
+
+  before_each(function()
+    require("epicenter.config").reset()
+    require("epicenter.config").setup({ animate = false, ui = { icons = "ascii" } })
+    original_send = qf.send_and_notify
+  end)
+
+  after_each(function()
+    qf.send_and_notify = original_send
+  end)
+
+  local function armed_palette(on_accept)
+    local p = palette.open({
+      title = " test ",
+      source = function(_, _, cb)
+        cb(nil, { { id = "a" } }, 1)
+      end,
+      render_item = function(item)
+        return { text = item.id }
+      end,
+      on_accept = on_accept,
+      empty_text = "  no matches",
+    })
+    p:arm_export("quickfix")
+    p:query("x")
+    vim.wait(50)
+    return p
+  end
+
+  it("exports on <CR> (a nil or 'edit' action)", function()
+    local sent = 0
+    qf.send_and_notify = function()
+      sent = sent + 1
+    end
+    local accepted = 0
+    local p = armed_palette(function()
+      accepted = accepted + 1
+    end)
+
+    p:accept("edit")
+    vim.wait(20)
+
+    expect.eq(sent, 1, "the armed export ran")
+    expect.eq(accepted, 0, "on_accept must not also run")
+  end)
+
+  for _, action in ipairs({ "tab", "vsplit", "split" }) do
+    it(("keeps its normal meaning: <%s> still opens the row, not export"):format(action), function()
+      local sent = 0
+      qf.send_and_notify = function()
+        sent = sent + 1
+      end
+      local accepted, accepted_action = 0, nil
+      local p = armed_palette(function(_item, act)
+        accepted, accepted_action = accepted + 1, act
+      end)
+
+      p:accept(action)
+      vim.wait(20)
+
+      expect.eq(sent, 0, "an armed export must not hijack " .. action)
+      expect.eq(accepted, 1, "the row still opens")
+      expect.eq(accepted_action, action)
+    end)
+  end
+end)
+
 describe("palette resize across the preview threshold (F2)", function()
   before_each(function()
     require("epicenter.config").reset()

@@ -10,6 +10,7 @@ CONTENTS                                                   *epicenter-contents*
   1. Introduction ............................. |epicenter-introduction|
   2. Installation ............................. |epicenter-installation|
   3. Commands ................................. |epicenter-commands|
+     - quickfix export ........................ |epicenter-quickfix|
   4. Mappings ................................. |epicenter-mappings|
   5. Configuration ............................ |epicenter-configuration|
   6. Highlights ............................... |epicenter-highlights|
@@ -21,9 +22,18 @@ CONTENTS                                                   *epicenter-contents*
          ripples .............................. |epicenter-ripples|
          badges ............................... |epicenter-badges|
      - explore ................................ |epicenter-explore|
+     - peek ................................... |epicenter-peek|
+     - crumbs ................................. |epicenter-crumbs|
+     - hierarchy .............................. |epicenter-hierarchy|
+     - context ................................ |epicenter-context|
+     - tests .................................. |epicenter-tests|
+     - impact ................................. |epicenter-impact|
+         review ............................... |epicenter-review|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
+     - tour ................................... |epicenter-tour|
+     - telescope ............................... |epicenter-telescope|
      - core .................................... |epicenter-core|
      - planned ................................ |epicenter-planned|
  10. Extending ................................ |epicenter-extending|
@@ -92,24 +102,55 @@ The binary is looked up in this order:
 
                                                     *epicenter-commands-table*
 >
-    search   |epicenter-search|   Fuzzy symbol search across the project
-    grep     |epicenter-search|   Repo-wide text search, unsaved edits too
-    blast    |epicenter-blast|    Blast radius of the symbol at the cursor
-    hover    |epicenter-blast|    What this symbol is, and who calls it
-    diff     |epicenter-blast|    Impact of the changes since a git ref
-    callers  |epicenter-explore|  Who calls the symbol under the cursor
-    callees  |epicenter-explore|  What the symbol under the cursor calls
-    path     |epicenter-path|     Call chain between two symbols
-    outline  |epicenter-outline|  Live symbol outline of the current buffer
-    hot      |epicenter-hot|      Most depended-on symbols, ranked by fan-in
-    unused   |epicenter-hot|      Symbols nothing in the index reaches
-    graph    |epicenter-hot|      Write the call graph to a file and open it
-    status   |epicenter-core|     Dashboard: index, server, languages, log
-    install  |epicenter-core|     Download or build the navgraph binary
-    restart  |epicenter-core|     Restart the server for this project
-    rescan   |epicenter-core|     Re-stat every file and rebuild the index
-    log      |epicenter-core|     Open the epicenter log
+    search     |epicenter-search|     Fuzzy symbol search across the project
+    grep       |epicenter-search|     Repo-wide text search, unsaved edits too
+    blast      |epicenter-blast|      Blast radius of the symbol at the cursor
+    hover      |epicenter-blast|      What this symbol is, and who calls it
+    diff       |epicenter-blast|      Impact of the changes since a git ref
+    callers    |epicenter-explore|    Who calls the symbol under the cursor
+    callees    |epicenter-explore|    What the symbol under the cursor calls
+    peek       |epicenter-peek|       Read the definition under the cursor
+    crumbs     |epicenter-crumbs|     Toggle the breadcrumb winbar here
+    hierarchy  |epicenter-hierarchy|  Call hierarchy at the cursor
+    types      |epicenter-hierarchy|  Type hierarchy, and who uses this type
+    context    |epicenter-context|    Yank a symbol's context bundle
+    where      |epicenter-context|    What encloses this line
+    tests      |epicenter-tests|      Tests that reach this symbol
+    impact     |epicenter-impact|     Blast radius of the working change
+    review     |epicenter-impact|     Review the working change's impact
+    path       |epicenter-path|       Call chain between two symbols
+    outline    |epicenter-outline|    Live symbol outline of this buffer
+    hot        |epicenter-hot|        Most depended-on symbols, by fan-in
+    unused     |epicenter-hot|        Symbols nothing in the index reaches
+    graph      |epicenter-hot|        Write the call graph and open it
+    tour       |epicenter-tour|       A minute with the whole plugin
+    status     |epicenter-core|       Dashboard: index, server, languages, log
+    install    |epicenter-core|       Download or build the navgraph binary
+    restart    |epicenter-core|       Restart the server for this project
+    rescan     |epicenter-core|       Re-stat every file and rebuild the index
+    log        |epicenter-core|       Open the epicenter log
 <
+                                                         *epicenter-quickfix*
+QUICKFIX AND LOCATION LIST
+
+Every subcommand that produces rows takes `--qf` or `--loc`: the result set
+goes to the quickfix list (or this window's location list) instead of staying
+in a panel, and the list opens ready for `:cnext`. >
+
+    :Epicenter blast --qf
+    :Epicenter callers M.handle --loc
+<
+On a live palette (`search`, `grep`, `path` with a name still to pick) there
+is no result set until you have typed one, so the flag arms `<CR>` instead:
+accepting sends the rows on screen to the list rather than jumping to one.
+
+Inside any panel or palette the same two lists are one key away: `<C-q>` sends
+the rows to the quickfix list, `<C-l>` to the location list. `<Tab>` toggles a
+row into a multi-selection first - with a selection, `<C-q>` sends only those
+rows; with none, it sends every row on screen.
+
+Each entry carries `file`, `line`, `col` and the row's own text, so the list
+reads the way the panel did.
 
 ==============================================================================
 4. MAPPINGS                                                *epicenter-mappings*
@@ -119,17 +160,24 @@ change `keymaps.prefix`.
 
                                                     *epicenter-mappings-table*
 >
-    <leader>es  :Epicenter search   Fuzzy symbol search across the project
-    <leader>eg  :Epicenter grep     Repo-wide text search, unsaved edits too
-    <leader>ee  :Epicenter blast    Blast radius of the symbol at the cursor
-    <leader>ek  :Epicenter hover    What this symbol is, and who calls it
-    <leader>ed  :Epicenter diff     Impact of the changes since a git ref
-    <leader>ec  :Epicenter callers  Who calls the symbol under the cursor
-    <leader>eC  :Epicenter callees  What the symbol under the cursor calls
-    <leader>ep  :Epicenter path     Call chain between two symbols
-    <leader>eo  :Epicenter outline  Live symbol outline of the current buffer
-    <leader>eh  :Epicenter hot      Most depended-on symbols, ranked by fan-in
-    <leader>ex  :Epicenter status   Dashboard: index, server, languages, log
+    <leader>es  :Epicenter search     Fuzzy symbol search across the project
+    <leader>eg  :Epicenter grep       Repo-wide text search, unsaved edits too
+    <leader>ee  :Epicenter blast      Blast radius of the symbol at the cursor
+    <leader>ek  :Epicenter hover      What this symbol is, and who calls it
+    <leader>ed  :Epicenter diff       Impact of the changes since a git ref
+    <leader>ec  :Epicenter callers    Who calls the symbol under the cursor
+    <leader>eC  :Epicenter callees    What the symbol under the cursor calls
+    <leader>eP  :Epicenter peek       Read the definition under the cursor
+    <leader>eH  :Epicenter hierarchy  Call hierarchy at the cursor
+    <leader>eT  :Epicenter types      Type hierarchy, and who uses this type
+    <leader>ey  :Epicenter context    Yank a symbol's context bundle
+    <leader>et  :Epicenter tests      Tests that reach this symbol
+    <leader>ei  :Epicenter impact     Blast radius of the working change
+    <leader>ea  :Epicenter review     Review the working change's impact
+    <leader>ep  :Epicenter path       Call chain between two symbols
+    <leader>eo  :Epicenter outline    Live symbol outline of this buffer
+    <leader>eh  :Epicenter hot        Most depended-on symbols, by fan-in
+    <leader>ex  :Epicenter status     Dashboard: index, server, languages, log
 <
 
 Panel keys are listed with each feature below, and `?` in normal mode shows
@@ -165,11 +213,19 @@ Defaults: >lua
         strict = false,
         tests = "with",
       },
+      crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
       explore = { debounce_ms = 100 },
       grep = { debounce_ms = 60, limit = 200 },
       highlights = {},
       hot = { bar_width = 12, limit = 30 },
       hover = { callers = 5, max_width = 80 },
+      impact = {
+        debounce_ms = 400,
+        depth = 2,
+        enabled = true,
+        inline = true,
+        marker = "affected",
+      },
       keymaps = { prefix = "<leader>e" },
       log = { file = nil, level = "warn" },
       lsp = {
@@ -196,6 +252,20 @@ Defaults: >lua
       path = { step_ms = 45 },
       ripples = true,
       search = { debounce_ms = 40, limit = 50 },
+      tests = {
+        limit = 100,
+        runner = {
+          go = "go test -run %s ./...",
+          javascript = "npx vitest run %f -t %s",
+          lua = "busted %f",
+          python = "pytest %f::%s",
+          rust = "cargo test %s",
+          typescript = "npx vitest run %f -t %s",
+          zig = "zig test %f",
+        },
+      },
+      theme = { accent = "auto" },
+      tour = { offer = true },
       ui = {
         border = "rounded",
         height = 0.8,
@@ -290,6 +360,10 @@ Groups are derived at runtime from the active colourscheme (`Normal`,
     EpicenterRipple2    ripple ring 2
     EpicenterRipple3    ripple ring 3 and deeper
 
+`theme.accent` decides where `EpicenterAccent` itself comes from: `"auto"`
+(default, `Function`/`Title`), `"mono"` (drops it - the flattest palette), or
+a literal `"#rrggbb"` / highlight group name to borrow `fg` from.
+
 ==============================================================================
 7. HEALTH                                                    *epicenter-health*
 
@@ -345,7 +419,24 @@ SEARCH                                                        *epicenter-search*
     Repo-wide text search over the server's in-memory sources, so unsaved
     edits are included. Same palette, different source.
 
-Keys inside either palette:
+                                                      *epicenter-palette-modes*
+It is ONE palette in three modes, and `<C-space>` cycles them without losing
+what you have typed:
+
+    symbols         fuzzy over every definition
+    grep            the same query as text, over the whole repo
+    references      the use sites of what matches, grouped by the definition
+                    they sit inside
+
+Both commands open the same palette - `:Epicenter search` starts in symbols,
+`:Epicenter grep` in grep - and the box renames itself as you cycle.
+
+                                                        *epicenter-frecency*
+Symbols you have jumped to before rank first, per project. Each pick is sent
+back as `search.recent` on the next query, and the list is remembered under
+`stdpath("state")` - never in the project itself.
+
+Keys inside the palette:
 
     <CR>            jump to the result, pushing the jumplist
     <C-t>           open in a new tab
@@ -354,9 +445,12 @@ Keys inside either palette:
     <C-n>, <Down>   next result
     <C-p>, <Up>     previous result
     j, k            next / previous result (normal mode)
-    <C-r>           search: toggle reference mode; grep: toggle regex
-    <C-k>           search: cycle the kind filter
+    <C-space>       symbols -> grep -> references
+    <C-r>           grep: toggle regex
+    <C-k>           symbols/references: cycle the kind filter
                     (all -> functions -> types -> values)
+    <Tab>           add / remove this row from the selection
+    <C-q>, <C-l>    send the rows to the quickfix / location list
     <C-y>           yank `file:line`
     ?               toggle the key help (normal mode)
     <Esc>, q        close
@@ -517,10 +611,15 @@ Keys inside the panel:
     <C-v>, <C-t>    open in a vertical split / a new tab
     o               peek at the definition without leaving the panel
     y               yank `file:line`
+    <Tab>           add / remove the row from the selection
+    <C-q>, <C-l>    send the rows to the quickfix / location list
     r               toggle reference edges
     s               toggle strict mode (drops the `?` edges)
     t               cycle the test scope (with -> without -> only)
     /               filter by name
+    +, -            grow / shrink
+    <, >            narrower / wider
+    <C-arrow>       move
     ?               toggle the key help (normal mode)
     q, <Esc>        close
 
@@ -528,10 +627,224 @@ The open rows are re-fetched on |EpicenterIndexed|, debounced and repainted
 once as a batch, so a burst of edits does not flicker or fan out one request
 per row.
 
+`+`/`-`/`<`/`>`/`<C-arrow>` are shared by every panel built on this shared
+kit (a float, with no fixed `box` of its own - the dashboards excepted): a
+resize is remembered per PANEL TYPE (not per project) under
+`stdpath("state")`, so `:Epicenter callers` reopens at the size you last left
+it, across a restart. A vsplit panel (e.g. |epicenter-outline|) keeps its own
+window's height/width instead - there is nothing to remember, it is already
+whatever you left it at. |epicenter-blast| owns its window separately and
+already spends `+`/`-` on query depth, so it does not have this.
+
 Options: >lua
 
     explore = { debounce_ms = 100 },
 <
+==============================================================================
+PEEK                                                           *epicenter-peek*
+
+                                                           *:Epicenter-peek*
+:Epicenter peek                                                *<leader>eP*
+    The definition under the cursor, in a float that does NOT take focus:
+    read it and keep typing. Off a name it falls back to the definition whose
+    body the cursor sits in.
+
+    <CR>            go to what the peek is showing
+    q               dismiss it
+
+    Both keys are borrowed from the buffer underneath while the float is up
+    and handed back when it goes. Moving the cursor, entering insert mode or
+    leaving the buffer dismisses it too.
+
+    The same component answers `o` inside every panel - there it takes focus,
+    because the panel already holds the cursor.
+
+==============================================================================
+CRUMBS                                                       *epicenter-crumbs*
+
+Two one-line components for your own statusline and winbar. Both read a cache
+on every redraw and ask the server at most once per line the cursor reaches;
+with no server running for the project both are empty and nothing is sent.
+
+                                                    *epicenter.breadcrumbs()*
+require("epicenter").breadcrumbs()
+    The enclosing chain of the cursor's line, outermost first, joined by
+    `crumbs.separator`. For a winbar: >lua
+
+        vim.wo.winbar = "%{v:lua.require'epicenter'.breadcrumbs()}"
+<
+    Set `crumbs.winbar = true` to have epicenter install exactly that on every
+    code window - it never overwrites a winbar you set yourself.
+
+                                                     *epicenter.statusline()*
+require("epicenter").statusline()
+    The fan-in/fan-out of whatever the cursor is inside, e.g. `⌁ 12 ← · 4 →`.
+    Drop it into lualine, heirline, or `statusline` directly: >lua
+
+        vim.o.statusline = "%f %{v:lua.require'epicenter'.statusline()}"
+<
+                                                         *:Epicenter-crumbs*
+:Epicenter crumbs
+    Turns the breadcrumb winbar on or off in this window, without editing the
+    config for a one-off look.
+
+Against a server older than protocol 1.1 the chain is the enclosing definition
+alone - what that server can answer, rather than an invented chain.
+
+Options: >lua
+
+    crumbs = { debounce_ms = 120, separator = " › ", winbar = false },
+<
+==============================================================================
+HIERARCHY                                                 *epicenter-hierarchy*
+
+Both panels ride the standard LSP call- and type-hierarchy methods the v1.1
+protocol adds, so any editor gets them - not just this one. Against a server
+that does not announce them the panel says so and sends nothing.
+
+                                                     *:Epicenter-hierarchy*
+:Epicenter hierarchy [incoming|outgoing]                       *<leader>eH*
+    Who calls the symbol under the cursor, as a tree. `incoming` by default;
+    `d` flips the whole tree to what it calls instead. Only the first level is
+    fetched - `l` asks for the next one - so the panel opens in one request
+    whatever the size of the graph.
+
+                                                         *:Epicenter-types*
+:Epicenter types                                               *<leader>eT*
+    The supertypes, subtypes, implementors and users of the type under the
+    cursor, in four groups. A supertype expands upward and a subtype
+    downward; implementors and users are locations, so they are leaves - a
+    user row also carries how it uses the type (`as param`, `as field`, ...).
+    Users comes from the custom `navgraph/types`, not the standard LSP
+    methods the other three groups use - it is only asked for once the
+    server announces that method; an older server still shows the other
+    three.
+
+Rows carry the kind icon, the qualified name, `file:line`, and:
+
+    3x              the caller reaches it from more than one call site
+    ?               a heuristic edge - resolved by trailing name, not by an
+                    exact qualified match
+    recursive       the definition is already open further up this branch
+
+Keys are the shared panel keys (|epicenter-explore| lists them), plus:
+
+    l, h            expand (fetching the level) / collapse
+    d               call hierarchy: flip incoming <-> outgoing
+
+==============================================================================
+CONTEXT                                                     *epicenter-context*
+
+The two questions an editing agent asks about code: everything about one
+symbol, and what a line belongs to. Both need protocol 1.1; against an older
+server the command says so and sends nothing.
+
+                                                       *:Epicenter-context*
+:Epicenter context [symbol] [--budget {n}]                     *<leader>ey*
+    Yanks one symbol's context bundle to the `+` register as compact markdown:
+    signature, doc, body, callers, callees, types and tests, each with its
+    `file:line`. Without {symbol} the cursor's own definition is used. A toast
+    reports the token estimate.
+
+    The server trims the bundle to {n} tokens (2000 by default) by dropping
+    bodies first, then tests, then types, then callees; a trimmed bundle says
+    so, in the markdown and in the toast.
+
+    With `--qf` (or `--loc`) the bundle's members also land in the quickfix
+    list, so the same set is walkable with `:cnext`.
+
+                                                         *:Epicenter-where*
+:Epicenter where [{file}:{line}]
+    The definition enclosing a line, with the breadcrumb chain that reaches
+    it. Without an argument, the cursor's line. Paste a frame off a stack
+    trace or a diff header to find out what it is inside of: >
+
+        :Epicenter where app/services/order_service.py:112
+<
+==============================================================================
+TESTS                                                         *epicenter-tests*
+
+                                                         *:Epicenter-tests*
+:Epicenter tests [symbol]                                      *<leader>et*
+    Every test from which the symbol under the cursor is reachable - the
+    coverage walk run backwards - grouped by the file it lives in. Needs
+    protocol 1.1.
+
+    Rows carry the test's name, its `file:line`, and `dN`: how many calls
+    away the target is. `d1` is a direct test; anything deeper reached it
+    through other definitions, which is worth knowing before trusting it.
+
+    Keys are the shared panel keys (|epicenter-explore| lists them), plus:
+
+    l, h            expand / collapse a file
+    r               run the test under the cursor
+
+                                                   *epicenter-tests-runner*
+`r` runs one test through a per-language command template. `%f` is the test's
+file, `%s` its own name; both are shell-escaped as they are substituted, so a
+template must not quote them itself. The command runs in the project root
+through your `shell`, and its output streams into a scratch split. Nothing
+blocks. >
+
+    require("epicenter").setup({
+      tests = {
+        runner = {
+          python = "pytest %f::%s",
+          go = "go test -run %s ./...",
+          -- add a language by naming it
+          elixir = "mix test %f",
+        },
+      },
+    })
+<
+A language with no template says so and runs nothing.
+
+==============================================================================
+IMPACT                                                       *epicenter-impact*
+
+What the working change reaches, without being asked. On every reindex - and
+only while something is actually unsaved - epicenter asks `navgraph/impact`
+and marks each impacted definition where it lives: a sign in the gutter and a
+calm note at the end of its line, graded by how many calls away it is.
+
+With nothing unsaved there is no working change, so no request is sent and
+every mark comes down. Needs protocol 1.1.
+
+                                                        *:Epicenter-impact*
+:Epicenter impact                                              *<leader>ei*
+    The blast panel, rooted at the changed hunks rather than at one symbol.
+    Every key the blast panel has (|epicenter-blast|) works here.
+
+                                                         *epicenter-review*
+                                                        *:Epicenter-review*
+:Epicenter review [export]                                     *<leader>ea*
+    The same impact as a review list: rows grouped by changed hunk, each
+    impacted definition with its `file:line`, how many calls away it is, and
+    `?` when the edge was resolved by name rather than exactly.
+
+    a               approve this row - it turns to a faint check, here and
+                    on the marker in the code
+    A               approve every impacted definition in this row's file
+    u               unapprove this row
+    <CR>, o         jump to it / peek at it without leaving the panel
+
+    `:Epicenter review export` copies the whole list to the clipboard as a
+    markdown checklist, for a pull-request description. `e` does the same
+    from inside the panel.
+
+    Approvals live under `stdpath("state")`, per project, and are keyed by the
+    definition AND the hash of its source: edit that definition and it comes
+    back unreviewed, while everything you already looked at stays ticked.
+
+                                                    *epicenter-impact-line*
+The progress fits a statusline: >
+
+    require("epicenter").impact()   -- "impact 3/12 reviewed", or ""
+<
+`impact = { inline = false }` keeps the panel and the statusline but marks
+nothing in the code; `impact = { enabled = false }` turns the whole ambient
+surface off, request included.
+
 ==============================================================================
 PATH                                                           *epicenter-path*
 
@@ -618,6 +931,32 @@ Options: >lua
     hot = { limit = 30, bar_width = 12 },
     unused = { limit = 200 },
 <
+==============================================================================
+TOUR                                                           *epicenter-tour*
+
+                                                          *:Epicenter-tour*
+:Epicenter tour
+    A minute with the whole plugin: a handful of notes, each with the panel it
+    is talking about open beside it, on the buffer you are in. Running it
+    again stops it.
+
+    Nothing starts on its own. The first time a project is indexed, one notice
+    says the tour exists - once, ever. `tour = { offer = false }` turns even
+    that off.
+
+==============================================================================
+TELESCOPE                                                 *epicenter-telescope*
+
+Optional: `require("telescope").load_extension("epicenter")` pulls in three
+pickers over the same server calls the palette and blast panel use - >
+
+    require("telescope").extensions.epicenter.symbols()  -- live, ranked
+    require("telescope").extensions.epicenter.grep()     -- live, repo-wide
+    require("telescope").extensions.epicenter.blast()    -- one fetch, filtered
+<
+Nothing here is required, or even touched, unless Telescope itself loads it -
+a session without Telescope never requires |epicenter.telescope|.
+
 ==============================================================================
 CORE                                                           *epicenter-core*
 

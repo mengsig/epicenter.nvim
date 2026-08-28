@@ -57,7 +57,22 @@ function M.after_each(fn)
   table.insert(suite.after, fn)
 end
 
+--- Raised by `M.skip`; carried through xpcall untouched so `M.it` can tell a
+--- deliberate skip from a failure.
+local SKIP = {}
+
+--- Ends the running test as SKIPPED, with `reason` printed in the report.
+--- For a precondition the lane cannot meet - a real server that does not
+--- speak the method under test yet. Never for a failing assertion.
+--- @param reason string
+function M.skip(reason)
+  error(setmetatable({ reason = tostring(reason) }, SKIP), 0)
+end
+
 local function traceback(err)
+  if getmetatable(err) == SKIP then
+    return err
+  end
   return debug.traceback(tostring(err), 3)
 end
 
@@ -83,6 +98,9 @@ function M.it(name, fn)
     end
   end
 
+  if not ok and getmetatable(err) == SKIP then
+    ok, case.skipped, err = true, err.reason, nil
+  end
   case.ok = ok
   case.err = err
   table.insert(state.results, case)
@@ -238,6 +256,16 @@ function M.isolate()
     end
   end
 
+  -- A buffer left pointing at a file a previous spec deleted (a tempname,
+  -- an installed shim) makes the NEXT file's first `:edit` print E211 and
+  -- redraw, which aborts headless Neovim in grid_line_flush. Wipe them.
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name ~= "" and vim.fn.filereadable(name) == 0 and vim.fn.isdirectory(name) == 0 then
+      pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    end
+  end
+
   for name in pairs(package.loaded) do
     if
       name == "epicenter"
@@ -272,10 +300,13 @@ function M.run(files)
 
   local passed, failed = 0, 0
   for _, case in ipairs(state.results) do
-    if case.ok then
-      passed = passed + 1
-    else
-      failed = failed + 1
+    -- A skipped case is neither a pass nor a failure; `report` names them.
+    if not case.skipped then
+      if case.ok then
+        passed = passed + 1
+      else
+        failed = failed + 1
+      end
     end
   end
   return passed, failed, state.results
@@ -293,8 +324,14 @@ function M.report(passed, failed, results, file_count, elapsed_ms, write)
     table.insert(out, select("#", ...) > 0 and fmt:format(...) or fmt)
   end
 
+  local skipped = 0
   for _, case in ipairs(results) do
-    if not case.ok then
+    if case.skipped then
+      skipped = skipped + 1
+      w("SKIP  %s", case.name)
+      w("      %s", case.skipped)
+      w("")
+    elseif not case.ok then
       w("FAIL  %s", case.name)
       for _, line in ipairs(vim.split(tostring(case.err), "\n", { plain = true })) do
         w("      %s", line)
@@ -303,7 +340,11 @@ function M.report(passed, failed, results, file_count, elapsed_ms, write)
     end
   end
 
-  w("%d passed, %d failed  (%d files, %.0fms)", passed, failed, file_count, elapsed_ms)
+  local tally = ("%d passed, %d failed"):format(passed, failed)
+  if skipped > 0 then
+    tally = tally .. (", %d skipped"):format(skipped)
+  end
+  w("%s  (%d files, %.0fms)", tally, file_count, elapsed_ms)
   -- A leading newline, not just a trailing one: Neovim's own LSP exit
   -- notices (e.g. a spec that provokes a crash on purpose) print without a
   -- trailing newline in headless mode, so this report used to start on
@@ -322,6 +363,7 @@ function M.install_globals()
   _G.after_each = M.after_each
   _G.expect = M.expect
   _G.wait = M.wait
+  _G.skip = M.skip
 end
 
 return M

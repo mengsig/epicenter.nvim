@@ -141,9 +141,10 @@ function M.relative_path(bufnr)
   if name == "" then
     return nil
   end
-  local path = vim.fs.normalize(name)
+  local root_mod = require("epicenter.root")
+  local path = root_mod.normalize(name)
   local cfg = require("epicenter.config").get()
-  local root = vim.fs.normalize(require("epicenter.root").find(bufnr, cfg.lsp.root_markers))
+  local root = root_mod.find(bufnr, cfg.lsp.root_markers)
   if root ~= "" and vim.startswith(path, root .. "/") then
     return path:sub(#root + 2)
   end

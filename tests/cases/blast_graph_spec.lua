@@ -163,7 +163,7 @@ describe("fake call graph", function()
     )
     expect.eq(outline.files[1].symbols[2].callers, 1)
     expect.eq(outline.files[1].symbols[2].callees, 2)
-    expect.eq(#graph.outline(built, {}).files, 3, "no path filter outlines every file")
+    expect.eq(#graph.outline(built, {}).files, 4, "no path filter outlines every file")
   end)
 
   it("treats the files navgraph holds overlays for as the changed set", function()

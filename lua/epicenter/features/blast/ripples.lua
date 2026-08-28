@@ -7,6 +7,7 @@
 local M = {}
 
 local theme = require("epicenter.ui.theme")
+local root_mod = require("epicenter.root")
 
 local NS = vim.api.nvim_create_namespace("epicenter.ripples")
 
@@ -17,8 +18,12 @@ local SIGN_ALPHA = { 1.0, 0.62, 0.38 }
 local SIGNS = { "▍", "▏", "▏" }
 local ASCII_SIGNS = { "|", ":", "." }
 
---- path -> line -> ring, or nil when no panel is open.
+--- path -> line -> ring, or nil when no panel is open. Keys are
+--- `root.normalize`d, to agree with the server's own canonicalized paths.
 local impacted = nil
+--- bufnr -> line -> extmark id: a repaint moves the marks the buffer's edits
+--- carried, instead of snapping them back to the answer's line numbers.
+local placed = {}
 local augroup = nil
 
 local function grade(ring)
@@ -44,29 +49,27 @@ local function sign_for(ring)
   return set[grade(ring)]
 end
 
+--- @param ring integer
+local function decorate(ring)
+  local group = M.GROUPS[grade(ring)]
+  return {
+    line_hl_group = group,
+    sign_text = sign_for(ring),
+    sign_hl_group = group,
+    priority = 90,
+  }
+end
+
 --- @param bufnr integer
 local function paint(bufnr)
-  if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    placed[bufnr] = nil
     return
   end
-  vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
   local name = vim.api.nvim_buf_get_name(bufnr)
-  local lines = name ~= "" and impacted and impacted[vim.fs.normalize(name)] or nil
-  if not lines then
-    return
-  end
-  local last = vim.api.nvim_buf_line_count(bufnr)
-  for line, ring in pairs(lines) do
-    if line >= 1 and line <= last then
-      local group = M.GROUPS[grade(ring)]
-      vim.api.nvim_buf_set_extmark(bufnr, NS, line - 1, 0, {
-        line_hl_group = group,
-        sign_text = sign_for(ring),
-        sign_hl_group = group,
-        priority = 90,
-      })
-    end
-  end
+  local lines = name ~= "" and impacted and impacted[root_mod.normalize(name)] or nil
+  placed[bufnr] =
+    require("epicenter.ui.marklayer").reapply(bufnr, NS, placed[bufnr], lines, decorate)
 end
 
 local function paint_all()
@@ -82,9 +85,15 @@ function M.apply(nodes)
     return M.clear()
   end
   local by_path = {}
+  -- One realpath per distinct file, not per node.
+  local canonical = {}
   for _, node in ipairs(nodes) do
     if node.state ~= "removed" and node.symbol.uri then
-      local path = vim.fs.normalize(vim.uri_to_fname(node.symbol.uri))
+      local path = canonical[node.symbol.uri]
+      if not path then
+        path = root_mod.normalize(vim.uri_to_fname(node.symbol.uri))
+        canonical[node.symbol.uri] = path
+      end
       local lines = by_path[path] or {}
       by_path[path] = lines
       local line = node.symbol.line
@@ -110,12 +119,19 @@ function M.apply(nodes)
       M.define()
     end,
   })
+  vim.api.nvim_create_autocmd({ "BufWipeout", "BufDelete" }, {
+    group = augroup,
+    callback = function(event)
+      placed[event.buf] = nil
+    end,
+  })
   paint_all()
 end
 
 --- Drops every mark. Called when the panel closes.
 function M.clear()
   impacted = nil
+  placed = {}
   if augroup then
     vim.api.nvim_clear_autocmds({ group = augroup })
   end

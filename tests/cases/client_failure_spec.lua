@@ -8,6 +8,7 @@
 --- broken thing and "no navgraph server running yet" underneath.
 local client = require("epicenter.client")
 local install = require("epicenter.install")
+local root_mod = require("epicenter.root")
 
 --- A navgraph stand-in. `--version` answers the capabilities document with
 --- `commands` as given; every other argv exits 2, exactly as the real stale
@@ -50,7 +51,9 @@ describe("a navgraph that cannot serve", function()
     install.forget_capabilities()
     install.forget_first_run_notice()
     path, dir = shim({ "search", "outline" })
-    root = dir
+    -- client.lua keys servers[] by the canonical (symlink-resolved) root, so
+    -- comparisons against client.roots()/client.info() must use the same form.
+    root = root_mod.normalize(dir)
     require("epicenter.config").setup({ navgraph = { path = path }, lsp = { auto_start = false } })
     notices = {}
     original_notify = require("epicenter.ui.toast").notify
@@ -168,7 +171,9 @@ describe("a navgraph that starts and then crash-loops", function()
     install.forget_first_run_notice()
     -- Advertises `lsp`, so the probe lets it through; exits 2 on every start.
     path, dir = shim({ "lsp" })
-    root = dir
+    -- client.lua keys servers[] by the canonical (symlink-resolved) root, so
+    -- comparisons against client.roots()/client.info() must use the same form.
+    root = root_mod.normalize(dir)
     require("epicenter.config").setup({
       navgraph = { path = path },
       lsp = { auto_start = false, restart = { max = 2, backoff_ms = { 10, 10 } } },

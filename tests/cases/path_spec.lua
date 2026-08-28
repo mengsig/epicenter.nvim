@@ -400,6 +400,46 @@ describe("path ambiguity on candidates that share a qualified name (F1)", functi
     )
   end)
 
+  it("keeps --qf across the picker, so the re-run's rows still reach the list", function()
+    local candidates = routers()
+    client.register_session(
+      root,
+      scripted(function(params)
+        if params.from == "router" then
+          return { path = {}, ambiguousFrom = candidates, ambiguousTo = {} }
+        end
+        return { path = { candidates[1] }, ambiguousFrom = {}, ambiguousTo = {} }
+      end)
+    )
+    -- The export itself is captured rather than run: a real quickfix window
+    -- (and the toast that follows it) left standing in a headless session
+    -- aborts the next test's first redraw.
+    local qf = require("epicenter.ui.qf")
+    local sent = nil
+    local original_send = qf.send_and_notify
+    qf.send_and_notify = function(opts)
+      sent = opts
+    end
+
+    -- L4: restored even if run()/pick_first() raises - an unrestored stub
+    -- here silently disables every later test's real quickfix assertions.
+    local pcall_ok, waited = pcall(function()
+      handle = require("epicenter").run("path", { "router", "M.start", "--qf" }, buf)
+      pick_first()
+      return vim.wait(10000, function()
+        return sent ~= nil
+      end, 10)
+    end)
+    qf.send_and_notify = original_send
+    if not pcall_ok then
+      error(waited, 0)
+    end
+
+    expect.truthy(waited, "the flag survived the picker and reached the re-run's rows")
+    expect.eq(sent.list, "quickfix")
+    expect.eq(#sent.rows, 1, "the resolved path's one step")
+  end)
+
   it("stops instead of reopening when even the file cannot separate them", function()
     -- `main` is a package and a function on the same line range of one Go
     -- file in the real fixture: `name@path` narrows to two, not one.

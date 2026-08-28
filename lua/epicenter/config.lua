@@ -62,6 +62,12 @@ local BASE = {
   },
   --- Overrides for derived `Epicenter*` groups, e.g. `{ EpicenterAccent = { fg = "#7aa2f7" } }`.
   highlights = {},
+  theme = {
+    --- "auto" derives the accent from the colourscheme; "mono" drops the
+    --- extra hue for one flat palette; else a literal `#rrggbb` or a
+    --- highlight group name to borrow `fg` from.
+    accent = "auto",
+  },
   --- `false` installs no keymaps.
   keymaps = {
     prefix = "<leader>e",
@@ -94,6 +100,7 @@ local DOCS = {
   ["navgraph.install_ref"] = "git ref to build from, on the source route",
   ["navgraph.path"] = "explicit path; else $PATH, then the managed install",
   ["navgraph.repo"] = "source for :Epicenter install",
+  ["theme.accent"] = '"auto" | "mono" | "#rrggbb" | a highlight group name',
   ["ui.height"] = "fraction of the editor when <= 1, else cells",
   ["ui.icons"] = '"auto" | "nerd" | "ascii"',
   ["ui.width"] = "fraction of the editor when <= 1, else cells",
@@ -113,7 +120,8 @@ local FREE_FORM = { highlights = true }
 
 --- Subtrees that pass an option unknown to their own defaults straight
 --- through, e.g. a newer navgraph's init_options key this plugin does not
---- know about yet - a documented option still gets its own validation.
+--- know about yet - a documented option still gets its own validation. A
+--- feature adds its own via the `extensible` option rule.
 local ALLOW_UNKNOWN = { ["lsp.init_options"] = true }
 
 local ENUMS = {
@@ -128,6 +136,23 @@ local ENUMS = {
 --- Strings that must not be empty: an empty keymaps.prefix installs bare
 --- normal-mode maps (`s`, `g`, ...), clobbering unrelated motions.
 local NONEMPTY_STRING = { ["keymaps.prefix"] = true }
+
+--- Strings with a shape of their own, checked here because the failure
+--- downstream is unreadable: `theme.accent = "#f00"` reaches
+--- `nvim_get_hl`, which raises "Highlight id out of bounds" and takes the
+--- whole of `setup()` - and then every `:colorscheme` - down with it.
+local FORMATS = {
+  ["theme.accent"] = {
+    want = '"auto", "mono", a "#rrggbb" colour, or a highlight-group name',
+    ok = function(value)
+      return value == "auto"
+        or value == "mono"
+        or value:match("^#%x%x%x%x%x%x$") ~= nil
+        -- What `nvim_get_hl` accepts as a name; anything else errors there.
+        or value:match("^[%w_.@%-]+$") ~= nil
+    end,
+  },
+}
 
 local POSITIVE = {
   ["ui.max_width"] = true,
@@ -176,13 +201,14 @@ local function join(prefix, key)
 end
 
 --- Core rules plus the ones features declared for their own options.
---- @return { variants: table, enums: table, positive: table }
+--- @return { variants: table, enums: table, positive: table, extensible: table }
 local function rules()
   local extra = registry.option_rules()
   return {
     variants = vim.tbl_extend("force", VARIANTS, extra.variants),
     enums = vim.tbl_extend("force", ENUMS, extra.enums),
     positive = vim.tbl_extend("force", POSITIVE, extra.positive),
+    extensible = vim.tbl_extend("force", ALLOW_UNKNOWN, extra.extensible),
   }
 end
 
@@ -202,6 +228,10 @@ local function check_value(rule, path, value)
   end
   if NONEMPTY_STRING[path] and value == "" then
     fail("%s must not be empty", path)
+  end
+  local format = FORMATS[path]
+  if format and type(value) == "string" and not format.ok(value) then
+    fail("%s must be %s, got %q", path, format.want, value)
   end
   if LIST_STRINGS[path] then
     for _, element in ipairs(value) do
@@ -264,7 +294,7 @@ local function merge(defaults, opts, prefix, rule, allow_unknown)
       if FREE_FORM[key] and prefix == "" then
         out[key] = vim.deepcopy(value)
       elseif type(value) == "table" and type(default) == "table" and not vim.islist(default) then
-        out[key] = merge(default, value, path, rule, ALLOW_UNKNOWN[path])
+        out[key] = merge(default, value, path, rule, rule.extensible[path])
       else
         out[key] = vim.deepcopy(value)
       end
