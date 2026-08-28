@@ -9,6 +9,7 @@ CONTENTS                                                   *epicenter-contents*
 
   1. Introduction ............................. |epicenter-introduction|
   2. Installation ............................. |epicenter-installation|
+     - the first five minutes ................ |epicenter-first-five|
   3. Commands ................................. |epicenter-commands|
      - quickfix export ........................ |epicenter-quickfix|
   4. Mappings ................................. |epicenter-mappings|
@@ -74,6 +75,19 @@ With lazy.nvim, wire the installer to the build hook: >lua
     }
 <
 Calling |epicenter.setup()| is optional; the defaults apply on their own.
+
+                                                         *epicenter-first-five*
+The first five minutes, after |:Epicenter-install|:
+    1. Open a file. The server for that root starts on its own.
+    2. `<leader>es` - search palette, fuzzy over every definition
+       (|epicenter-search|).
+    3. Cursor on a symbol, `<leader>ec` - who calls it, as a tree
+       (|epicenter-explore|).
+    4. `<leader>ee` - blast radius: what breaks if you change this
+       (|epicenter-blast|).
+    5. Edit something, `<leader>ea` - impact review, `a` to approve a row
+       (|epicenter-review|). Needs navgraph protocol 1.1; an older server
+       says so instead of showing the panel (|epicenter-health|).
 
                                                           *epicenter.install()*
 require("epicenter").install({opts})
