@@ -5,7 +5,9 @@ local function tmptree(paths)
   for _, p in ipairs(paths) do
     vim.fn.mkdir(vim.fs.joinpath(base, p), "p")
   end
-  return vim.fs.normalize(base)
+  -- root.find_from resolves symlinks (a macOS tempdir traverses one); the
+  -- expected value here must be in that same canonical form to compare.
+  return root.normalize(base)
 end
 
 describe("root", function()
