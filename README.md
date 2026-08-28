@@ -68,9 +68,7 @@ Now press one key — `<leader>es` opens the search palette — or run
    or `.navgraph` root). The first navgraph server for that root starts on
    its own; `:Epicenter status` shows when it is ready.
 2. **`<leader>es`** — the search palette, fuzzy over every definition in the
-   project. Type a few letters of a name and jump to it.
-
-   ![The search palette, mid-query, over a multi-language project](assets/search.svg)
+   project. Type a few letters of a name and jump to it — see it above.
 3. **Put the cursor on a symbol, then `<leader>ec`** — who calls it, as a
    tree. `l` fetches the next level, `<CR>` jumps.
 
@@ -243,7 +241,9 @@ in one window.
 ### Call hierarchy — `:Epicenter hierarchy`, `<leader>eH`
 
 Who calls the symbol under the cursor, as a lazy tree: `l` fetches the next
-level, `d` flips the whole tree to what it calls instead.
+level, `d` flips the whole tree to what it calls instead. Needs the standard
+call-hierarchy method the v1.1 protocol addendum adds — see
+[Troubleshooting](#troubleshooting) on an older binary.
 
 ```
 ╭─ incoming calls · M.handle_request ────────────────────────────────────────╮
@@ -259,12 +259,14 @@ four groups. A supertype expands upward, a subtype downward; implementors and
 users are leaves, each tagged with how it uses the type (`as param`,
 `as field`, ...).
 
-Supertypes/subtypes/implementors ride the standard LSP call- and
-type-hierarchy methods the v1.1 protocol adds — any editor gets them, not just
-this one. Users comes from `navgraph/types`, a custom addition, so it is only
-asked for once the server announces that method — against an older server the
-other three groups still show, and against one with no method at all the panel
-says so and sends nothing.
+The whole panel needs the standard type-hierarchy method the v1.1 protocol
+addendum adds; against an older server it shows a plain notice instead, same
+as call hierarchy above — see [Troubleshooting](#troubleshooting). Once that
+method is there, supertypes, subtypes and implementors ride it — any editor
+gets them, not just this one. Users comes from `navgraph/types`, a further
+custom addition, so it is only asked for once the server also announces that
+method; against a server that has type hierarchy but not `navgraph/types`,
+the other three groups still show and users does not.
 
 ### LLM context — `:Epicenter context`, `<leader>ey`
 
@@ -307,12 +309,14 @@ scratch split without blocking the editor.
 tests = { runner = { python = "pytest %f::%s", elixir = "mix test %f" } }
 ```
 
-### Impact — always on, `:Epicenter impact`, `<leader>ei`
+### Impact — `:Epicenter impact`, `<leader>ei`
 
-While anything is unsaved, every definition your change reaches carries a calm
-note at the end of its line and a graded mark in the gutter. Save, and it all
-goes away — with no working change there is nothing to ask about, so nothing is
-asked.
+Needs `navgraph/impact`, part of the v1.1 protocol addendum — see
+[Troubleshooting](#troubleshooting) on an older binary. Where supported, it
+runs on its own: while anything is unsaved, every definition your change
+reaches carries a calm note at the end of its line and a graded mark in the
+gutter. Save, and it all goes away — with no working change there is nothing
+to ask about, so nothing is asked.
 
 ```
 def render_invoice(order):        ⌁ affected · order_service.py:112
@@ -675,8 +679,9 @@ hover card too.
 
 **Start with `:checkhealth epicenter`.** It reports, in order: the plugin
 version, your Neovim version, the resolved `navgraph` binary and its version,
-the negotiated protocol of every running server, icon mode, and keymap state.
-A clean run looks like:
+the negotiated protocol of every running server, icon mode, keymap state, and
+the log path. A clean run, with a server already up for the current project,
+looks like:
 
 ```
 epicenter.nvim ~
@@ -684,8 +689,8 @@ epicenter.nvim ~
 - OK neovim 0.12.4+v0.12.4
 - OK navgraph binary: ~/.local/share/nvim/epicenter/bin/navgraph
 - OK navgraph version: 1.0.0+src.69bff45bb067ea6b
-- no navgraph server running yet (one starts on the first indexed buffer)
-- icons: ascii fallback (set `vim.g.have_nerd_font` for glyphs)
+- OK ~/code/orders-api: protocol 1
+- icons: ascii fallback (set `vim.g.have_nerd_font = true` for glyphs)
 - OK keymaps: <leader>e + 18 keys, all installed
 - log: ~/.local/state/nvim/epicenter.log
 ```
@@ -698,23 +703,26 @@ see "navgraph is starting for this project, try again shortly" — that one
 clears on its own.
 
 **A panel says it needs a newer protocol.** Impact review, the tests panel,
-type hierarchy's `users` group, and `:Epicenter context`/`where` all need
-navgraph's v1.1 protocol addendum. Against an older binary you get a plain
-notice instead of an empty or broken panel, e.g. "impact review needs
-navgraph protocol 1.1 - `:Epicenter status` says what this one speaks".
-`:Epicenter status` (or `:checkhealth epicenter`) names the protocol version
-your `navgraph` actually speaks; `:Epicenter install` gets the current one.
+`:Epicenter context`/`where`, `:Epicenter impact`, call hierarchy, and the
+whole type hierarchy panel all need methods from navgraph's v1.1 protocol
+addendum. Against an older binary you get a plain notice instead of an empty
+or broken panel, e.g. "impact review needs navgraph protocol 1.1 -
+`:Epicenter status` says what this one speaks".
+
+That message points at the wrong signal, though: the protocol number is the
+major version `1` on a v1.0 binary and a v1.1 one alike, by contract, so
+`:Epicenter status` and `:checkhealth epicenter` print the same `protocol 1`
+either way — it cannot tell the tiers apart. What does is the `navgraph
+version:` line `:checkhealth epicenter` prints just above it (`1.0.x` vs
+`1.1.x`); run `:Epicenter install` to get the current binary.
 
 **Errors** always go through `:Epicenter log` (or `l` on the status
 dashboard), and every error toast names the log file.
 
-### Requirements
+Requirements are the same as [Install](#install) above: Neovim 0.10+ and the
+`navgraph` binary.
 
-Neovim 0.10+ and the `navgraph` binary (`:Epicenter install` fetches or
-builds it). Neovim 0.11+ additionally gets `vim.lsp.enable("navgraph")` via
-the bundled `lsp/navgraph.lua`.
-
-### More docs
+## More docs
 
 `:help epicenter` (its tables are generated from the same registry as this
 README's, so the two never drift), [CHANGELOG.md](CHANGELOG.md) for what
