@@ -245,6 +245,28 @@ same members in the quickfix list.
 question — which definition a line is inside of, with the chain that reaches
 it. Paste a stack-trace frame straight in.
 
+### Tests — `:Epicenter tests`, `<leader>et`
+
+Which tests reach the symbol under the cursor, grouped by file — the coverage
+walk run backwards. `dN` is how many calls away the target is, so a `d1` and a
+`d4` do not look like the same assurance.
+
+```
+╭─ tests · UserService.fetch ────────────────────────────────────────────────╮
+│ v tests/test_users.py (2)                                                  │
+│     te test_get_user      tests/test_users.py:6    d1                      │
+│     te test_update_email  tests/test_users.py:20   d2                      │
+╰─ 2 · max depth 2 · r run ──────────────────────────────────────────────────╯
+```
+
+`r` runs the test under the cursor. The command is a per-language template —
+`%f` is the file, `%s` the test's name — and its output streams into a scratch
+split without blocking the editor.
+
+```lua
+tests = { runner = { python = "pytest %f::%s", elixir = "mix test %f" } }
+```
+
 ### Call path — `:Epicenter path`, `<leader>ep`
 
 The chain between two symbols, drawn one rung at a time.
@@ -399,6 +421,7 @@ One prefix, `<leader>e` by default (`keymaps = false` installs none).
 | `<leader>eH` | `:Epicenter hierarchy` | Call hierarchy at the cursor             |
 | `<leader>eT` | `:Epicenter types`     | Supertypes, subtypes and implementors    |
 | `<leader>ey` | `:Epicenter context`   | Yank a symbol's context bundle           |
+| `<leader>et` | `:Epicenter tests`     | Tests that reach this symbol             |
 | `<leader>ep` | `:Epicenter path`      | Call chain between two symbols           |
 | `<leader>eo` | `:Epicenter outline`   | Live symbol outline of this buffer       |
 | `<leader>eh` | `:Epicenter hot`       | Most depended-on symbols, by fan-in      |
@@ -439,6 +462,7 @@ Inside the palette:
 | `types`     | Supertypes, subtypes and implementors    |
 | `context`   | Yank a symbol's context bundle           |
 | `where`     | What encloses this line                  |
+| `tests`     | Tests that reach this symbol             |
 | `path`      | Call chain between two symbols           |
 | `outline`   | Live symbol outline of this buffer       |
 | `hot`       | Most depended-on symbols, by fan-in      |
@@ -576,6 +600,18 @@ require("epicenter").setup({
   path = { step_ms = 45 },                  -- time each rung of the path ladder takes to draw
   ripples = true,                           -- mark the impacted lines while a panel is open
   search = { debounce_ms = 40, limit = 50 },
+  tests = {
+    limit = 100,                            -- most tests asked for
+    runner = {                              -- per language: %f is the file, %s the test's name
+      go = "go test -run %s ./...",
+      javascript = "npx vitest run %f -t %s",
+      lua = "busted %f",
+      python = "pytest %f::%s",
+      rust = "cargo test %s",
+      typescript = "npx vitest run %f -t %s",
+      zig = "zig test %f",
+    },
+  },
   ui = {
     border = "rounded",
     height = 0.8,                           -- fraction of the editor when <= 1, else cells

@@ -17,7 +17,6 @@ local UNCALLED = {
   ["navgraph/imports"] = true,
   ["navgraph/importers"] = true,
   -- v1.1 helpers whose panels land in the next wave.
-  ["navgraph/tests"] = true,
   ["navgraph/types"] = true,
   ["navgraph/impact"] = true,
 }
@@ -161,6 +160,12 @@ ANSWERS["navgraph/context"] = {
   truncated = false,
   tokensEstimate = 12,
 }
+ANSWERS["navgraph/tests"] = {
+  symbol = symbol(),
+  tests = {},
+  summary = { count = 0, maxDepth = 0 },
+  truncated = false,
+}
 ANSWERS["navgraph/where"] = {
   enclosing = symbol(),
   breadcrumbs = { symbol() },
@@ -222,6 +227,7 @@ local DRIVEN = {
   { "context", { "M.handle", "--budget", "500" } },
   { "where", {} },
   { "where", { "app/server.lua:4" } },
+  { "tests", {} },
   { "path", { "M.handle", "M.start" } },
   { "outline", {} },
   { "hot", {} },

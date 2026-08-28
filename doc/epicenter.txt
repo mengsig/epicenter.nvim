@@ -26,6 +26,7 @@ CONTENTS                                                   *epicenter-contents*
      - crumbs ................................. |epicenter-crumbs|
      - hierarchy .............................. |epicenter-hierarchy|
      - context ................................ |epicenter-context|
+     - tests .................................. |epicenter-tests|
      - path ................................... |epicenter-path|
      - outline ................................ |epicenter-outline|
      - hot .................................... |epicenter-hot|
@@ -110,6 +111,7 @@ The binary is looked up in this order:
     types      |epicenter-hierarchy|  Supertypes, subtypes and implementors
     context    |epicenter-context|    Yank a symbol's context bundle
     where      |epicenter-context|    What encloses this line
+    tests      |epicenter-tests|      Tests that reach this symbol
     path       |epicenter-path|       Call chain between two symbols
     outline    |epicenter-outline|    Live symbol outline of this buffer
     hot        |epicenter-hot|        Most depended-on symbols, by fan-in
@@ -158,6 +160,7 @@ change `keymaps.prefix`.
     <leader>eH  :Epicenter hierarchy  Call hierarchy at the cursor
     <leader>eT  :Epicenter types      Supertypes, subtypes and implementors
     <leader>ey  :Epicenter context    Yank a symbol's context bundle
+    <leader>et  :Epicenter tests      Tests that reach this symbol
     <leader>ep  :Epicenter path       Call chain between two symbols
     <leader>eo  :Epicenter outline    Live symbol outline of this buffer
     <leader>eh  :Epicenter hot        Most depended-on symbols, by fan-in
@@ -229,6 +232,18 @@ Defaults: >lua
       path = { step_ms = 45 },
       ripples = true,
       search = { debounce_ms = 40, limit = 50 },
+      tests = {
+        limit = 100,
+        runner = {
+          go = "go test -run %s ./...",
+          javascript = "npx vitest run %f -t %s",
+          lua = "busted %f",
+          python = "pytest %f::%s",
+          rust = "cargo test %s",
+          typescript = "npx vitest run %f -t %s",
+          zig = "zig test %f",
+        },
+      },
       ui = {
         border = "rounded",
         height = 0.8,
@@ -683,6 +698,42 @@ server the command says so and sends nothing.
 
         :Epicenter where app/services/order_service.py:112
 <
+==============================================================================
+TESTS                                                         *epicenter-tests*
+
+                                                         *:Epicenter-tests*
+:Epicenter tests [symbol]                                      *<leader>et*
+    Every test from which the symbol under the cursor is reachable - the
+    coverage walk run backwards - grouped by the file it lives in. Needs
+    protocol 1.1.
+
+    Rows carry the test's name, its `file:line`, and `dN`: how many calls
+    away the target is. `d1` is a direct test; anything deeper reached it
+    through other definitions, which is worth knowing before trusting it.
+
+    Keys are the shared panel keys (|epicenter-explore| lists them), plus:
+
+    l, h            expand / collapse a file
+    r               run the test under the cursor
+
+                                                   *epicenter-tests-runner*
+`r` runs one test through a per-language command template. `%f` is the test's
+file, `%s` its own name; the command runs in the project root through your
+`shell`, and its output streams into a scratch split. Nothing blocks. >
+
+    require("epicenter").setup({
+      tests = {
+        runner = {
+          python = "pytest %f::%s",
+          go = "go test -run %s ./...",
+          -- add a language by naming it
+          elixir = "mix test %f",
+        },
+      },
+    })
+<
+A language with no template says so and runs nothing.
+
 ==============================================================================
 PATH                                                           *epicenter-path*
 
