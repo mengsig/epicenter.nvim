@@ -68,8 +68,10 @@ describe("real navgraph: the explorer", function()
 
     -- `l` opens the row against a placeholder child first; the real level
     -- replaces it when the request lands, so wait for the callee itself.
+    -- `_append_line` calls `self.items.get(item_id)`, i.e. `ItemService.get`
+    -- (self.items is an ItemService) - not OrderService's own `get`.
     wait(function()
-      return vim.tbl_contains(rows(panel), "OrderService.get")
+      return vim.tbl_contains(rows(panel), "ItemService.get")
     end, 20000, "the fetched level under the expanded row")
     expect.truthy(panel.list:count() > before, "the level added rows")
   end)

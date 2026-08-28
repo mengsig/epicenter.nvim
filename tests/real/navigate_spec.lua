@@ -131,18 +131,24 @@ describe("real navgraph: navigation panels", function()
   end
 
   it("F1: resolves a pick whose candidates all share one qualified name", function()
-    -- Both `get_item` definitions reach ItemService.get (a dict receiver, so
-    -- either resolves) - pick candidate 1 by POSITION and assert the ladder
-    -- starts at THAT candidate's own file:line, never a target pinned to a
-    -- specific definition the resolver's tie-break can reorder.
+    -- Only routes/items.py's `get_item` reaches ItemService.get (a real
+    -- call); db.py's calls dict.get, an external stdlib method, so its honest
+    -- answer is "no call path" - pick candidate 1 by POSITION, never a target
+    -- pinned to a specific definition the resolver's tie-break can reorder,
+    -- and assert whichever one that turns out to be, correctly.
     local handle = epicenter.run("path", { "get_item", "ItemService.get" }, buf)
     local picker, picked = pick_index(handle, 1)
     expect.eq(#picker.list:items(), 2, "both same-qualified definitions were offered")
 
     local text = answer_text()
-    local loc = (picked.file .. ":" .. picked.line):gsub("%p", "%%%0")
-    expect.matches(text, loc, "the ladder starts at the PICKED get_item")
-    expect.matches(text, "ItemService%.get")
+    if picked.file == "py_fastapi/app/routes/items.py" then
+      local loc = (picked.file .. ":" .. picked.line):gsub("%p", "%%%0")
+      expect.matches(text, loc, "the ladder starts at the PICKED get_item")
+      expect.matches(text, "ItemService%.get")
+    else
+      expect.eq(picked.file, "py_fastapi/app/db.py")
+      expect.matches(text, "no call path", "db.py's get_item calls dict.get, not ItemService.get")
+    end
   end)
 
   it("F1: resolves the four-way `router` collision the fixture ships", function()
