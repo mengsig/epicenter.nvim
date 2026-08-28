@@ -148,6 +148,35 @@ describe("crumbs against the fake navgraph server", function()
     expect.eq(requests.sent(), { "navgraph/symbolAt" }, "one line change, one request")
   end)
 
+  it("answers for the window being drawn, not the first one showing the buffer", function()
+    wait(function()
+      return epicenter.breadcrumbs(buf) ~= ""
+    end, 10000, "the first answer")
+
+    local top = vim.api.nvim_get_current_win()
+    vim.cmd("split")
+    local bottom = vim.api.nvim_get_current_win()
+    -- Two windows on one buffer, cursors inside two different definitions.
+    vim.api.nvim_win_set_cursor(top, { 10, 0 })
+    vim.api.nvim_win_set_cursor(bottom, { 15, 0 })
+
+    local function crumbs_in(win)
+      vim.g.statusline_winid = win
+      local text = epicenter.breadcrumbs(buf)
+      vim.g.statusline_winid = nil
+      return text
+    end
+
+    local top_text, bottom_text
+    wait(function()
+      top_text, bottom_text = crumbs_in(top), crumbs_in(bottom)
+      return top_text ~= "" and bottom_text ~= "" and top_text ~= bottom_text
+    end, 10000, "each window's own chain")
+    expect.ne(top_text, bottom_text, "each winbar names where ITS cursor is")
+
+    vim.api.nvim_win_close(bottom, true)
+  end)
+
   it("costs nothing to move along a line", function()
     wait(function()
       return epicenter.breadcrumbs(buf) ~= ""

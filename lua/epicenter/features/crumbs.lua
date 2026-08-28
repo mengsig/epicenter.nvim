@@ -11,8 +11,12 @@
 --- No config requires at file scope - see `epicenter.registry`.
 local M = {}
 
---- bufnr -> { wanted: string, shown: string|nil, crumbs: string, fan: table|nil,
----   debounce: table }
+--- WINDOW -> { bufnr, wanted: string, shown: string|nil, crumbs: string[],
+---   fan: table|nil, debounce: table }
+---
+--- Keyed by window, not by buffer: 'winbar' and 'statusline' are evaluated
+--- once per window, and one buffer split in two has a cursor - a place the
+--- reader is - in each of them.
 local cache = {}
 
 --- What "the answer is still current" means: the buffer's contents and the
@@ -21,11 +25,19 @@ local function key_of(bufnr, line)
   return ("%d:%d"):format(vim.api.nvim_buf_get_changedtick(bufnr), line)
 end
 
-local function forget(bufnr)
-  local entry = cache[bufnr]
+local function forget(win)
+  local entry = cache[win]
   if entry then
     entry.debounce.close()
-    cache[bufnr] = nil
+    cache[win] = nil
+  end
+end
+
+local function forget_buffer(bufnr)
+  for win, entry in pairs(cache) do
+    if entry.bufnr == bufnr then
+      forget(win)
+    end
   end
 end
 
@@ -86,11 +98,12 @@ function M.fan_text(fan)
   )
 end
 
-local function fetch(bufnr)
-  local entry = cache[bufnr]
-  if not entry or not vim.api.nvim_buf_is_valid(bufnr) then
+local function fetch(win)
+  local entry = cache[win]
+  if not entry or not vim.api.nvim_buf_is_valid(entry.bufnr) then
     return
   end
+  local bufnr = entry.bufnr
   local wanted = entry.wanted
   local line = tonumber(wanted:match(":(%d+)$"))
   if not line then
@@ -109,7 +122,7 @@ local function fetch(bufnr)
     uri = vim.uri_from_bufnr(bufnr),
     position = { line = line - 1, character = 0 },
   }, function(err, result)
-    local current = cache[bufnr]
+    local current = cache[win]
     if err or not current or current.wanted ~= wanted then
       return
     end
@@ -119,30 +132,67 @@ local function fetch(bufnr)
     -- The winbar and statusline are only repainted when Neovim decides to;
     -- a fresh answer has to ask for that itself.
     vim.cmd("redrawstatus")
-  end, { bufnr = bufnr, channel = "crumbs:" .. bufnr })
+  end, { bufnr = bufnr, channel = "crumbs:" .. win })
 end
 
---- Cache entry for `bufnr`, arming one debounced request when the cursor has
---- reached a line the cache does not cover. Cheap: this runs on every redraw.
-local function entry_for(bufnr)
+--- The window this answer is about. Neovim sets `g:statusline_winid` while it
+--- evaluates 'winbar' and 'statusline', which is the only thing that says
+--- WHICH window is being drawn; outside a redraw the current one is right.
+--- A caller naming a buffer that is not in either falls back to any window
+--- showing it.
+--- @return integer|nil
+local function window_for(bufnr)
+  local drawing = vim.g.statusline_winid
+  if
+    type(drawing) == "number"
+    and drawing ~= 0
+    and vim.api.nvim_win_is_valid(drawing)
+    and vim.api.nvim_win_get_buf(drawing) == bufnr
+  then
+    return drawing
+  end
+  local current = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_buf(current) == bufnr then
+    return current
+  end
   local win = vim.fn.bufwinid(bufnr)
-  if win == -1 or vim.bo[bufnr].buftype ~= "" then
+  return win ~= -1 and win or nil
+end
+
+--- Cache entry for the window showing `bufnr`, arming one debounced request
+--- when its cursor has reached a line the cache does not cover. Cheap: this
+--- runs on every redraw.
+local function entry_for(bufnr)
+  local win = window_for(bufnr)
+  if not win or vim.bo[bufnr].buftype ~= "" then
     return nil
   end
 
-  local entry = cache[bufnr]
+  local entry = cache[win]
+  if entry and entry.bufnr ~= bufnr then
+    -- The window now shows something else: its chain is not this buffer's.
+    forget(win)
+    entry = nil
+  end
   if not entry then
     local cfg = require("epicenter.config").get()
-    entry = { crumbs = {}, fan = nil, wanted = nil, shown = nil }
+    entry = { bufnr = bufnr, crumbs = {}, fan = nil, wanted = nil, shown = nil }
     entry.debounce = require("epicenter.ui.prompt").debounce(cfg.crumbs.debounce_ms, function()
-      fetch(bufnr)
+      fetch(win)
     end)
-    cache[bufnr] = entry
+    cache[win] = entry
     vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
       buffer = bufnr,
       once = true,
       callback = function()
-        forget(bufnr)
+        forget_buffer(bufnr)
+      end,
+    })
+    vim.api.nvim_create_autocmd("WinClosed", {
+      pattern = tostring(win),
+      once = true,
+      callback = function()
+        forget(win)
       end,
     })
   end
@@ -275,8 +325,8 @@ M.commands = {
 
 --- Test seam: drops every cached answer and closes its timer.
 function M.reset()
-  for bufnr in pairs(cache) do
-    forget(bufnr)
+  for win in pairs(cache) do
+    forget(win)
   end
   remove_winbars()
 end
