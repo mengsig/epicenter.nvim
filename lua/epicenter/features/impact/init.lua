@@ -14,12 +14,16 @@ local marks = require("epicenter.features.impact.marks")
 local review = require("epicenter.features.impact.review")
 
 --- The one answer the whole feature reads, plus what was approved under it.
---- nil means "no working change", which is a different thing from "an empty
---- impact" - only the second one is a server answer. The table is MUTATED in
---- place on a fresh answer, so an open review panel holding it sees the new
---- one instead of the panel and the marks disagreeing.
---- @type { root: string, result: table, groups: table[], state: table }|nil
-local current = nil
+--- `answered` false means "no working change", which is a different thing
+--- from "an empty impact" - only the second one is a server answer.
+---
+--- The table's IDENTITY is stable for the whole session: an open review panel
+--- captures it, so it is refilled and cleared in place. Replacing it - which
+--- a save-then-edit cycle used to do - left the panel approving into a
+--- session neither the marks nor the statusline read.
+--- @type { answered: boolean, root: string|nil, result: table|nil,
+---   groups: table[]|nil, state: table|nil, reviewed: integer, total: integer }
+local current = { answered = false, reviewed = 0, total = 0 }
 
 local unsubscribe = nil
 local debounced = nil
@@ -73,7 +77,7 @@ end
 --- marks and the statusline. Approving a row lands here - reloading the
 --- panel from under the cursor would move it.
 local function refresh_marks()
-  if not current then
+  if not current.answered then
     marks.clear()
   else
     marks.apply(marker_entries())
@@ -81,22 +85,54 @@ local function refresh_marks()
   vim.cmd("redrawstatus")
 end
 
+--- `review.counts` walks every impacted node and builds an approval key per
+--- node. The statusline is evaluated per window per redraw, so the numbers
+--- are computed where they CHANGE - a fresh answer, or an approval.
+local function recount()
+  if not current.answered then
+    current.reviewed, current.total = 0, 0
+    return
+  end
+  current.reviewed, current.total = review.counts(current.groups, current.state)
+end
+
+--- An approval changed: the numbers and the inline marks move, the panel's
+--- own rows do not (reloading would move the cursor out from under the reader).
+local function approval_changed()
+  recount()
+  refresh_marks()
+end
+
 --- The above, plus an open review panel: a NEW answer replaces its rows.
 local function refresh()
+  recount()
   refresh_marks()
   if panel and panel:valid() then
-    review.reload(panel, current)
+    review.reload(panel, M.current())
   end
 end
 
 M.refresh = refresh
 
 local function forget()
-  if current == nil then
+  if not current.answered then
     return
   end
-  current = nil
+  -- Cleared in place: an open review panel holds this exact table.
+  current.answered = false
+  current.result, current.groups, current.state = nil, nil, nil
   refresh()
+end
+
+--- A reindex asks about whatever buffer is current, which may be a plugin
+--- float (the review panel itself) with no project of its own. Fall back to
+--- the project the last answer came from rather than dropping that answer.
+--- @return string|nil
+local function ambient_root(bufnr, markers)
+  if vim.bo[bufnr].buftype == "" and vim.api.nvim_buf_get_name(bufnr) ~= "" then
+    return require("epicenter.root").find(bufnr, markers)
+  end
+  return current.root
 end
 
 local function fetch(bufnr)
@@ -105,8 +141,8 @@ local function fetch(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
-  local root = require("epicenter.root").find(bufnr, cfg.lsp.root_markers)
-  if not client.supports("navgraph/impact", { root = root }) then
+  local root = ambient_root(bufnr, cfg.lsp.root_markers)
+  if not root or not client.supports("navgraph/impact", { root = root }) then
     return forget()
   end
   if not M.has_working_change(root) then
@@ -121,11 +157,17 @@ local function fetch(bufnr)
       require("epicenter.log").warn("impact: %s", err.message or "no answer")
       return
     end
-    current = current or { root = root }
+    -- The contract makes changeId required, and every approval is scoped to
+    -- it: without one there is no honest way to say what has been reviewed.
+    if type(result.changeId) ~= "string" or result.changeId == "" then
+      require("epicenter.log").warn("impact: answer carried no changeId")
+      return forget()
+    end
+    current.answered = true
     current.root = root
     current.result = result
     current.groups = review.group_by_hunk(result, direction)
-    current.state = approvals.load(root)
+    current.state = approvals.load(root, result.changeId)
     refresh()
   end, { root = root, channel = "impact:ambient" })
 end
@@ -133,21 +175,17 @@ end
 -- Surfaces ---------------------------------------------------------------------------
 
 --- The statusline fragment, e.g. `⌁ impact 3/12 reviewed`. Empty while there
---- is no working change, or before the first answer. Zero cost: it reads the
---- cached answer and nothing else.
+--- is no working change, or before the first answer. Reads the counts cached
+--- by `recount` and nothing else - this runs per window, per redraw.
 --- @return string
 function M.statusline()
-  if not current then
-    return ""
-  end
-  local reviewed, total = review.counts(current.groups, current.state)
-  if total == 0 then
+  if not current.answered or current.total == 0 then
     return ""
   end
   return ("%s impact %d/%d reviewed"):format(
     require("epicenter.ui.icons").ui("impact"),
-    reviewed,
-    total
+    current.reviewed,
+    current.total
   )
 end
 
@@ -168,7 +206,7 @@ end
 
 --- @param session table the live `current` table, mutated by a fresh answer
 local function open_review(session)
-  session.on_change = refresh_marks
+  session.on_change = approval_changed
   panel = review.open(session)
   return panel
 end
@@ -180,7 +218,7 @@ local function run_review(ctx)
   if reason then
     return epicenter.notify(reason, "warn")
   end
-  if not current then
+  if not current.answered then
     return epicenter.notify("no working change to review", "info")
   end
   if ctx.args[1] == "export" then
@@ -286,9 +324,10 @@ function M.reset()
   forget()
 end
 
---- The cached answer, for tests and the statusline's own spec.
+--- The cached answer, or nil while there is no working change.
+--- @return table|nil
 function M.current()
-  return current
+  return current.answered and current or nil
 end
 
 return M

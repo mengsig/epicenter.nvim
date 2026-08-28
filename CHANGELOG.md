@@ -52,8 +52,10 @@ questions an agent asks about a symbol.
   `<leader>ea`) — the working change's blast radius, live: a calm inline
   marker on every impacted line, a statusline fragment, and a review panel
   that ticks each impacted symbol off (`a`/`A`/`u`) with approvals keyed to
-  the exact code that earned them, so editing that code again clears the
-  tick. `:Epicenter review export` copies a markdown checklist to `+`.
+  the exact code that earned them AND to the change they were given for, so
+  editing either clears the tick - "reviewed" never survives into a change
+  nobody has looked at. `:Epicenter review export` copies a markdown
+  checklist to `+`.
 - **Telescope extension** — optional: `require("telescope").load_extension
   ("epicenter")` gets `.symbols()`, `.grep()` and `.blast()`, the same server
   calls the built-in palette and blast panel use, Telescope's own UI.

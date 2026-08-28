@@ -214,7 +214,7 @@ function M.open(session)
     end
     local changed = false
     for _, symbol in ipairs(symbols) do
-      if approvals.set(session.state, symbol, session.result.changeId, approved) then
+      if approvals.set(session.state, symbol, approved) then
         changed = true
       end
     end
@@ -224,7 +224,7 @@ function M.open(session)
         "warn"
       )
     end
-    local ok, err = approvals.save(session.root, session.state, session.result.changeId)
+    local ok, err = approvals.save(session.root, session.state)
     if not ok then
       require("epicenter").notify(err, "error")
     end

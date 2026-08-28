@@ -94,8 +94,8 @@ describe("impact approvals", function()
   end)
 
   it("keeps an approval while that definition's source is unchanged", function()
-    local state = { entries = {}, changes = {} }
-    approvals.set(state, symbol(), "change0001", true)
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
+    approvals.set(state, symbol(), true)
     expect.truthy(approvals.approved(state, symbol()))
     expect.falsy(
       approvals.approved(state, symbol({ contentHash = "bbbb2222" })),
@@ -103,11 +103,27 @@ describe("impact approvals", function()
     )
   end)
 
+  it("does not carry an approval over to a change nobody has reviewed", function()
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
+    approvals.set(state, symbol(), true)
+    -- Same impacted definition, untouched - but the working change is new.
+    state.change_id = "change0002"
+    expect.falsy(
+      approvals.approved(state, symbol()),
+      "an approval given for one change says nothing about the next"
+    )
+    state.change_id = "change0001"
+    expect.truthy(approvals.approved(state, symbol()), "undoing the edit restores the tick")
+  end)
+
   it("forgets entries older than the changes it keeps", function()
     local state = { entries = {}, changes = {} }
     for i = 1, 10 do
-      approvals.set(state, symbol({ contentHash = "hash" .. i }), "change" .. i, true)
-      state = approvals.prune(state, "change" .. i)
+      state.change_id = "change" .. i
+      approvals.set(state, symbol({ contentHash = "hash" .. i }), true)
+      state = vim.tbl_extend("force", approvals.prune(state, state.change_id), {
+        change_id = state.change_id,
+      })
     end
     expect.eq(#state.changes, 8, "the change ring is bounded")
     expect.falsy(approvals.approved(state, symbol({ contentHash = "hash1" })))
@@ -137,16 +153,16 @@ describe("the impact review model", function()
 
   it("counts what has been reviewed", function()
     local groups = review.group_by_hunk(answer(), "callers")
-    local state = { entries = {}, changes = {} }
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
     expect.eq({ review.counts(groups, state) }, { 0, 3 })
-    approvals.set(state, groups[1].nodes[1].symbol, "change0001", true)
+    approvals.set(state, groups[1].nodes[1].symbol, true)
     expect.eq({ review.counts(groups, state) }, { 1, 3 })
   end)
 
   it("exports a markdown checklist with the ticked rows ticked", function()
     local groups = review.group_by_hunk(answer(), "callers")
-    local state = { entries = {}, changes = {} }
-    approvals.set(state, groups[1].nodes[1].symbol, "change0001", true)
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
+    approvals.set(state, groups[1].nodes[1].symbol, true)
     local text = review.checklist(groups, state)
     expect.matches(text, "## impact · 1/3 reviewed")
     expect.matches(text, "### .*app/server%.lua:9")
@@ -156,14 +172,14 @@ describe("the impact review model", function()
 
   it("marks a reviewed row, and a heuristic one", function()
     local groups = review.group_by_hunk(answer(), "callers")
-    local state = { entries = {}, changes = {} }
+    local state = { entries = {}, changes = {}, change_id = "change0001" }
     local row = {
       node = { type = "impacted", name = "M.caller_b", node = groups[2].nodes[1] },
       depth = 1,
       expanded = false,
     }
     expect.matches(review.render_row(row, state).text, "%?")
-    approvals.set(state, groups[2].nodes[1].symbol, "change0001", true)
+    approvals.set(state, groups[2].nodes[1].symbol, true)
     expect.matches(review.render_row(row, state).text, "%+", "the ascii ok glyph")
   end)
 end)
@@ -313,7 +329,7 @@ describe("impact against the fake navgraph server", function()
     expect.truthy(approvals.approved(impact.current().state, symbol_row))
     expect.matches(vim.api.nvim_win_get_config(panel.win.win).title[1][1], "1/%d+ reviewed")
     expect.truthy(
-      approvals.approved(approvals.load(root), symbol_row),
+      approvals.approved(approvals.load(root, impact.current().result.changeId), symbol_row),
       "the approval survives a reload from disk"
     )
 
@@ -340,6 +356,95 @@ describe("impact against the fake navgraph server", function()
       expect.truthy(entry.lnum >= 1)
     end
     vim.fn.setqflist({}, "f")
+  end)
+
+  --- A real keypress in the window that holds the panel.
+  local function press(panel_handle, keys)
+    vim.api.nvim_set_current_win(panel_handle.win.win)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "x", false)
+  end
+
+  local function approve_every_row(panel_handle)
+    for index = 1, panel_handle.list:count() do
+      panel_handle.list:select(index)
+      local row = panel_handle:current()
+      if row and row.node.type == "impacted" then
+        press(panel_handle, "a")
+      end
+    end
+  end
+
+  it("never reports a change nobody has looked at as reviewed", function()
+    edit()
+    answered()
+
+    panel = epicenter.run("review", {}, edited)
+    wait(function()
+      return panel:valid() and panel.list:count() > 1
+    end, 10000, "the review rows")
+    approve_every_row(panel)
+
+    local reviewed, total = review.counts(impact.current().groups, impact.current().state)
+    expect.truthy(total > 0, "the change impacts something")
+    expect.eq(reviewed, total, "every impacted definition approved")
+    expect.matches(impact.statusline(), ("impact %d/%d reviewed"):format(total, total))
+    local before = impact.current().result.changeId
+
+    -- A second, different edit to the same definition. None of the impacted
+    -- sources moved, so every approval key still matches - but this is a new
+    -- change, and nobody has looked at what it reaches.
+    vim.api.nvim_buf_set_lines(edited, 3, 4, false, {
+      "function M.route(method, path, extra, and_more)",
+    })
+    wait(function()
+      local state = impact.current()
+      return state ~= nil and state.result.changeId ~= before
+    end, 10000, "the impact answer for the second change")
+
+    local now_reviewed, now_total = review.counts(impact.current().groups, impact.current().state)
+    expect.truthy(now_total > 0)
+    expect.eq(now_reviewed, 0, "a change nobody reviewed reads as nobody reviewed it")
+    expect.matches(impact.statusline(), ("impact 0/%d reviewed"):format(now_total))
+    expect.matches(
+      review.checklist(impact.current().groups, impact.current().state),
+      "## impact · 0/%d+ reviewed"
+    )
+  end)
+
+  it("keeps an open review panel bound to the session across a save and a re-edit", function()
+    edit()
+    answered()
+
+    panel = epicenter.run("review", {}, edited)
+    wait(function()
+      return panel:valid() and panel.list:count() > 1
+    end, 10000, "the review rows")
+
+    -- Saved away: no working change, and the panel says so.
+    vim.bo[edited].modified = false
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    wait(function()
+      return impact.current() == nil
+    end, 10000, "the cleared impact")
+
+    -- Edited again: the answer refills the session the panel is holding.
+    vim.api.nvim_buf_set_lines(edited, 3, 4, false, {
+      "function M.route(method, path, again)",
+    })
+    wait(function()
+      local state = impact.current()
+      return state ~= nil and #state.groups > 0 and panel.list:count() > 1
+    end, 10000, "the repainted review rows")
+
+    panel.list:select(2)
+    local symbol_row = panel:current().node.node.symbol
+    press(panel, "a")
+
+    expect.truthy(
+      approvals.approved(impact.current().state, symbol_row),
+      "the panel approves into the session the marks and the statusline read"
+    )
+    expect.matches(impact.statusline(), "impact 1/%d+ reviewed")
   end)
 
   it("opens the blast panel rooted at the hunks", function()

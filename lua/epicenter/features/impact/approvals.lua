@@ -2,10 +2,14 @@
 --- across restarts.
 ---
 --- An entry is keyed by the definition (`qualified@file`) AND the hash of its
---- source, and records the change it was approved under. Editing that
---- definition changes its hash, so the key no longer matches and the row
---- comes back unreviewed - which is the whole point. Editing something else
---- leaves it alone.
+--- source, and records the change it was approved under. BOTH have to still
+--- match for the row to read as reviewed: editing the impacted definition
+--- changes its hash, and editing the working change itself yields a new
+--- changeId - and nobody has looked at THAT change's impact yet.
+---
+--- A loaded state therefore carries the change it is being read against;
+--- reading approvals without knowing which change they were given for is
+--- what let a fresh edit inherit a full set of ticks.
 local M = {}
 
 local KIND = "impact"
@@ -23,12 +27,15 @@ function M.key(symbol)
   return ("%s#%s"):format(ref, symbol.contentHash)
 end
 
---- @return { entries: table<string, string>, changes: string[] }
-function M.load(root)
+--- @param change_id string the change these approvals are read against
+--- @return { entries: table<string, string>, changes: string[], change_id: string }
+function M.load(root, change_id)
+  assert(type(change_id) == "string" and change_id ~= "", "approvals need a change to read against")
   local stored = require("epicenter.store").read(KIND, root)
   return {
     entries = type(stored.entries) == "table" and stored.entries or {},
     changes = type(stored.changes) == "table" and stored.changes or {},
+    change_id = change_id,
   }
 end
 
@@ -58,29 +65,33 @@ function M.prune(state, change_id)
 end
 
 --- @return boolean ok, string|nil err
-function M.save(root, state, change_id)
-  return require("epicenter.store").write(KIND, root, M.prune(state, change_id))
+function M.save(root, state)
+  return require("epicenter.store").write(KIND, root, M.prune(state, state.change_id))
 end
 
---- @param state table
+--- Reviewed means: this exact source was approved, AND it was approved for
+--- the change now being reported. An entry recorded under an earlier change
+--- says nothing about this one.
+--- @param state table from `M.load`
 --- @param symbol table
 --- @return boolean
 function M.approved(state, symbol)
   local key = M.key(symbol)
-  return key ~= nil and state.entries[key] ~= nil
+  local recorded = key ~= nil and state.entries[key] or nil
+  return recorded ~= nil and recorded == state.change_id
 end
 
---- Marks `symbol` approved (or not) under `change_id`. A symbol the server
---- gave no hash for cannot be keyed, so it is reported rather than silently
---- recorded under a key that would match everything.
+--- Marks `symbol` approved (or not) under the state's own change. A symbol
+--- the server gave no hash for cannot be keyed, so it is reported rather than
+--- silently recorded under a key that would match everything.
 --- @return boolean changed
-function M.set(state, symbol, change_id, approved)
+function M.set(state, symbol, approved)
   local key = M.key(symbol)
   if not key then
     return false
   end
   local before = state.entries[key]
-  state.entries[key] = approved and change_id or nil
+  state.entries[key] = approved and state.change_id or nil
   return before ~= state.entries[key]
 end
 
