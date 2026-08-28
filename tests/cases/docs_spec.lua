@@ -141,6 +141,17 @@ describe("documentation stays in sync", function()
     expect.eq(ok, true)
   end)
 
+  it("links |vim.ui.open()| with the parens the real tag carries (merge-gate F10)", function()
+    expect.falsy(
+      doc:find("|vim.ui.open|", 1, true),
+      "doc/epicenter.txt links the dangling |vim.ui.open| (the real tag has parens)"
+    )
+    expect.truthy(
+      doc:find("|vim.ui.open()|", 1, true),
+      "doc/epicenter.txt has no |vim.ui.open()| link"
+    )
+  end)
+
   it("advertises the same Neovim floor the code actually requires", function()
     local plugin = read("plugin/epicenter.lua")
     local health = read("lua/epicenter/health.lua")

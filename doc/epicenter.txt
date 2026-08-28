@@ -486,7 +486,7 @@ Rows carry the kind icon, the qualified name, `file:line`, and:
 
 Keys inside the panel:
 
-    j, k            next / previous row
+    j, k, gg, G     move
     l               expand (fetching the level on first open)
     h               collapse
     <CR>            jump to the symbol, pushing the jumplist
@@ -568,14 +568,10 @@ HOT SPOTS                                                      *epicenter-hot*
     Symbols nothing in the index reaches. {filter} narrows the list by name,
     and `p` drops the public ones so only unreached internals remain.
 
-                                                          *:Epicenter-graph*
-:Epicenter graph [file]
-    Asks the server to draw the call graph and opens it with |vim.ui.open|.
-    {file} narrows the drawing to that file - it is a filter, never an output
-    path; the server always chooses where the HTML is written (under
-    `.navgraph/`) and the notice names it.
+Keys inside the panel (hot, unused):
 
-    <CR>            jump to the symbol (hot, unused)
+    j, k, gg, G     move
+    <CR>            jump to the symbol
     <C-v>, <C-t>    open in a vertical split / a new tab
     o               peek at it
     y               yank `file:line`
@@ -584,6 +580,14 @@ HOT SPOTS                                                      *epicenter-hot*
     /               filter by name
     ?               toggle the key help (normal mode)
     q, <Esc>        close
+
+                                                          *:Epicenter-graph*
+:Epicenter graph [file]
+    Asks the server to draw the call graph and opens it with |vim.ui.open()|.
+    {file} narrows the drawing to that file - it is a filter, never an output
+    path; the server always chooses where the HTML is written (under
+    `.navgraph/`) and the notice names it. `graph` opens no panel, so none of
+    the keys above apply to it.
 
 Options: >lua
 

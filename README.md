@@ -156,10 +156,11 @@ definition in the buffer, `false` for none.
 ### Inside the callers/callees tree
 
 (and every other results panel - outline, hot, unused - which share the same
-`j`/`k`/`<CR>`/`o`/`y`/`/`/`?`/`q` keys)
+`j`/`k`/`gg`/`G`/`<CR>`/`o`/`y`/`/`/`?`/`q` keys)
 
 | Key                     | Does                                           |
 | ----------------------- | ----------------------------------------------- |
+| `j` / `k` / `gg` / `G`  | Move                                           |
 | `l` / `h`               | Expand (fetching that level) / collapse        |
 | `<CR>`                  | Jump to the symbol                             |
 | `<C-v>` / `<C-t>`       | Open in a vertical split / a new tab           |
@@ -168,6 +169,9 @@ definition in the buffer, `false` for none.
 | `r`                     | Toggle reference edges                         |
 | `s`                     | Strict mode - drop the `?` (heuristic) edges   |
 | `t`                     | Cycle the test scope: with / without / only    |
+| `<C-k>`                 | Outline: cycle the kind filter                 |
+| `b`                     | Hot: buffer / repo scope                       |
+| `p`                     | Unused: hide the public symbols                |
 | `/`                     | Filter by name                                 |
 | `?`                     | Toggle the key help (normal mode)              |
 | `q` / `<Esc>`           | Close                                          |
