@@ -91,6 +91,26 @@ describe("real navgraph: navigation panels", function()
     return win
   end
 
+  --- Picks by POSITION, never by a field the resolver's tie-break can reorder
+  --- (F1 regression: the real server's candidate order is deterministic but
+  --- unspecified - a fixed `file`/`line` target pinned the old order and broke
+  --- when a resolver change reordered it). Returns the picked symbol too, so
+  --- the caller can assert against what was actually picked.
+  local function pick_index(handle, index)
+    local win = wait(function()
+      return handle.win
+    end, 20000, "the ambiguity candidate picker")
+    wait(function()
+      return win.list:count() > 0
+    end, 20000, "candidates listed")
+    local items = win.list:items()
+    local item = items[index]
+    assert(item, "no candidate at index " .. index .. ": " .. vim.inspect(items))
+    win.list:select(index)
+    win:accept("edit")
+    return win, item.symbol
+  end
+
   --- The `epicenter-path` window the pick produced - an answer, not another
   --- picker. Consumes it, so a later case starts clean.
   local function answer_text()
@@ -111,17 +131,18 @@ describe("real navgraph: navigation panels", function()
   end
 
   it("F1: resolves a pick whose candidates all share one qualified name", function()
-    -- Both `get_item` definitions reach OrderService.get, so only the file on
-    -- the first rung says which one the pick actually resolved.
-    local handle = epicenter.run("path", { "get_item", "OrderService.get" }, buf)
-    local picker = pick(handle, function(symbol)
-      return symbol.file == "py_fastapi/app/db.py"
-    end)
+    -- Both `get_item` definitions reach ItemService.get (a dict receiver, so
+    -- either resolves) - pick candidate 1 by POSITION and assert the ladder
+    -- starts at THAT candidate's own file:line, never a target pinned to a
+    -- specific definition the resolver's tie-break can reorder.
+    local handle = epicenter.run("path", { "get_item", "ItemService.get" }, buf)
+    local picker, picked = pick_index(handle, 1)
     expect.eq(#picker.list:items(), 2, "both same-qualified definitions were offered")
 
     local text = answer_text()
-    expect.matches(text, "py_fastapi/app/db%.py:22", "the ladder starts at the PICKED get_item")
-    expect.matches(text, "OrderService%.get")
+    local loc = (picked.file .. ":" .. picked.line):gsub("%p", "%%%0")
+    expect.matches(text, loc, "the ladder starts at the PICKED get_item")
+    expect.matches(text, "ItemService%.get")
   end)
 
   it("F1: resolves the four-way `router` collision the fixture ships", function()
