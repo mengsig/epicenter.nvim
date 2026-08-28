@@ -152,7 +152,10 @@ function Palette:_set_footer()
   local shown = self.list:count()
   local left = shown == total and ("%d"):format(total) or ("%d/%d"):format(shown, total)
   local mode = self.spec.mode_label and self.spec.mode_label(self.state) or nil
-  self.results_win:set_footer((" %s%s "):format(left, mode and (" · " .. mode) or ""))
+  local armed = self.armed_export
+      and (" · <CR> → " .. (self.armed_export == "loclist" and "loclist" or "quickfix"))
+    or ""
+  self.results_win:set_footer((" %s%s%s "):format(left, mode and (" · " .. mode) or "", armed))
 end
 
 function Palette:_update_preview()
@@ -178,7 +181,6 @@ function Palette:_on_results(err, items, total)
     self.total = 0
     self.list:draw()
     self:_set_footer()
-    self:_populated()
     return
   end
   self.list.empty_text = self.spec.empty_text or "  no matches"
@@ -187,21 +189,16 @@ function Palette:_on_results(err, items, total)
   self.list:draw({ stagger = true })
   self:_set_footer()
   self:_update_preview()
-  self:_populated()
 end
 
---- Registers a callback for each result set, for the `--qf`/`--loc` command
---- flags: the rows only exist once the server has answered.
---- @param fn fun(palette: epicenter.Palette)
-function Palette:on_populate(fn)
-  self.populate_hooks = self.populate_hooks or {}
-  table.insert(self.populate_hooks, fn)
-end
-
-function Palette:_populated()
-  for _, fn in ipairs(self.populate_hooks or {}) do
-    fn(self)
-  end
+--- Arms the `--qf`/`--loc` command flag. A palette is live: at the moment the
+--- flag is given there is no result set yet, and the empty-query answer `open`
+--- ends with is not one the user asked for. So the flag redirects `<CR>` -
+--- accept sends the rows on screen to `list` instead of jumping to one.
+--- @param list "quickfix"|"loclist"
+function Palette:arm_export(list)
+  self.armed_export = list
+  self:_set_footer()
 end
 
 --- The rows an export sends: the `<Tab>` multi-selection, or every row the
@@ -290,6 +287,9 @@ function Palette:toggle_help()
 end
 
 function Palette:accept(action)
+  if self.armed_export then
+    return self:export(self.armed_export)
+  end
   local item = self.list:current()
   if not item then
     return

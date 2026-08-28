@@ -583,6 +583,10 @@ in a panel — the list opens ready for `:cnext`.
 :Epicenter callers M.handle --loc
 ```
 
+On a live palette (`search`, `grep`) there is no result set until you have
+typed one, so the flag arms `<CR>` instead: accepting sends the rows on screen
+to the list rather than jumping to one.
+
 Inside any panel or palette, `<C-q>` and `<C-l>` do the same thing. `<Tab>`
 toggles a row into a multi-selection first: with a selection `<C-q>` sends only
 those rows, with none it sends every row on screen. Each entry carries `file`,

@@ -400,6 +400,30 @@ describe("path ambiguity on candidates that share a qualified name (F1)", functi
     )
   end)
 
+  it("keeps --qf across the picker, so the re-run's rows still reach the list", function()
+    local candidates = routers()
+    client.register_session(
+      root,
+      scripted(function(params)
+        if params.from == "router" then
+          return { path = {}, ambiguousFrom = candidates, ambiguousTo = {} }
+        end
+        return { path = { candidates[1] }, ambiguousFrom = {}, ambiguousTo = {} }
+      end)
+    )
+    vim.fn.setqflist({}, "f")
+
+    handle = require("epicenter").run("path", { "router", "M.start", "--qf" }, buf)
+    pick_first()
+
+    wait(function()
+      return #vim.fn.getqflist() > 0
+    end, 10000, "the quickfix list the flag asked for")
+    expect.eq(#vim.fn.getqflist(), 1, "the resolved path's one step")
+    vim.fn.setqflist({}, "f")
+    vim.cmd("silent! cclose")
+  end)
+
   it("stops instead of reopening when even the file cannot separate them", function()
     -- `main` is a package and a function on the same line range of one Go
     -- file in the real fixture: `name@path` narrows to two, not one.

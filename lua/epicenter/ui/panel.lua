@@ -230,20 +230,30 @@ function Panel:export(list)
   end)
 end
 
+--- SETTLED: the panel has rows, or it has said there are none. A bare
+--- `set_items({})` is a reload clearing the old answer, not an answer.
+function Panel:settled()
+  return self.list:count() > 0 or self.noticed == true
+end
+
 --- Registers a callback for each result set the panel receives. Used by the
 --- `--qf`/`--loc` command flags, which have to act on rows that only arrive
 --- once the server answers.
+---
+--- A panel that filled itself synchronously has already settled by the time
+--- the flag registers, so `fn` runs now: waiting would skip the answer the
+--- user asked for and then fire on whatever a later reindex repainted.
 --- @param fn fun(panel: epicenter.Panel)
 function Panel:on_populate(fn)
+  if self:settled() then
+    return fn(self)
+  end
   self.populate_hooks = self.populate_hooks or {}
   table.insert(self.populate_hooks, fn)
 end
 
---- Fires the hooks once the panel is actually SETTLED - it has rows, or it
---- has said there are none. A bare `set_items({})` is a reload clearing the
---- old answer, not an answer, and must not look like one.
 function Panel:_populated()
-  if self.list:count() == 0 and not self.noticed then
+  if not self:settled() then
     return
   end
   for _, fn in ipairs(self.populate_hooks or {}) do

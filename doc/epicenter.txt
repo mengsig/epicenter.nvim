@@ -140,6 +140,10 @@ in a panel, and the list opens ready for `:cnext`. >
     :Epicenter blast --qf
     :Epicenter callers M.handle --loc
 <
+On a live palette (`search`, `grep`, `path` with a name still to pick) there
+is no result set until you have typed one, so the flag arms `<CR>` instead:
+accepting sends the rows on screen to the list rather than jumping to one.
+
 Inside any panel or palette the same two lists are one key away: `<C-q>` sends
 the rows to the quickfix list, `<C-l>` to the location list. `<Tab>` toggles a
 row into a multi-selection first - with a selection, `<C-q>` sends only those

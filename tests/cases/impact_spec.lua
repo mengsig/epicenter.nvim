@@ -327,6 +327,21 @@ describe("impact against the fake navgraph server", function()
     )
   end)
 
+  it("--qf sends the rows the review panel had already filled itself with", function()
+    vim.fn.setqflist({}, "f")
+    edit()
+    answered()
+
+    epicenter.run("review", { "--qf" }, edited)
+    wait(function()
+      return #vim.fn.getqflist() > 0
+    end, 10000, "the quickfix list to fill")
+    for _, entry in ipairs(vim.fn.getqflist()) do
+      expect.truthy(entry.lnum >= 1)
+    end
+    vim.fn.setqflist({}, "f")
+  end)
+
   it("opens the blast panel rooted at the hunks", function()
     edit()
     panel = epicenter.run("impact", {}, edited)

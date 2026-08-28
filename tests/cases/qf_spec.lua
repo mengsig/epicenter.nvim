@@ -207,6 +207,28 @@ describe("sending rows to a list, against the fake navgraph server", function()
     expect.truthy(#vim.fn.getqflist() > 0)
   end)
 
+  it("--qf on a live palette waits for the query the user actually types", function()
+    local palette = epicenter.run("grep", { "--qf" }, buf)
+    -- The palette opens with an empty-query request of its own; its answer
+    -- is not a result set anybody asked for.
+    vim.wait(400)
+    expect.truthy(palette.open, "the palette is still open before a keystroke")
+    expect.eq(#vim.fn.getqflist(), 0, "nothing is exported for a query nobody typed")
+
+    palette:query("handle_request")
+    wait(function()
+      return palette.list:count() > 0
+    end, 10000, "grep matches")
+    local matched = palette.list:count()
+
+    palette:accept()
+    wait(function()
+      return #vim.fn.getqflist() > 0
+    end, 5000, "the quickfix list to fill")
+    expect.eq(#vim.fn.getqflist(), matched, "the rows the user was looking at")
+    expect.falsy(palette.open, "the palette closes once its rows are in the list")
+  end)
+
   it("--loc fills the location list instead", function()
     epicenter.run("callers", { "--loc" }, buf)
     wait(function()

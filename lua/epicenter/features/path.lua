@@ -219,7 +219,9 @@ end
 --- `from`/`to` are re-resolved through `find` (bottom of this file) once
 --- every ambiguous side has a chosen candidate, so the re-query goes through
 --- the exact same path a fresh `:Epicenter path` call would.
-local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+--- @param rerun fun(handle) the walk that finally runs, handed back so an
+---   export flag registered on the FIRST handle still lands on its rows.
+local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to, rerun)
   if #ambiguous_from > 0 then
     return pick_candidate(
       bufnr,
@@ -232,11 +234,11 @@ local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
             (" %s is ambiguous - pick one "):format(label(to)),
             ambiguous_to,
             function(picked_to)
-              find(bufnr, endpoint(picked_from), endpoint(picked_to))
+              rerun(find(bufnr, endpoint(picked_from), endpoint(picked_to)))
             end
           )
         else
-          find(bufnr, endpoint(picked_from), to)
+          rerun(find(bufnr, endpoint(picked_from), to))
         end
       end
     )
@@ -246,7 +248,7 @@ local function disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
     (" %s is ambiguous - pick one "):format(label(to)),
     ambiguous_to,
     function(picked_to)
-      find(bufnr, from, endpoint(picked_to))
+      rerun(find(bufnr, from, endpoint(picked_to)))
     end
   )
 end
@@ -254,7 +256,8 @@ end
 --- @param result { path: table[], ambiguousFrom: table[], ambiguousTo: table[] }
 ---   `path` is a flat Symbol[], empty when no chain exists; the ambiguous
 ---   arrays carry same-name candidates the walk was never run against (F1).
-local function show(result, from, to, previous_win, bufnr)
+--- @param rerun fun(handle) see `disambiguate`
+local function show(result, from, to, previous_win, bufnr, rerun)
   local ambiguous_from = result.ambiguousFrom or {}
   local ambiguous_to = result.ambiguousTo or {}
   -- An endpoint already sent as `name@file` that comes back ambiguous is one
@@ -268,7 +271,7 @@ local function show(result, from, to, previous_win, bufnr)
     return message_window(stuck_lines(label(to), ambiguous_to))
   end
   if #ambiguous_from > 0 or #ambiguous_to > 0 then
-    return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to)
+    return disambiguate(bufnr, from, to, ambiguous_from, ambiguous_to, rerun)
   end
 
   local steps = result.path or {}
@@ -355,6 +358,18 @@ function find(bufnr, from, to)
     table.insert(self.populate_hooks, fn)
   end
 
+  --- The walk re-ran after a picker narrowed an endpoint. This handle is the
+  --- one the `--qf`/`--loc` flag was registered on, so it takes over the new
+  --- one's window and rows rather than letting them fall on the floor.
+  function handle:adopt(other)
+    other:on_populate(function()
+      self.win, self.steps = other.win, other.steps
+      for _, fn in ipairs(self.populate_hooks) do
+        fn(self)
+      end
+    end)
+  end
+
   function handle:export(list)
     if self.win then
       self.win:close()
@@ -375,7 +390,9 @@ function find(bufnr, from, to)
       return
     end
     result = result or {}
-    handle.win = show(result, from, to, previous_win, bufnr)
+    handle.win = show(result, from, to, previous_win, bufnr, function(other)
+      handle:adopt(other)
+    end)
     handle.steps = result.path or {}
     local ambiguous = #(result.ambiguousFrom or {}) > 0 or #(result.ambiguousTo or {}) > 0
     if not ambiguous then
