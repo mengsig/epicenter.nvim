@@ -2,6 +2,7 @@ NVIM ?= nvim
 LUA_FILES := $(shell find lua lsp plugin scripts tests -name '*.lua' -not -path 'tests/fixtures/*')
 
 NAVGRAPH_BIN ?= navgraph
+LUACHECK ?= luacheck
 
 .PHONY: test test-real smoke lint fmt doc docs-check docs-fix contract-check screenshots all
 
@@ -24,8 +25,8 @@ lint:
 	else \
 		echo "note: stylua not installed - skipping format check"; \
 	fi
-	@if command -v luacheck >/dev/null 2>&1; then \
-		luacheck $(LUA_FILES); \
+	@if command -v $(LUACHECK) >/dev/null 2>&1; then \
+		$(LUACHECK) $(LUA_FILES); \
 	elif [ "$(LINT_SKIP_LUACHECK)" = "1" ]; then \
 		echo "note: luacheck not installed - skipping lint (LINT_SKIP_LUACHECK=1)"; \
 	else \

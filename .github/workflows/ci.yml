@@ -42,10 +42,16 @@ jobs:
         with:
           luaVersion: "luajit-openresty"
       - uses: leafo/gh-actions-luarocks@v4
+      # Luarocks manifest mirrors are flaky (they intermittently 404 the Lua
+      # 5.1 lookup luacheck needs), so this pulls a pinned, sha256-verified
+      # standalone binary first and only falls back to luarocks.
       - name: install luacheck
-        run: luarocks install luacheck
+        run: |
+          bin="$(scripts/install-luacheck.sh "$RUNNER_TEMP/bin")"
+          echo "LUACHECK=$bin" >> "$GITHUB_ENV"
       - name: luacheck
-        run: luacheck lua lsp plugin scripts tests --exclude-files 'tests/fixtures/**'
+        run: |
+          "$LUACHECK" lua lsp plugin scripts tests --exclude-files 'tests/fixtures/**'
 
   real:
     name: real navgraph (nvim ${{ matrix.nvim }})
