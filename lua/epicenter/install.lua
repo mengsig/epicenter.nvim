@@ -305,9 +305,10 @@ end
 
 --- Whether `content`'s SHA256 matches what a `SHA256SUMS` file lists for
 --- `name`. Pure - no disk, no network - so this is testable without touching
---- either. A repo that publishes no checksums, or lists no entry for this
---- asset, has nothing to verify against; that is not itself a failure. A
---- listed asset that does not match is a corrupted or tampered download.
+--- either. A repo that publishes no checksums at all has nothing to verify
+--- against, and that is not itself a failure. But once a `SHA256SUMS` exists,
+--- an asset it does not list is indistinguishable from a tampered one that
+--- was renamed to dodge the check - that is a failure, not a silent skip.
 --- @param sums_text string|nil `SHA256SUMS`'s content, or nil if none was published
 --- @param name string the asset's filename, as `SHA256SUMS` lists it
 --- @param content string the asset's raw bytes
@@ -325,7 +326,7 @@ function M.verify_checksum(sums_text, name, content)
     end
   end
   if not expected then
-    return true, nil
+    return nil, ("SHA256SUMS was published but lists no entry for %s"):format(name)
   end
   local actual = vim.fn.sha256(content)
   if actual ~= expected then
@@ -336,22 +337,25 @@ function M.verify_checksum(sums_text, name, content)
 end
 
 --- Reads `archive` and its sibling `SHA256SUMS` (when `gh` downloaded one)
---- off disk and hands their bytes to the pure `M.verify_checksum`.
+--- off disk and hands their bytes to the pure `M.verify_checksum`. Exposed
+--- for tests: the disk half (locating the sibling file, `io.open` failures)
+--- has no coverage through the pure function alone.
 --- @return string|nil err
-local function checksum_error(dir, archive)
+function M.checksum_error(dir, archive)
   local sums_path = vim.fs.joinpath(dir, "SHA256SUMS")
   local sums_text
   if uv.fs_stat(sums_path) then
-    local sums_fh = io.open(sums_path, "rb")
-    if sums_fh then
-      sums_text = sums_fh:read("*a")
-      sums_fh:close()
+    local sums_fh, open_err = io.open(sums_path, "rb")
+    if not sums_fh then
+      return ("could not open %s to verify its checksum: %s"):format(sums_path, open_err)
     end
+    sums_text = sums_fh:read("*a")
+    sums_fh:close()
   end
 
-  local archive_fh = io.open(archive, "rb")
+  local archive_fh, archive_open_err = io.open(archive, "rb")
   if not archive_fh then
-    return ("could not open %s to verify its checksum"):format(archive)
+    return ("could not open %s to verify its checksum: %s"):format(archive, archive_open_err)
   end
   local content = archive_fh:read("*a")
   archive_fh:close()
@@ -397,7 +401,7 @@ local function install_from_release(cfg, tmp, progress, cb)
     end
 
     progress.update(0.5, "verifying checksum")
-    local checksum_err = checksum_error(tmp, archive)
+    local checksum_err = M.checksum_error(tmp, archive)
     if checksum_err then
       return cb(checksum_err)
     end

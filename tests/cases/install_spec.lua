@@ -202,11 +202,14 @@ describe("release checksum verification", function()
     expect.eq(err, nil)
   end)
 
-  it("passes through an asset SHA256SUMS does not list", function()
+  it("fails an asset SHA256SUMS was published but does not list (F3)", function()
+    -- Once a SHA256SUMS exists, an asset missing from it is indistinguishable
+    -- from a tampered rename - this must never degrade to a silent pass.
     local sums = ("%s  some-other-asset.tar.gz\n"):format(HASH)
     local ok, err = install.verify_checksum(sums, NAME, CONTENT)
-    expect.truthy(ok, "an unlisted asset has nothing to verify against")
-    expect.eq(err, nil)
+    expect.eq(ok, nil, "an unlisted asset in a real SHA256SUMS must fail, not pass")
+    expect.matches(err, "lists no entry for")
+    expect.matches(err, (NAME:gsub("[%-%.]", "%%%1")))
   end)
 
   it("reads the standard sha256sum two-space and binary-mode formats", function()
@@ -214,6 +217,55 @@ describe("release checksum verification", function()
     local binary_mode = ("%s *%s"):format(HASH, NAME)
     expect.truthy((install.verify_checksum(two_space, NAME, CONTENT)))
     expect.truthy((install.verify_checksum(binary_mode, NAME, CONTENT)))
+  end)
+end)
+
+describe("checksum_error (disk half, F3/F7)", function()
+  local dir
+
+  before_each(function()
+    dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+  end)
+
+  after_each(function()
+    vim.fn.delete(dir, "rf")
+  end)
+
+  local function write(name, content)
+    local path = vim.fs.joinpath(dir, name)
+    local fh = assert(io.open(path, "wb"))
+    fh:write(content)
+    fh:close()
+    return path
+  end
+
+  it("passes a verified archive against its sibling SHA256SUMS", function()
+    local content = "archive bytes"
+    local archive = write("navgraph-x86_64-linux.tar.gz", content)
+    write("SHA256SUMS", ("%s  navgraph-x86_64-linux.tar.gz\n"):format(vim.fn.sha256(content)))
+    expect.eq(install.checksum_error(dir, archive), nil)
+  end)
+
+  it("fails a tampered archive against its sibling SHA256SUMS", function()
+    local archive = write("navgraph-x86_64-linux.tar.gz", "tampered bytes")
+    write(
+      "SHA256SUMS",
+      ("%s  navgraph-x86_64-linux.tar.gz\n"):format(vim.fn.sha256("real bytes"))
+    )
+    expect.matches(install.checksum_error(dir, archive), "failed SHA256 verification")
+  end)
+
+  it("passes through when no SHA256SUMS was published at all", function()
+    local archive = write("navgraph-x86_64-linux.tar.gz", "archive bytes")
+    expect.eq(install.checksum_error(dir, archive), nil)
+  end)
+
+  it("reports the archive when it cannot be opened", function()
+    local missing = vim.fs.joinpath(dir, "does-not-exist.tar.gz")
+    local err = install.checksum_error(dir, missing)
+    expect.matches(err, "could not open")
+    expect.matches(err, "does%-not%-exist%.tar%.gz")
   end)
 end)
 
