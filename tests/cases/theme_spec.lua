@@ -98,6 +98,17 @@ describe("theme", function()
     expect.truthy(next(hl) ~= nil, "EpicenterAccent was not defined")
   end)
 
+  it("survives every accent the config lets through", function()
+    local config = require("epicenter.config")
+    for _, accent in ipairs({ "auto", "mono", "#7aa2f7", "Function", "NoSuchGroupHere" }) do
+      config.reset()
+      config.setup({ theme = { accent = accent } })
+      local ok, err = pcall(require("epicenter.ui.theme").apply)
+      expect.truthy(ok, ("accent %q: %s"):format(accent, tostring(err)))
+    end
+    config.reset()
+  end)
+
   it("reads config.theme.accent when applying live", function()
     require("epicenter.config").reset()
     require("epicenter.config").setup({ theme = { accent = "#123456" } })

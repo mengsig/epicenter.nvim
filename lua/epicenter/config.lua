@@ -137,6 +137,23 @@ local ENUMS = {
 --- normal-mode maps (`s`, `g`, ...), clobbering unrelated motions.
 local NONEMPTY_STRING = { ["keymaps.prefix"] = true }
 
+--- Strings with a shape of their own, checked here because the failure
+--- downstream is unreadable: `theme.accent = "#f00"` reaches
+--- `nvim_get_hl`, which raises "Highlight id out of bounds" and takes the
+--- whole of `setup()` - and then every `:colorscheme` - down with it.
+local FORMATS = {
+  ["theme.accent"] = {
+    want = '"auto", "mono", a "#rrggbb" colour, or a highlight-group name',
+    ok = function(value)
+      return value == "auto"
+        or value == "mono"
+        or value:match("^#%x%x%x%x%x%x$") ~= nil
+        -- What `nvim_get_hl` accepts as a name; anything else errors there.
+        or value:match("^[%w_.@%-]+$") ~= nil
+    end,
+  },
+}
+
 local POSITIVE = {
   ["ui.max_width"] = true,
   ["ui.max_height"] = true,
@@ -211,6 +228,10 @@ local function check_value(rule, path, value)
   end
   if NONEMPTY_STRING[path] and value == "" then
     fail("%s must not be empty", path)
+  end
+  local format = FORMATS[path]
+  if format and type(value) == "string" and not format.ok(value) then
+    fail("%s must be %s, got %q", path, format.want, value)
   end
   if LIST_STRINGS[path] then
     for _, element in ipairs(value) do
