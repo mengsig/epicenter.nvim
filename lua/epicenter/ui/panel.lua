@@ -71,6 +71,35 @@ function M.peek(target)
   return require("epicenter.ui.peek").open(target, { focus = true })
 end
 
+-- Remembered layout -------------------------------------------------------------
+-- Terminal/window preference, not project data: one geometry per panel TYPE
+-- (`spec.filetype`), independent of which project it was resized in - so
+-- `store`'s per-root keying is deliberately not used here.
+local LAYOUT_ROOT = "panel-layout"
+local MIN_WIDTH, MIN_HEIGHT = 20, 3
+local RESIZE_STEP, MOVE_STEP = 4, 1
+
+--- @param filetype string
+--- @return epicenter.Box|nil
+local function remembered_box(filetype)
+  local box = require("epicenter.store").read("panel_layout", LAYOUT_ROOT)[filetype]
+  return box and window.clamp(box) or nil
+end
+
+--- A failure to save is a log line, not a toast: the panel still works, it
+--- just reopens at the default size next time.
+--- @param filetype string
+--- @param box epicenter.Box
+local function remember_box(filetype, box)
+  local store = require("epicenter.store")
+  local stored = store.read("panel_layout", LAYOUT_ROOT)
+  stored[filetype] = { width = box.width, height = box.height, row = box.row, col = box.col }
+  local ok, err = store.write("panel_layout", LAYOUT_ROOT, stored)
+  if not ok then
+    require("epicenter.log").warn("could not remember panel geometry: %s", err)
+  end
+end
+
 --- @class epicenter.Panel
 local Panel = {}
 Panel.__index = Panel
@@ -87,16 +116,22 @@ Panel.__index = Panel
 ---   on_filter?: fun(query: string) }
 --- @return epicenter.Panel
 function M.open(spec)
-  local box = spec.box or M.box()
+  -- A split already takes only the height the user left it at (F8); an
+  -- explicit box is the caller's own choice (e.g. a fixed dashboard) -
+  -- neither resizes/moves interactively or remembers a geometry.
+  local resizable = spec.layout ~= "vsplit" and not spec.box
+  local remembered = resizable and remembered_box(spec.filetype)
+  local box = spec.box or remembered or M.box()
   local self = setmetatable({
     spec = spec,
     open = true,
     help_open = false,
     previous_win = vim.api.nvim_get_current_win(),
-    -- A split already takes only the height the user left it at (F8); an
-    -- explicit box is the caller's own choice. Everything else sizes to its
-    -- row count rather than sitting in `ui.height` regardless of it (F13).
-    size_to_content = spec.layout ~= "vsplit" and not spec.box,
+    resizable = resizable,
+    -- A remembered size is the user's own explicit choice - it must not be
+    -- overridden by the next redraw's content-fit (F13's default behaviour,
+    -- kept for any panel the user has never resized).
+    size_to_content = resizable and not remembered,
   }, Panel)
 
   local function on_close()
@@ -244,6 +279,11 @@ function Panel:_help_lines()
   end
   add("gg, G", "top / bottom")
   add("/", "filter by name")
+  if self.resizable then
+    add("+, -", "grow / shrink")
+    add("<, >", "narrower / wider")
+    add("<C-arrow>", "move")
+  end
   for lhs, hint in pairs(self.spec.hints or {}) do
     add(lhs, hint)
   end
@@ -259,6 +299,30 @@ function Panel:_toggle_help()
     self.win:set_lines(self:_help_lines())
   else
     self:draw()
+  end
+end
+
+--- Resizes/moves a resizable float, clamped to the editor grid, and
+--- remembers the result under its panel type - the user's own explicit
+--- choice, so a later redraw stops fitting height to content (F13's default
+--- only holds until the panel has actually been touched).
+--- @param delta { width?: integer, height?: integer, row?: integer, col?: integer }
+function Panel:_nudge(delta)
+  if not self.resizable or not self:valid() then
+    return
+  end
+  local box = self.win:geometry()
+  local next_box = window.clamp({
+    width = math.max(MIN_WIDTH, box.width + (delta.width or 0)),
+    height = math.max(MIN_HEIGHT, box.height + (delta.height or 0)),
+    row = box.row + (delta.row or 0),
+    col = box.col + (delta.col or 0),
+  })
+  self.size_to_content = false
+  self.win:set_geometry(next_box)
+  self:draw()
+  if self.spec.filetype then
+    remember_box(self.spec.filetype, next_box)
   end
 end
 
@@ -301,6 +365,35 @@ function Panel:_install_keys()
     end
     actions["<C-l>"] = function()
       self:export("loclist")
+    end
+  end
+
+  if self.resizable then
+    actions["+"] = function()
+      self:_nudge({ height = RESIZE_STEP })
+    end
+    actions["-"] = function()
+      self:_nudge({ height = -RESIZE_STEP })
+    end
+    actions[">"] = function()
+      self:_nudge({ width = RESIZE_STEP })
+    end
+    -- A literal `<` must be spelled `<lt>` as a mapping lhs, or Neovim reads
+    -- it as the start of a special-key sequence.
+    actions["<lt>"] = function()
+      self:_nudge({ width = -RESIZE_STEP })
+    end
+    actions["<C-Up>"] = function()
+      self:_nudge({ row = -MOVE_STEP })
+    end
+    actions["<C-Down>"] = function()
+      self:_nudge({ row = MOVE_STEP })
+    end
+    actions["<C-Left>"] = function()
+      self:_nudge({ col = -MOVE_STEP })
+    end
+    actions["<C-Right>"] = function()
+      self:_nudge({ col = MOVE_STEP })
     end
   end
 

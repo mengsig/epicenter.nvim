@@ -37,6 +37,24 @@ local function resolve(value, total, max)
   return math.max(1, math.min(n, max or total, total))
 end
 
+--- Clamps a box (e.g. one remembered from a previous, differently-sized
+--- session) inside the current editor grid. Pure.
+--- @param box epicenter.Box
+--- @param opts? { columns?: integer, lines?: integer }
+--- @return epicenter.Box
+function M.clamp(box, opts)
+  local columns = (opts and opts.columns) or vim.o.columns
+  local lines = (opts and opts.lines) or (vim.o.lines - vim.o.cmdheight - 1)
+  local width = math.max(1, math.min(box.width, columns))
+  local height = math.max(1, math.min(box.height, lines))
+  return {
+    width = width,
+    height = height,
+    row = math.max(0, math.min(box.row, lines - height)),
+    col = math.max(0, math.min(box.col, columns - width)),
+  }
+end
+
 --- Centered box for the editor grid. Pure.
 --- @param opts { width: number, height: number, max_width?: integer,
 ---   max_height?: integer, columns?: integer, lines?: integer }
