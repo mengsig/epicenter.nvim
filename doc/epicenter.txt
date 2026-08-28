@@ -2,7 +2,7 @@
 
 Author:   Marcus Engsig
 Licence:  MIT
-Requires: Neovim 0.11+ and the `navgraph` binary
+Requires: Neovim 0.10+ and the `navgraph` binary (0.11+ for |vim.lsp.enable()|)
 
 ==============================================================================
 CONTENTS                                                   *epicenter-contents*

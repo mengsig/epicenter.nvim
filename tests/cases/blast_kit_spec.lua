@@ -45,11 +45,14 @@ describe("K under lsp.fallback_only decides the hover provider at press time", f
   it("falls back to vim.lsp.buf.hover() once another client already answers hover", function()
     -- A synthetic competitor, injected at the `vim.lsp.get_clients` seam the
     -- fallback guard itself queries - no second real LSP client needed.
-    local fake_other = {
+    local fake_other
+    fake_other = {
       id = -999,
       name = "fake-other-lsp",
-      supports_method = function(_, method)
-        return method == "textDocument/hover"
+      -- 0.11 calls this as a method, 0.10 as a plain function: answer both,
+      -- the way a real client object does.
+      supports_method = function(a, b)
+        return (a == fake_other and b or a) == "textDocument/hover"
       end,
     }
     local original_get_clients = vim.lsp.get_clients

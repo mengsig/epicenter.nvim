@@ -7,6 +7,7 @@
 --- for a query they have already replaced.
 local M = {}
 
+local compat = require("epicenter.compat")
 local config = require("epicenter.config")
 local events = require("epicenter.events")
 local log = require("epicenter.log")
@@ -37,6 +38,24 @@ M.SUPPORTED_EXTENSIONS = {
   ".go",
   ".rs",
   ".rb",
+}
+
+--- The filetypes those extensions carry, for `lsp/navgraph.lua` - Neovim's
+--- own server definitions match on filetype, not on path.
+M.FILETYPES = {
+  "c",
+  "cpp",
+  "cs",
+  "go",
+  "javascript",
+  "javascriptreact",
+  "lua",
+  "python",
+  "ruby",
+  "rust",
+  "typescript",
+  "typescriptreact",
+  "zig",
 }
 
 --- Standard providers hidden on buffers that already have a real language
@@ -151,14 +170,14 @@ local function lsp_rpc(client_id)
       if not client then
         return false, nil
       end
-      return client:request(method, params, function(err, result)
+      return compat.lsp_request(client, method, params, function(err, result)
         handler(err, result)
       end)
     end,
     cancel = function(id)
       local client = vim.lsp.get_client_by_id(client_id)
       if client then
-        client:cancel_request(id)
+        compat.lsp_cancel(client, id)
       end
     end,
   }
@@ -184,7 +203,7 @@ local function install_fallback_guard(client)
         if
           other.id ~= client.id
           and other.name ~= "navgraph"
-          and other:supports_method(method, bufnr)
+          and compat.lsp_supports_method(other, method, bufnr)
         then
           return false
         end
@@ -258,7 +277,7 @@ function M.start(opts)
   }
   servers[root] = state
 
-  local client_id = vim.lsp.start({
+  local client_id = compat.lsp_start({
     name = "navgraph",
     cmd = cmd,
     root_dir = root,
@@ -296,7 +315,7 @@ function M.start(opts)
         servers[root] = nil
       end
     end,
-  }, { bufnr = opts.bufnr, attach = opts.bufnr ~= nil })
+  }, opts.bufnr)
 
   if not client_id then
     servers[root] = nil
@@ -380,7 +399,7 @@ function M.stop(root)
   state.stopping = true
   local client = vim.lsp.get_client_by_id(state.client_id)
   if client then
-    client:stop()
+    compat.lsp_stop(client)
   end
   servers[vim.fs.normalize(root)] = nil
 end
@@ -437,7 +456,7 @@ function M.request(method, params, cb, opts)
   end
   if not session then
     local state = servers[root]
-    -- Requests between vim.lsp.start() returning and on_init are normal, not
+    -- Requests between the server starting and on_init are normal, not
     -- an absent server: say so, instead of an alarming "not running".
     if state and state.starting then
       cb(

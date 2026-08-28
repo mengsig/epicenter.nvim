@@ -3,6 +3,7 @@
 --- without wall-clock sleeps.
 local M = {}
 
+local compat = require("epicenter.compat")
 local easing = require("epicenter.ui.easing")
 
 local uv = vim.uv or vim.loop
@@ -68,7 +69,7 @@ end
 ---   clock?: fun(): number, driver?: table }
 --- @return { cancel: fun(), done: fun(): boolean }
 function M.tween(opts)
-  vim.validate("on_frame", opts.on_frame, "function")
+  compat.validate("on_frame", opts.on_frame, "function")
 
   local cfg = require("epicenter.config").get()
   local motion = opts.motion

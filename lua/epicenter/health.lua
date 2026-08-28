@@ -4,10 +4,16 @@ local M = {}
 local PROTOCOL_VERSION = 1
 
 local function check_neovim()
-  if vim.fn.has("nvim-0.11") == 1 then
-    vim.health.ok("neovim " .. tostring(vim.version()))
+  if vim.fn.has("nvim-0.10") == 0 then
+    vim.health.error("neovim 0.10 or newer is required")
+    return
+  end
+  local version = "neovim " .. tostring(vim.version())
+  if require("epicenter.compat").HAS_011 then
+    vim.health.ok(version)
   else
-    vim.health.error("neovim 0.11 or newer is required")
+    -- 0.10 is supported, but `vim.lsp.enable` and `winborder` are not there.
+    vim.health.ok(version .. " (0.11+ adds vim.lsp.enable and 'winborder')")
   end
 end
 

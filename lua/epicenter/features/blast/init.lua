@@ -75,7 +75,8 @@ end
 --- `lsp.fallback_only`, means no other language server offers one.
 local function navgraph_owns_hover(bufnr)
   for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr, name = "navgraph" })) do
-    if client:supports_method("textDocument/hover", bufnr) then
+    local compat = require("epicenter.compat")
+    if compat.lsp_supports_method(client, "textDocument/hover", bufnr) then
       return true
     end
   end

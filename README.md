@@ -26,8 +26,9 @@ fan-in hot spots, unused symbols, a graph export, and the status dashboard.
 
 ## Install
 
-Needs Neovim 0.11+ and the `navgraph` binary (`:Epicenter install` fetches or
-builds it for you).
+Needs Neovim 0.10+ and the `navgraph` binary (`:Epicenter install` fetches or
+builds it for you). 0.11+ additionally gets an `lsp/navgraph.lua` definition,
+so `vim.lsp.enable("navgraph")` works without this plugin's own start path.
 
 **[lazy.nvim](https://github.com/folke/lazy.nvim)**
 

@@ -2,6 +2,8 @@
 --- `:autocmd User EpicenterIndexed` see the same events.
 local M = {}
 
+local compat = require("epicenter.compat")
+
 M.INDEXED = "EpicenterIndexed"
 
 local subscribers = {}
@@ -11,8 +13,8 @@ local next_id = 0
 --- @param fn fun(payload: table)
 --- @return fun() unsubscribe
 function M.on(event, fn)
-  vim.validate("event", event, "string")
-  vim.validate("fn", fn, "function")
+  compat.validate("event", event, "string")
+  compat.validate("fn", fn, "function")
   next_id = next_id + 1
   local id = next_id
   subscribers[event] = subscribers[event] or {}
@@ -28,7 +30,7 @@ end
 --- A failing subscriber is logged and skipped so one bad listener cannot
 --- silence the rest; the failure is visible in `:Epicenter log`.
 function M.emit(event, payload)
-  vim.validate("event", event, "string")
+  compat.validate("event", event, "string")
   for _, fn in pairs(subscribers[event] or {}) do
     local ok, err = pcall(fn, payload)
     if not ok then

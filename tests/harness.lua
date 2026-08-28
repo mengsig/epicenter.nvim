@@ -213,9 +213,10 @@ local function isolate()
   end
 
   -- Graceful stop, never force: the fake server blocks on a stdin read, so a
-  -- SIGTERM only lands once it returns. shutdown/exit over stdio does land.
+  -- SIGTERM only lands once it returns. shutdown/exit over stdio does land -
+  -- and on 0.10 `client:stop()` would pass the client itself as `force`.
   for _, client in ipairs(vim.lsp.get_clients()) do
-    client:stop()
+    require("epicenter.compat").lsp_stop(client)
   end
   vim.wait(5000, function()
     return #vim.lsp.get_clients() == 0

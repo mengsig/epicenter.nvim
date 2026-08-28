@@ -1,5 +1,5 @@
 NVIM ?= nvim
-LUA_FILES := $(shell find lua plugin tests -name '*.lua' -not -path 'tests/fixtures/*')
+LUA_FILES := $(shell find lua lsp plugin tests -name '*.lua' -not -path 'tests/fixtures/*')
 
 NAVGRAPH_BIN ?= navgraph
 
