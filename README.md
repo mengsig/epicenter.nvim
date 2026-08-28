@@ -695,6 +695,10 @@ epicenter.nvim ~
 - log: ~/.local/state/nvim/epicenter.log
 ```
 
+This is a v1.0 binary — every line is green, but the panels gated on the v1.1
+addendum (see below) are unavailable. A v1.1 binary looks identical except for
+the `navgraph version:` line, which reads `1.1.x` instead of `1.0.x`.
+
 **"navgraph is not running for this project."** No server has started for
 this file's root yet — open a file under the project root, or check
 `:checkhealth epicenter` for why the binary could not be resolved (usually:
@@ -712,9 +716,10 @@ or broken panel, e.g. "impact review needs navgraph protocol 1.1 -
 That message points at the wrong signal, though: the protocol number is the
 major version `1` on a v1.0 binary and a v1.1 one alike, by contract, so
 `:Epicenter status` and `:checkhealth epicenter` print the same `protocol 1`
-either way — it cannot tell the tiers apart. What does is the `navgraph
-version:` line `:checkhealth epicenter` prints just above it (`1.0.x` vs
-`1.1.x`); run `:Epicenter install` to get the current binary.
+either way — it cannot tell the tiers apart. What does is the `navgraph`
+version — beside `protocol` on the status dashboard, and on its own `navgraph
+version:` line in `:checkhealth epicenter` (`1.0.x` vs `1.1.x`); run
+`:Epicenter install` to get the current binary.
 
 **Errors** always go through `:Epicenter log` (or `l` on the status
 dashboard), and every error toast names the log file.
