@@ -148,6 +148,14 @@ local function export_when_answered(handle, list, name)
   if type(handle) == "table" and type(handle.arm_export) == "function" then
     return handle:arm_export(list)
   end
+  -- A gated panel's rows will never arrive on this server: say so now,
+  -- instead of registering a hook that either never fires (this buffer's
+  -- gate never clears) or fires later when a capable session appears and
+  -- closes the panel minutes after the command ran.
+  if type(handle) == "table" and handle.gate_reason then
+    M.notify(vim.trim(handle.gate_reason), "warn")
+    return
+  end
   if type(handle) ~= "table" or type(handle.on_populate) ~= "function" then
     M.notify(("%s has no rows to send to a list"):format(name), "warn")
     return

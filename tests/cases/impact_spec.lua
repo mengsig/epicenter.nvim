@@ -769,6 +769,50 @@ describe("the protocol 1.1 gate on impact/review", function()
     expect.matches(body(panel), "protocol 1.1", "the notice survives the keypress")
   end)
 
+  --- LOW-1: `--qf` on a gated buffer used to register a hook that either
+  --- never fired (the flag silently dropped) or fired later once a capable
+  --- session appeared, exporting and closing the panel long after the
+  --- command ran. It must say why, right away, and never fire late.
+  it("--qf on a gated buffer says why instead of silently dropping the flag", function()
+    vim.fn.setqflist({}, "f")
+    register_v10()
+    local notices = {}
+    local toast = require("epicenter.ui.toast")
+    local original = toast.notify
+    toast.notify = function(msg)
+      table.insert(notices, msg)
+    end
+    panel = epicenter.run("impact", { "--qf" }, buf)
+    toast.notify = original
+
+    expect.eq(#notices, 1)
+    expect.matches(notices[1], "protocol 1.1")
+    expect.eq(vim.fn.getqflist(), {}, "nothing to export while gated")
+
+    -- A capable session then appears - the hook must not have been left
+    -- armed, or this reindex would export a stale --qf and close the panel.
+    require("epicenter.client").register_session(root, {
+      request = function(_, method, _params, cb)
+        vim.schedule(function()
+          cb(nil, { roots = {}, summary = {}, changeId = "1" })
+        end)
+        return { cancel = function() end }
+      end,
+      dropped_count = function()
+        return 0
+      end,
+    }, { experimental = { navgraph = { protocolVersion = 2, methods = { "navgraph/impact" } } } })
+    require("epicenter.events").emit(require("epicenter.events").INDEXED, {})
+    panel.realtime.flush()
+    wait(function()
+      return body(panel):find("protocol 1.1", 1, true) == nil
+    end, 5000, "the panel to repaint from a real answer")
+
+    expect.eq(vim.fn.getqflist(), {}, "a later answer must not export a --qf already left behind")
+    expect.truthy(panel:valid(), "and must not close the panel either")
+    vim.fn.setqflist({}, "f")
+  end)
+
   it("clears the gate once a capable session appears, and answers for real", function()
     local sent = register_v10()
     panel = epicenter.run("impact", {}, buf)
