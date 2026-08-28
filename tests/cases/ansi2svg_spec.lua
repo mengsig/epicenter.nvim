@@ -23,12 +23,16 @@ local function convert(lines, fg, bg)
 end
 
 describe("ansi2svg", function()
-  it("keeps the grid: one x per glyph, and spaces preserved", function()
-    local svg = convert({ "ab  cd" })
-    expect.matches(svg, 'xml:space="preserve"', "XML would otherwise collapse the grid's spaces")
-    -- One run, six glyphs, at columns 0..5 of a 9px cell.
-    expect.matches(svg, 'x="0 9 18 27 36 45"')
-    expect.matches(svg, ">ab  cd</text>")
+  it("keeps the grid for both renderers: every glyph placed, every space unbreakable", function()
+    local svg = convert({ " ab  cd " })
+    -- Trimmed to its ink, so the first x is a real glyph's - librsvg uses only
+    -- that one - and every glyph carries its own, which Chromium uses.
+    expect.matches(svg, 'x="9 18 27 36 45 54"')
+    expect.matches(svg, ">ab&#160;&#160;cd</text>")
+    expect.falsy(
+      svg:find("> ", 1, true),
+      "a plain space in text content is whitespace a renderer may collapse"
+    )
   end)
 
   it("sizes the page from the widest row", function()
@@ -49,6 +53,7 @@ describe("ansi2svg", function()
 
   it("paints a background run as a rect, and the default background only once", function()
     local svg = convert({ ESC .. "48;2;20;30;40mx" }, "#ffffff", "#000000")
+
     expect.matches(svg, '<rect x="0" y="0" width="9" height="20" fill="#141e28"/>')
     local _, page_rects = svg:gsub('<rect width="', "")
     expect.eq(page_rects, 1, "the page background is one rect")
@@ -81,6 +86,12 @@ describe("ansi2svg", function()
   it("draws no text for a run that is only whitespace", function()
     local svg = convert({ "   " })
     expect.falsy(svg:find("<text", 1, true), "blank cells are the page background")
+  end)
+
+  it("still paints the background of a blank run", function()
+    local svg = convert({ ESC .. "48;5;1m   " }, "#ffffff", "#000000")
+    expect.matches(svg, '<rect x="0" y="0" width="27" height="20" fill="#cc5555"/>')
+    expect.falsy(svg:find("<text", 1, true))
   end)
 
   it("drops an escape sequence it does not interpret", function()

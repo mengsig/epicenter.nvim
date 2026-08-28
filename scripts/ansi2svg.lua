@@ -191,9 +191,7 @@ local function svg(rows, defaults)
   local height = #rows * CELL_H
 
   local out = {
-    -- xml:space="preserve": without it XML collapses the runs of spaces the
-    -- grid is made of, and every glyph after one lands a column short.
-    ('<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 %d %d" width="%d" height="%d" font-family="%s" font-size="%d">'):format(
+    ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" font-family="%s" font-size="%d">'):format(
       width,
       height,
       width,
@@ -204,8 +202,8 @@ local function svg(rows, defaults)
     ('<rect width="%d" height="%d" fill="%s"/>'):format(width, height, defaults.bg),
   }
 
-  for index, cells in ipairs(rows) do
-    local y = (index - 1) * CELL_H
+  for row, cells in ipairs(rows) do
+    local y = (row - 1) * CELL_H
     for _, run in ipairs(runs_of(cells)) do
       local style = run.style
       local fg = style.fg or defaults.fg
@@ -213,30 +211,40 @@ local function svg(rows, defaults)
       if style.reverse then
         fg, bg = bg, fg
       end
-      local x = (run.column - 1) * CELL_W
-      local run_width = #run.chars * CELL_W
-      local text = table.concat(run.chars)
-
       if bg ~= defaults.bg then
         table.insert(
           out,
           ('<rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>'):format(
-            x,
+            (run.column - 1) * CELL_W,
             y,
-            run_width,
+            #run.chars * CELL_W,
             CELL_H,
             bg
           )
         )
       end
-      if text:match("^%s*$") == nil then
-        -- One x per glyph, rather than one per run plus a textLength: the grid
-        -- then survives a renderer whose monospace advance is not CELL_W, and
-        -- librsvg does not honour textLength at all.
-        local xs = {}
-        for column = run.column, run.column + #run.chars - 1 do
-          table.insert(xs, tostring((column - 1) * CELL_W))
+      -- The two renderers that matter disagree, so the run has to satisfy both.
+      -- Chromium honours a per-glyph `x` list but collapses runs of spaces in
+      -- text content whatever `xml:space` says; librsvg keeps the spaces but
+      -- ignores every `x` past the first and advances by the font instead. So:
+      -- one x per glyph (exact for Chromium), each space written as a
+      -- no-break space (uncollapsible, and it advances for librsvg), and the
+      -- run trimmed to its ink so the first x is a real glyph's.
+      local first, last = nil, nil
+      for offset, char in ipairs(run.chars) do
+        if char:match("^%s$") == nil then
+          first = first or offset
+          last = offset
         end
+      end
+      if first then
+        local pieces, xs = {}, {}
+        for offset = first, last do
+          local char = run.chars[offset]
+          table.insert(pieces, char:match("^%s$") and "&#160;" or xml_escape(char))
+          table.insert(xs, tostring((run.column + offset - 2) * CELL_W))
+        end
+        local text = table.concat(pieces)
         local attrs = ('x="%s" y="%d" fill="%s"'):format(table.concat(xs, " "), y + BASELINE, fg)
         if style.bold then
           attrs = attrs .. ' font-weight="bold"'
@@ -247,7 +255,7 @@ local function svg(rows, defaults)
         if style.underline then
           attrs = attrs .. ' text-decoration="underline"'
         end
-        table.insert(out, ("<text %s>%s</text>"):format(attrs, xml_escape(text)))
+        table.insert(out, ("<text %s>%s</text>"):format(attrs, text))
       end
     end
   end
